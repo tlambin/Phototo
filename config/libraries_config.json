@@ -1,0 +1,53 @@
+{
+    "active_library": "Azerty",
+    "libraries": {
+        "Ma Bibliothèque": {
+            "name": "Ma Bibliothèque",
+            "source_type": "TAKEOUT_ZIPS",
+            "is_takeout": true,
+            "source_paths": [
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-001.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-002.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-003.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-004.zip"
+            ],
+            "dest_dir": "D:\\Ressources\\Test",
+            "db_path": "D:\\Ressources\\Test\\library_ma_bibliothèque.db",
+            "created_at": "2026-11-04T22:21:17.635118",
+            "options": {
+                "fix_takeout_json_metadata": true,
+                "delete_zips_progressively": false,
+                "organize_by_year_month": true,
+                "run_deduplication": true,
+                "run_faces_ai": true,
+                "run_ocr": true,
+                "run_similarity": true,
+                "run_semantic_clip": true
+            }
+        },
+        "Azerty": {
+            "name": "Azerty",
+            "source_type": "TAKEOUT_ZIPS",
+            "is_takeout": true,
+            "source_paths": [
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-001.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-002.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-003.zip",
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-004.zip"
+            ],
+            "dest_dir": "D:\\Ressources\\azerty",
+            "db_path": "D:\\Ressources\\azerty\\library_azerty.db",
+            "created_at": "2026-11-05T02:56:10.566591",
+            "options": {
+                "fix_takeout_json_metadata": true,
+                "delete_zips_progressively": false,
+                "organize_by_year_month": true,
+                "run_deduplication": true,
+                "run_faces_ai": true,
+                "run_ocr": true,
+                "run_similarity": true,
+                "run_semantic_clip": true
+            }
+        }
+    }
+}

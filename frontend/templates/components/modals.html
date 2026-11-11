@@ -1,0 +1,386 @@
+<!-- ==================== VISIONNEUSE PLEIN ÉCRAN (LIGHTBOX) ==================== -->
+<div id="lightbox-modal" class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col text-white">
+    <div class="h-14 px-5 bg-black/70 border-b border-white/10 flex items-center justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+            <button onclick="closeLightbox()" class="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-1.5 rounded-full">← Retour</button>
+            <span id="lb-title" class="text-xs font-semibold opacity-80 truncate"></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="lb-btn-fav" onclick="lightboxToggleFavorite()" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20 transition">♡ Favori</button>
+            <button onclick="lightboxOpenStudio()" class="px-3.5 py-1.5 rounded-full text-xs font-bold plum-btn">🎨 Modifier</button>
+            <button onclick="lightboxOpenFaceTagger()" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20">🎯 +Visage</button>
+            <button onclick="toggleLightboxInfoDrawer()" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20">ℹ️ Infos & EXIF</button>
+            <button onclick="lightboxDeleteMedia()" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-600 hover:bg-rose-500">🗑️ Supprimer</button>
+        </div>
+    </div>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        <button onclick="navigateLightbox(-1)" class="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 text-white text-xl font-bold z-20 flex items-center justify-center">‹</button>
+        <div class="flex-1 flex items-center justify-center p-4 overflow-hidden" onclick="if(event.target===this) closeLightbox()">
+            <img id="lb-img" class="hidden max-h-full max-w-full object-contain rounded shadow-2xl select-none"/>
+            <video id="lb-video" controls class="hidden max-h-full max-w-full object-contain rounded shadow-2xl"></video>
+        </div>
+        <button onclick="navigateLightbox(1)" class="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 text-white text-xl font-bold z-20 flex items-center justify-center">›</button>
+
+        <aside id="lb-info-drawer" class="hidden w-80 bg-zinc-900 border-l border-white/10 p-4 overflow-y-auto space-y-4 z-30">
+            <div class="flex justify-between items-center border-b border-white/10 pb-2">
+                <h3 class="text-sm font-bold">ℹ️ Détails du média</h3>
+                <button onclick="toggleLightboxInfoDrawer()" class="opacity-60 hover:opacity-100 text-xs">✕</button>
+            </div>
+            <div id="lb-info-content" class="space-y-2.5 text-xs text-zinc-300 font-mono break-all"></div>
+            <button onclick="lightboxOpenMetadataEditor()" class="w-full plum-btn font-bold py-2 rounded-full text-xs">✏️ Modifier Date / GPS / EXIF</button>
+        </aside>
+    </div>
+</div>
+
+<!-- ==================== FENÊTRE D'IMPORTATION EN 3 ÉTAPES ==================== -->
+<div id="import-wizard-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeImportWizard()">
+    <div class="ui-card rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+
+        <!-- ÉTAPE 1 : Importer des fichiers (Glisser-déposer, Dossier ou Google Photos) -->
+        <div id="import-step-1" class="space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-base font-extrabold">Importer des fichiers</h2>
+                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+            </div>
+
+            <div id="drop-zone"
+                 onclick="document.getElementById('hidden-file-input').click()"
+                 ondragover="event.preventDefault(); this.classList.add('ring-2','ring-[#593E5A]')"
+                 ondragleave="this.classList.remove('ring-2','ring-[#593E5A]')"
+                 ondrop="handleDroppedFiles(event)"
+                 class="ui-pill rounded-2xl h-28 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:opacity-90 transition">
+                <svg class="w-6 h-6 opacity-50" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span class="text-xs font-bold opacity-55">Faites glisser vos fichiers</span>
+                <input id="hidden-file-input" type="file" multiple class="hidden" onchange="handleSelectedFilesInput(this.files)"/>
+            </div>
+
+            <button onclick="pickStandardFolderForImport()" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <span class="text-sm font-extrabold">Sélectionner un dossier</span>
+            </button>
+
+            <button onclick="showImportStep(2)" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-extrabold">Google Photos</span>
+            </button>
+        </div>
+
+        <!-- ÉTAPE 2 : Importer depuis Google (Dossier décompressé ou Fichiers ZIP) -->
+        <div id="import-step-2" class="hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <button onclick="showImportStep(1)" class="text-lg font-bold hover:scale-110 transition">←</button>
+                    <h2 class="text-base font-extrabold">Importer depuis Google</h2>
+                </div>
+                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+            </div>
+
+            <button onclick="pickTakeoutSource('TAKEOUT_FOLDER')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <span class="text-sm font-extrabold">Dossier décompressé</span>
+            </button>
+
+            <button onclick="pickTakeoutSource('TAKEOUT_ZIPS')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-extrabold">Fichiers ZIP</span>
+            </button>
+        </div>
+
+        <!-- ÉTAPE 3 : Confirmation & Options (Corriger les métadonnées / Supprimer les zip) -->
+        <div id="import-step-3" class="hidden space-y-5">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <button id="import-step3-back-btn" onclick="showImportStep(2)" class="text-lg font-bold hover:scale-110 transition">←</button>
+                    <h2 id="import-step3-header" class="text-base font-extrabold">Importer depuis Google</h2>
+                </div>
+                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+            </div>
+
+            <div class="flex items-start gap-4">
+                <div onclick="rePickStep3Paths()" class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow cursor-pointer" title="Changer la sélection">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div id="import-step3-subtitle" class="text-sm font-extrabold">Fichiers ZIP</div>
+                    <div id="import-step3-paths" class="text-[11px] font-bold opacity-55 space-y-0.5 max-h-24 overflow-y-auto break-all mt-0.5"></div>
+                </div>
+            </div>
+
+            <div class="space-y-2.5 pl-1">
+                <div id="row-opt-fix-meta" onclick="toggleWizardCheck('fix')" class="flex items-center gap-3 cursor-pointer select-none">
+                    <div id="wiz-chk-fix" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold">✓</div>
+                    <span class="text-xs font-extrabold">Corriger les metadonnées</span>
+                </div>
+
+                <div id="row-opt-del-zips" onclick="toggleWizardCheck('del')" class="hidden flex items-center gap-3 cursor-pointer select-none">
+                    <div id="wiz-chk-del" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold"></div>
+                    <span class="text-xs font-extrabold">Supprimer les zip apres extraction</span>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-1">
+                <button onclick="confirmWizardImport()" class="plum-btn px-8 py-2.5 rounded-full text-xs font-extrabold shadow-md">
+                    Importer
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ==================== MODALES DE CONFIGURATION (CRÉER/MODIFIER BIBLIOTHÈQUE, FUSION, VISAGE, EXIF, STUDIO) ==================== -->
+<div id="library-modal" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex justify-between items-center pb-2">
+            <h2 id="lib-modal-title" class="text-lg font-extrabold">Configurer la Bibliothèque</h2>
+            <button onclick="closeLibraryModal()" class="text-lg font-bold opacity-60 hover:opacity-100">✕</button>
+        </div>
+        <input id="lib-name" type="text" placeholder="Nom de la bibliothèque (ex: Bibliotheque 1)" class="ui-pill w-full rounded-2xl px-4 py-2.5 text-xs font-semibold outline-none"/>
+        <div id="lib-source-type-row" class="grid grid-cols-3 gap-2 text-xs font-bold">
+            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="STANDARD_FOLDER" checked onchange="toggleSourceTypeUI()"/> 📁 Dossier</label>
+            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="TAKEOUT_FOLDER" onchange="toggleSourceTypeUI()"/> 📂 Takeout</label>
+            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="TAKEOUT_ZIPS" onchange="toggleSourceTypeUI()"/> 📦 Takeout .ZIP</label>
+        </div>
+        <div>
+            <div class="flex justify-between mb-1.5 items-center">
+                <span class="text-xs font-bold opacity-75">Dossier(s) ou Archive(s) .ZIP sources</span>
+                <div class="flex gap-2">
+                    <button id="btn-browse-zips" onclick="browseSource('zips')" class="hidden plum-btn text-xs px-3 py-1 rounded-full">📦 Choisir .ZIP</button>
+                    <button onclick="browseSource('folder')" class="ui-pill text-xs font-bold px-3 py-1 rounded-full">📂 Parcourir...</button>
+                </div>
+            </div>
+            <textarea id="lib-paths" rows="3" class="ui-pill w-full rounded-2xl p-3 text-xs font-mono outline-none"></textarea>
+        </div>
+        <div>
+            <div class="flex justify-between mb-1.5 items-center">
+                <span class="text-xs font-bold opacity-75">Dossier de destination (Tri & Base SQLite)</span>
+                <button onclick="browseDest()" class="ui-pill text-xs font-bold px-3 py-1 rounded-full">📂 Parcourir...</button>
+            </div>
+            <input id="lib-dest" type="text" class="ui-pill w-full rounded-2xl px-4 py-2.5 text-xs font-mono outline-none"/>
+        </div>
+        <div id="takeout-only-panel" class="hidden ui-pill rounded-2xl p-3.5 space-y-2 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer font-bold">
+                <input id="opt-fix-json" type="checkbox" checked/>
+                <span>Corriger les métadonnées Google Takeout (.json ➔ EXIF/GPS/Dates)</span>
+            </label>
+            <div id="takeout-zip-delete-option" class="hidden pt-1">
+                <label class="flex items-center gap-2 text-rose-600 font-bold cursor-pointer">
+                    <input id="opt-delete-zips" type="checkbox"/>
+                    <span>Supprimer les .ZIP au fur et à mesure après extraction</span>
+                </label>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+            <button onclick="closeLibraryModal()" class="ui-pill px-5 py-2 rounded-full text-xs font-bold">Annuler</button>
+            <button onclick="submitLibraryModal()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow">Valider & Synchroniser</button>
+        </div>
+    </div>
+</div>
+
+<div id="merge-lib-modal" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex justify-between items-center">
+            <h2 class="text-base font-extrabold">🔗 Fusionner des Bibliothèques</h2>
+            <button onclick="document.getElementById('merge-lib-modal').classList.add('hidden')" class="text-sm font-bold">✕</button>
+        </div>
+        <div class="space-y-3 text-xs font-bold">
+            <div>
+                <label class="block opacity-75 mb-1">Bibliothèque à fusionner :</label>
+                <select id="merge-src-lib" class="ui-pill w-full rounded-2xl p-2.5 outline-none"></select>
+            </div>
+            <div>
+                <label class="block opacity-75 mb-1">Vers la bibliothèque cible :</label>
+                <select id="merge-dst-lib" class="ui-pill w-full rounded-2xl p-2.5 outline-none"></select>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+            <button onclick="document.getElementById('merge-lib-modal').classList.add('hidden')" class="ui-pill px-4 py-2 rounded-full text-xs font-bold">Annuler</button>
+            <button onclick="confirmMergeLibraries()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold">Fusionner</button>
+        </div>
+    </div>
+</div>
+
+<div id="manual-face-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-4xl w-full p-5 flex flex-col max-h-[90vh]">
+        <div class="flex justify-between items-center pb-3 mb-3">
+            <h2 class="text-base font-extrabold">🎯 Encadrer un visage à la souris</h2>
+            <button onclick="closeManualFaceModal()" class="font-bold">✕</button>
+        </div>
+        <div class="flex-1 overflow-auto flex justify-center items-center bg-black rounded-2xl p-2">
+            <div id="tagger-stage" class="relative inline-block cursor-crosshair">
+                <img id="tagger-img" draggable="false" class="max-h-[58vh] w-auto block select-none"/>
+                <div id="tagger-draw-box" class="hidden absolute border-2 border-amber-400 bg-amber-400/20 pointer-events-none"></div>
+            </div>
+        </div>
+        <div class="mt-4 pt-3 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex gap-2">
+                <select id="manual-person-select" class="ui-pill rounded-full px-4 py-1.5 text-xs font-bold"></select>
+                <input id="manual-new-name" type="text" placeholder="Ou nouveau prénom..." class="ui-pill rounded-full px-4 py-1.5 text-xs font-bold outline-none"/>
+            </div>
+            <button id="btn-save-manual-face" onclick="saveManualFaceBox()" disabled class="plum-btn disabled:opacity-40 font-bold px-6 py-2 rounded-full text-xs">Enregistrer ce visage</button>
+        </div>
+    </div>
+</div>
+
+<div id="metadata-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="flex justify-between items-center pb-2">
+            <h2 class="text-base font-extrabold">✏️ Modifier les Métadonnées (Date / Heure / Lieu)</h2>
+            <button onclick="closeMetadataModal()" class="font-bold">✕</button>
+        </div>
+        <div class="ui-pill rounded-2xl p-4 space-y-3 text-xs">
+            <label class="block font-extrabold">📅 Date & Heure</label>
+            <input id="meta-datetime" type="datetime-local" step="1" onchange="updateSequentialPreview()" class="ui-card w-full rounded-xl px-3 py-2 font-bold outline-none"/>
+            <div id="meta-sequence-panel" class="hidden pt-2 space-y-2">
+                <div class="font-bold">⏱️ Suite horaire automatique</div>
+                <div class="flex gap-3">
+                    <label><input type="radio" name="time_seq_mode" value="PRESERVE_GAPS" checked onchange="updateSequentialPreview()"/> Conserver les écarts</label>
+                    <label><input type="radio" name="time_seq_mode" value="FIXED_STEP" onchange="updateSequentialPreview()"/> Pas fixe (+sec)</label>
+                    <label><input type="radio" name="time_seq_mode" value="SAME" onchange="updateSequentialPreview()"/> Même seconde</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span>Intervalle (sec) :</span>
+                    <input id="meta-step-sec" type="number" value="17" min="1" oninput="updateSequentialPreview()" class="w-20 ui-card rounded px-2 py-1"/>
+                </div>
+                <div id="meta-seq-preview" class="bg-black text-emerald-400 rounded-xl p-2 font-mono text-[11px] max-h-24 overflow-y-auto"></div>
+            </div>
+        </div>
+        <div class="ui-pill rounded-2xl p-4 space-y-2 text-xs">
+            <div class="font-extrabold">📍 Position GPS</div>
+            <div class="flex gap-2">
+                <input id="meta-place-search" type="text" placeholder="Rechercher une ville..." class="flex-1 ui-card rounded-full px-3 py-1.5 outline-none"/>
+                <button onclick="searchPlaceForMetaMap()" class="plum-btn px-4 py-1.5 rounded-full font-bold">Chercher</button>
+            </div>
+            <div id="meta-picker-map" class="w-full h-44 rounded-2xl z-10"></div>
+            <div class="grid grid-cols-2 gap-2">
+                <input id="meta-lat" type="number" step="any" placeholder="Latitude" class="ui-card rounded-xl px-3 py-1.5"/>
+                <input id="meta-lon" type="number" step="any" placeholder="Longitude" class="ui-card rounded-xl px-3 py-1.5"/>
+            </div>
+            <input id="meta-desc" type="text" placeholder="Description / Légende EXIF..." class="w-full ui-card rounded-xl px-3 py-1.5"/>
+        </div>
+        <div class="flex justify-between items-center pt-2 text-xs">
+            <div class="flex gap-2">
+                <button onclick="stripMetadata(true, false)" class="bg-rose-600/20 text-rose-600 font-bold px-4 py-1.5 rounded-full">Effacer GPS</button>
+                <button onclick="stripMetadata(false, true)" class="bg-rose-600 text-white font-bold px-4 py-1.5 rounded-full">Purger EXIF</button>
+            </div>
+            <button onclick="saveMetadataChanges()" class="plum-btn font-bold px-6 py-2 rounded-full">Appliquer</button>
+        </div>
+    </div>
+</div>
+
+<div id="studio-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-6xl w-full p-5 flex flex-col max-h-[94vh]">
+        <div class="flex justify-between items-center pb-3 mb-3">
+            <h2 class="text-lg font-extrabold">🎨 Studio d'Édition Photo & Vidéo</h2>
+            <button onclick="closeStudioModal()" class="text-xl font-bold">✕</button>
+        </div>
+        <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden">
+            <div class="lg:col-span-7 flex flex-col bg-black rounded-2xl p-3 overflow-hidden">
+                <div class="flex justify-between items-center pb-2 mb-2 text-xs text-white">
+                    <div class="flex gap-2">
+                        <button onclick="setStudioMouseTool('CROP')" class="plum-btn font-bold px-3 py-1 rounded-full">✂️ Rognage</button>
+                        <button onclick="setStudioMouseTool('ERASER')" class="bg-white/10 text-rose-300 px-3 py-1 rounded-full">🪄 Gomme Magique</button>
+                    </div>
+                    <button onclick="clearStudioDrawings()" class="opacity-70 underline">Effacer les tracés</button>
+                </div>
+                <div class="flex-1 flex items-center justify-center overflow-auto select-none">
+                    <div id="studio-stage" class="relative inline-block cursor-crosshair">
+                        <img id="studio-img" draggable="false" class="hidden max-h-[54vh] w-auto block select-none"/>
+                        <video id="studio-video" controls class="hidden max-h-[54vh] w-auto block select-none"></video>
+                        <div id="studio-crop-box" class="hidden absolute border-2 border-sky-400 bg-sky-400/15 pointer-events-none"></div>
+                        <div id="studio-eraser-boxes" class="absolute inset-0 pointer-events-none"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-5 overflow-y-auto space-y-3 pr-1 text-xs">
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">🔄 Pivoter & Retourner</div>
+                    <div class="grid grid-cols-4 gap-2 font-bold">
+                        <button onclick="studioRotate(-90)" class="ui-card py-1.5 rounded-xl">↺ -90°</button>
+                        <button onclick="studioRotate(90)" class="ui-card py-1.5 rounded-xl">↻ +90°</button>
+                        <button onclick="studioFlip('H')" class="ui-card py-1.5 rounded-xl">↔ Miroir H</button>
+                        <button onclick="studioFlip('V')" class="ui-card py-1.5 rounded-xl">↕ Miroir V</button>
+                    </div>
+                </div>
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">☀️ Luminosité, Contraste & Couleurs</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Luminosité</label><input id="st-bright" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Contraste</label><input id="st-contrast" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Saturation</label><input id="st-sat" type="range" min="0.0" max="2.5" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Netteté</label><input id="st-sharp" type="range" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                    </div>
+                </div>
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">🔤 Ajouter du Texte</div>
+                    <div class="flex gap-2">
+                        <input id="st-text-val" type="text" placeholder="Texte..." class="flex-1 ui-card rounded-xl px-2.5 py-1"/>
+                        <input id="st-text-color" type="color" value="#ffffff" class="w-8 h-7 bg-transparent"/>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input id="st-text-x" type="number" value="5" placeholder="X%" class="ui-card rounded-xl px-2 py-1"/>
+                        <input id="st-text-y" type="number" value="88" placeholder="Y%" class="ui-card rounded-xl px-2 py-1"/>
+                        <input id="st-text-size" type="number" value="40" placeholder="Taille" class="ui-card rounded-xl px-2 py-1"/>
+                    </div>
+                </div>
+                <div id="studio-video-panel" class="hidden ui-pill rounded-2xl p-3 space-y-2.5">
+                    <div class="font-extrabold">🎬 Outils Vidéo</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Début (sec)</label><input id="st-vid-start" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
+                        <div><label>Fin (0 = fin)</label><input id="st-vid-end" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 items-center">
+                        <select id="st-vid-speed" class="ui-card rounded-xl px-2 py-1.5">
+                            <option value="0.5">Vitesse 0.5x</option>
+                            <option value="1.0" selected>Vitesse 1.0x</option>
+                            <option value="1.5">Vitesse 1.5x</option>
+                            <option value="2.0">Vitesse 2.0x</option>
+                        </select>
+                        <label class="flex items-center gap-1.5 font-bold"><input id="st-vid-mute" type="checkbox"/> 🔇 Muet</label>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="st-vid-audio" type="text" placeholder="Fichier audio..." class="flex-1 ui-card rounded-xl px-2 py-1 font-mono"/>
+                        <button onclick="browseStudioAudio()" class="ui-card px-2.5 py-1 rounded-xl">📂 Audio</button>
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <button onclick="applyStudioChanges('SPLIT')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">✂️ Séparer en 2</button>
+                        <button onclick="applyStudioChanges('GIF')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">🎞️ Créer GIF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-4 pt-3 text-xs">
+            <div class="flex items-center gap-4 ui-pill px-4 py-2 rounded-full">
+                <label class="flex items-center gap-1.5 font-bold cursor-pointer">
+                    <input type="radio" name="studio_save_mode" value="copy" checked/>
+                    <span>Enregistrer une copie (<code>_edit</code>)</span>
+                </label>
+                <label class="flex items-center gap-1.5 font-semibold cursor-pointer">
+                    <input type="radio" name="studio_save_mode" value="overwrite"/>
+                    <span>Remplacer l'original</span>
+                </label>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeStudioModal()" class="ui-pill px-5 py-2 rounded-full font-bold">Annuler</button>
+                <button onclick="applyStudioChanges('EDIT')" class="plum-btn font-bold px-6 py-2 rounded-full">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+</div>

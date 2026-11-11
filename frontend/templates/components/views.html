@@ -1,0 +1,466 @@
+<main id="main-scroll-container" class="flex-1 overflow-y-auto pr-2">
+
+    <!-- LES 3 CARTES D'OPTIONS D'AFFICHAGE (Trier/Grouper | Filtrer | Disposition) -->
+    <div id="filter-drawer" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
+        <!-- Carte 1 : Trier par & Grouper par -->
+        <div class="lg:col-span-5 ui-card rounded-3xl p-4 flex flex-col justify-center gap-3 shadow-sm">
+            <div class="flex flex-wrap items-center gap-2.5">
+                <span class="text-xs font-extrabold w-24">Trier par :</span>
+                <select id="gal-sort-by" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="date">Date</option>
+                    <option value="name">Nom</option>
+                    <option value="added">Date d'ajout</option>
+                </select>
+                <select id="gal-sort-order" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="desc">Décroissant</option>
+                    <option value="asc">Croissant</option>
+                </select>
+            </div>
+            <div class="flex flex-wrap items-center gap-2.5">
+                <span class="text-xs font-extrabold w-24">Grouper par :</span>
+                <select id="gal-group-by" onchange="onChangeGroupBy(this.value)" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="NONE">Aucun</option>
+                    <option value="DAY">Jour</option>
+                    <option value="WEEK">Semaine</option>
+                    <option value="MONTH">Mois</option>
+                    <option value="YEAR">Année</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Carte 2 : Filtrer par (Années, Mois, Catégories, Type d'extension) -->
+        <div class="lg:col-span-5 ui-card rounded-3xl p-4 flex items-center gap-3 shadow-sm">
+            <span class="text-xs font-extrabold shrink-0">Filtrer par :</span>
+            <div class="grid grid-cols-2 gap-2 flex-1">
+                <select id="gal-year" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer"></select>
+                <select id="gal-month" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer"></select>
+                <select id="gal-type-filter" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="">Catégories</option>
+                    <option value="PHOTOS">Photos</option>
+                    <option value="VIDEOS">Vidéos</option>
+                    <option value="RAW">RAW</option>
+                    <option value="SCREENSHOTS">Captures</option>
+                </select>
+                <select id="gal-ext-select" onchange="currentExtFilter=this.value; refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="">Type</option>
+                </select>
+            </div>
+            <!-- Champs cachés pour compatibilité avec les filtres Favoris / Albums -->
+            <select id="gal-album" class="hidden"></select>
+            <input id="gal-fav" type="checkbox" class="hidden"/>
+            <input id="gal-nofaces" type="checkbox" class="hidden"/>
+        </div>
+
+        <!-- Carte 3 : Disposition (Grille ou Mosaïque) -->
+        <div class="lg:col-span-2 ui-card rounded-3xl p-3 flex flex-col items-center justify-center gap-2 shadow-sm">
+            <span class="text-xs font-extrabold">Disposition</span>
+            <div class="flex items-center gap-3">
+                <button onclick="setGalleryLayout('GRID')" class="flex flex-col items-center gap-1 group">
+                    <div id="layout-btn-GRID" class="w-10 h-10 rounded-2xl nav-item-active flex items-center justify-center transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                    </div>
+                    <span class="text-[10px] font-bold opacity-70">Grille</span>
+                </button>
+                <button onclick="setGalleryLayout('MASONRY')" class="flex flex-col items-center gap-1 group">
+                    <div id="layout-btn-MASONRY" class="w-10 h-10 rounded-2xl ui-pill flex items-center justify-center transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                    </div>
+                    <span class="text-[10px] font-bold opacity-70">Mosaïque</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BARRE FLOTTANTE D'ACTIONS PAR LOT -->
+    <div id="gal-batch-bar" class="hidden sticky top-2 z-20 ui-card rounded-2xl p-3 mb-4 flex flex-wrap justify-between items-center gap-2 shadow-xl">
+        <div class="flex items-center gap-3">
+            <span id="gal-batch-count" class="plum-btn text-xs font-bold px-3 py-1 rounded-full">0</span>
+            <button onclick="selectAllGalleryPage(true)" class="text-xs font-bold underline">Tout cocher</button>
+            <button onclick="selectAllGalleryPage(false)" class="text-xs opacity-70 underline">Tout décocher</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button onclick="runGalleryBatch('FAVORITE_ADD')" class="ui-pill text-xs font-bold px-3 py-1.5 rounded-full">♥ Favoris</button>
+            <input id="batch-album-input" type="text" placeholder="Nom d'album..." class="ui-pill rounded-full px-3 py-1 text-xs w-36 outline-none"/>
+            <button onclick="runGalleryBatch('ALBUM_ADD')" class="plum-btn text-xs font-bold px-3.5 py-1.5 rounded-full">+ Album</button>
+            <button onclick="openMetadataModalForSelection()" class="plum-btn text-xs font-bold px-3.5 py-1.5 rounded-full">Métadonnées / Heures</button>
+            <button onclick="runGalleryBatch('TRASH')" class="bg-rose-600 text-white text-xs font-bold px-3.5 py-1.5 rounded-full">Supprimer</button>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 1 : GALERIE ==================== -->
+    <div id="tab-gallery">
+        <div class="flex items-center justify-between mb-5">
+            <div onclick="toggleFilterBar()" title="Afficher / masquer les options de tri, filtre et disposition"
+                 class="flex items-center gap-3 cursor-pointer group">
+                <h1 id="gallery-main-heading" class="text-4xl font-extrabold tracking-tight">Galerie</h1>
+                <svg id="filter-chevron-icon" class="w-6 h-6 opacity-70 group-hover:opacity-100 transition-transform duration-200 mt-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <span id="gal-total-label" class="text-xs font-bold opacity-60"></span>
+        </div>
+
+        <div id="gallery-content-area" class="space-y-6"></div>
+
+        <!-- Sentinelle de Défilement Infini (Galerie) -->
+        <div id="gallery-scroll-sentinel" class="py-8 flex justify-center items-center">
+            <div id="gallery-loading-spinner" class="hidden text-xs font-extrabold opacity-60 animate-pulse">
+                Chargement de la suite...
+            </div>
+        </div>
+
+        <!-- Barre de défilement chronologique (Années & Mois) -->
+        <div id="timeline-scrubber" class="hidden"
+             onmousedown="startTimelineScrub(event)"
+             onmousemove="moveTimelineScrub(event)"
+             onmouseup="endTimelineScrub()">
+            <div id="timeline-tooltip" class="hidden fixed right-20 px-4 py-2 rounded-2xl plum-btn text-xs font-extrabold shadow-2xl pointer-events-none whitespace-nowrap z-50">
+                Novembre 2026
+            </div>
+            <div id="timeline-items-container" class="w-full h-full flex flex-col justify-between items-end overflow-y-auto no-scrollbar"></div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 2 : ALBUMS ==================== -->
+    <div id="tab-albums" class="hidden">
+        <div id="albums-overview-panel">
+            <div class="flex items-center justify-between mb-6">
+                <div onclick="toggleFilterBar()" class="flex items-center gap-3 cursor-pointer group">
+                    <h1 class="text-4xl font-extrabold tracking-tight">Albums</h1>
+                    <svg class="w-6 h-6 opacity-70 group-hover:opacity-100 mt-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <button onclick="promptCreateNewAlbum()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow flex items-center gap-2">
+                    <span>+</span> <span>Nouveau</span>
+                </button>
+            </div>
+            <div id="albums-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"></div>
+        </div>
+
+        <div id="album-single-panel" class="hidden space-y-5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button onclick="closeSingleAlbumView()" class="ui-card px-4 py-2 rounded-full text-xs font-bold shadow-sm">← Tous les albums</button>
+                    <h1 id="single-album-title" class="text-3xl font-extrabold"></h1>
+                    <button onclick="toggleFilterBar()" class="text-xl font-bold opacity-60 hover:opacity-100 px-2">⌄</button>
+                </div>
+                <span id="single-album-count" class="text-xs font-bold opacity-60"></span>
+            </div>
+            <div id="album-single-content-area" class="space-y-6"></div>
+
+            <!-- Sentinelle de Défilement Infini (Album) -->
+            <div id="album-scroll-sentinel" class="py-8 flex justify-center items-center">
+                <div id="album-loading-spinner" class="hidden text-xs font-extrabold opacity-60 animate-pulse">
+                    Chargement de la suite...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 3 : PERSONNES ==================== -->
+    <div id="tab-faces" class="hidden">
+        <div id="persons-overview-panel">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-baseline gap-3">
+                    <h1 class="text-4xl font-extrabold tracking-tight">Personnes</h1>
+                    <button onclick="toggleSuggestionsPanel()" title="Suggestions et fusion de personnes" class="text-2xl font-bold opacity-60 hover:opacity-100 px-2">...</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-merge-selected" onclick="mergeSelectedPersons()" class="hidden ui-card px-4 py-2 rounded-full text-xs font-bold">Fusionner la sélection</button>
+                    <button onclick="runTask('FACES')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+                </div>
+            </div>
+
+            <div id="suggestions-panel" class="hidden ui-card rounded-3xl p-4 mb-6 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-extrabold">Suggestions de visages similaires</span>
+                    <button onclick="syncExifNow()" class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold">Inscrire les noms dans l'EXIF</button>
+                </div>
+                <div id="suggestions-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+            </div>
+
+            <div id="persons-identified-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 mb-10"></div>
+
+            <h2 class="text-2xl font-extrabold mb-5">Non Identifié</h2>
+            <div id="persons-unknown-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 pb-10"></div>
+        </div>
+
+        <div id="person-timeline-modal" class="hidden ui-card rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-black/10">
+                <h2 id="tl-person-name" class="text-2xl font-extrabold"></h2>
+                <button onclick="closeTimeline()" class="ui-pill px-4 py-2 rounded-full text-xs font-bold">← Retour aux personnes</button>
+            </div>
+            <div class="ui-pill rounded-2xl p-3 mb-4 flex flex-wrap justify-between items-center gap-2">
+                <span id="tl-sel-count" class="text-xs font-bold">0 sélectionné(s)</span>
+                <div class="flex flex-wrap gap-2">
+                    <select id="tl-target-person-select" class="ui-card rounded-full px-3 py-1 text-xs"></select>
+                    <button onclick="reassignSelectedFaces('EXISTING_PERSON')" class="plum-btn text-xs px-3.5 py-1 rounded-full">Réassigner</button>
+                    <button onclick="reassignSelectedFaces('NEW_GROUP')" class="plum-btn text-xs px-3.5 py-1 rounded-full">Nouveau groupe</button>
+                    <button onclick="reassignSelectedFaces('IGNORE')" class="bg-rose-600 text-white text-xs px-3.5 py-1 rounded-full">Ignorer</button>
+                </div>
+            </div>
+            <div id="tl-faces-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3"></div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 4 : LIEUX ==================== -->
+    <div id="tab-map" class="hidden">
+        <div class="flex items-center justify-between mb-5">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight">Lieux</h1>
+                <span id="map-stats-label" class="text-xs font-bold opacity-60">...</span>
+            </div>
+            <button onclick="openMetadataModalForSelection()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow flex items-center gap-2">
+                <span>+</span> <span>Ajouter</span>
+            </button>
+        </div>
+        <div id="world-map" class="w-full h-[380px] rounded-3xl ui-card shadow-sm z-10 mb-6 overflow-hidden"></div>
+        <div id="places-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 pb-8"></div>
+    </div>
+
+    <!-- ==================== VUE 5 : CATÉGORIES / TYPES ==================== -->
+    <div id="tab-types" class="hidden space-y-6">
+        <div class="flex items-baseline gap-3 mb-4">
+            <h1 class="text-4xl font-extrabold tracking-tight">Catégories</h1>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-5" id="types-cards-grid"></div>
+        <div class="ui-card rounded-3xl p-5">
+            <h3 class="text-sm font-extrabold mb-3">Formats & Extensions</h3>
+            <div id="types-ext-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 6 : OUTILS ==================== -->
+    <div id="tab-tools" class="hidden space-y-6">
+        <div class="flex items-baseline gap-3 mb-4">
+            <h1 class="text-4xl font-extrabold tracking-tight">Outils</h1>
+            <span class="text-2xl font-bold opacity-60">...</span>
+        </div>
+
+        <div class="flex flex-wrap gap-4">
+            <button onclick="openEditorFromTools('PHOTO')" class="ui-card px-6 py-3 rounded-2xl text-xs font-extrabold flex items-center gap-2.5 shadow-sm hover:scale-[1.02] transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <span>Editeur Photos</span>
+            </button>
+            <button onclick="openEditorFromTools('VIDEO')" class="ui-card px-6 py-3 rounded-2xl text-xs font-extrabold flex items-center gap-2.5 shadow-sm hover:scale-[1.02] transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>
+                <span>Editeur Vidéos</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 max-w-xl gap-6 pt-2">
+            <div class="ui-card rounded-3xl p-6 text-center space-y-4 shadow-sm">
+                <div class="text-xs font-extrabold tracking-wider uppercase">MES DOUBLONS</div>
+                <div class="ui-pill rounded-2xl py-2.5 text-lg font-extrabold" id="st-dups">0</div>
+                <div class="flex justify-center gap-3">
+                    <button onclick="switchTab('dups')" title="Voir les doublons" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button onclick="switchTab('dups'); runTask('DEDUP')" title="Lancer l'analyse des doublons" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="ui-card rounded-3xl p-6 text-center space-y-4 shadow-sm">
+                <div class="text-xs font-extrabold tracking-wider uppercase">MES SIMILARITES</div>
+                <div class="ui-pill rounded-2xl py-2.5 text-lg font-extrabold" id="st-sims">0</div>
+                <div class="flex justify-center gap-3">
+                    <button onclick="switchTab('similar')" title="Voir les similarités" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button onclick="switchTab('similar'); runTask('SIMILAR')" title="Lancer l'analyse des similarités" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 max-w-4xl">
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <div class="text-xs font-extrabold uppercase">🔍 Texte OCR & Recherche IA</div>
+                <div class="flex gap-2">
+                    <button onclick="runTask('OCR')" class="plum-btn flex-1 py-2 rounded-full text-xs font-bold">Analyser OCR</button>
+                    <button onclick="runTask('CLIP')" class="plum-btn flex-1 py-2 rounded-full text-xs font-bold">Indexer IA</button>
+                </div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm md:col-span-2 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="text-xs font-extrabold uppercase">📅 Métadonnées Takeout manquantes (<span id="st-missing-meta">0</span>)</div>
+                    <p class="text-[11px] opacity-70">Récupère automatiquement les dates depuis le nom ou le JSON.</p>
+                </div>
+                <button id="btn-retry-meta" onclick="retryMissingMetadataNow()" class="plum-btn px-5 py-2 rounded-full text-xs font-bold shadow">
+                    Réparer les dates
+                </button>
+            </div>
+        </div>
+
+        <div id="global-search-results-panel" class="hidden space-y-3 pt-4">
+            <h3 class="text-lg font-extrabold">Résultats de recherche</h3>
+            <div id="semantic-results-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4"></div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 7 : DOUBLONS ==================== -->
+    <div id="tab-dups" class="hidden space-y-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight">Doublons</h1>
+                <span class="text-2xl font-bold opacity-60">...</span>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-delete-checked-dups" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
+                <button onclick="runTask('DEDUP')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+            </div>
+        </div>
+
+        <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
+            <div id="dups-status-title" class="text-xs font-extrabold text-center">Analyse en cours...</div>
+            <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
+                <div id="cov-bar-dedup" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                <span id="cov-pct-dedup" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white">0 %</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
+                <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-dedup">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
+                <div class="ui-pill rounded-2xl py-2.5 px-3">Temps restant estimé :<br><span id="dups-eta-label" class="font-semibold opacity-75">--</span></div>
+                <div class="ui-pill rounded-2xl py-2.5 px-3"><span id="dups-count-banner">0</span> doublons<br><span class="font-semibold opacity-75">0 echecs</span></div>
+            </div>
+        </div>
+
+        <div class="text-xs font-extrabold text-center opacity-80">Sélectionnez les fichiers que vous souhaitez supprimer</div>
+        <div id="dups-container" class="space-y-6 pb-10"></div>
+    </div>
+
+    <!-- ==================== VUE 8 : SIMILAIRES ==================== -->
+    <div id="tab-similar" class="hidden space-y-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight">Similaires</h1>
+                <span class="text-2xl font-bold opacity-60">...</span>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-delete-checked-sims" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
+                <button onclick="runTask('SIMILAR')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+            </div>
+        </div>
+
+        <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
+            <div class="text-xs font-extrabold text-center">Analyse en cours...</div>
+            <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
+                <div id="cov-bar-similar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                <span id="cov-pct-similar" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white">0 %</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
+                <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-similar">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
+                <div class="ui-pill rounded-2xl py-2.5 px-3">Temps restant estimé :<br><span id="sims-eta-label" class="font-semibold opacity-75">--</span></div>
+                <div class="ui-pill rounded-2xl py-2.5 px-3"><span id="sims-count-banner">0</span> similarités<br><span class="font-semibold opacity-75">0 echecs</span></div>
+            </div>
+        </div>
+
+        <div class="text-xs font-extrabold text-center opacity-80">Sélectionnez les fichiers que vous souhaitez supprimer</div>
+        <div id="similar-container" class="space-y-6 pb-10"></div>
+    </div>
+
+    <!-- ==================== VUE 9 : CORBEILLE ==================== -->
+    <div id="tab-trash" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight">Corbeille</h1>
+                <span id="trash-summary-label" class="text-xs font-bold opacity-60">...</span>
+            </div>
+            <button onclick="emptyAllTrash()" class="plum-btn px-8 py-2 rounded-full text-xs font-bold shadow">Vider</button>
+        </div>
+        <div id="trash-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5 pb-10"></div>
+    </div>
+
+    <!-- ==================== VUE 10 : PARAMÈTRES ==================== -->
+    <div id="tab-settings" class="hidden max-w-4xl">
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-4xl font-extrabold tracking-tight">Parametres</h1>
+            <div class="flex items-center gap-3">
+                <button onclick="restartApplication()" title="Redémarrer le logiciel"
+                        class="w-11 h-11 rounded-2xl bg-[#E5C168] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button onclick="shutdownApplication()" title="Arrêter le logiciel"
+                        class="w-11 h-11 rounded-2xl bg-[#DC6B6B] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
+                    <span>🌡️</span> <span>Choisir le theme</span>
+                </div>
+                <button id="theme-btn-light" onclick="setAppTheme('light')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
+                    <span>☀️</span> <span>Clair</span>
+                </button>
+                <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
+                    <span>🌙</span> <span>Sombre</span>
+                </button>
+                <button id="theme-btn-system" onclick="setAppTheme('system')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
+                    <span>🖥️</span> <span>Système</span>
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
+                    <span>🌐</span> <span>Choix de la langue</span>
+                </div>
+                <div class="ui-card rounded-2xl px-4 py-2.5 shadow-sm">
+                    <select id="settings-lang" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
+                        <option value="fr">Français</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+
+                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm ml-2">
+                    <span>🕒</span> <span>Fuseau horaire</span>
+                </div>
+                <div class="ui-card rounded-2xl px-4 py-2.5 shadow-sm">
+                    <select id="settings-timezone" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
+                        <option value="Europe/Paris">Paris/France</option>
+                        <option value="Europe/London">London/UK</option>
+                        <option value="America/New_York">New York/USA</option>
+                        <option value="America/Montreal">Montréal/Canada</option>
+                        <option value="UTC">UTC</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
+                    <span>🔲</span> <span>Accélération Materielle</span>
+                </div>
+                <button id="gpu-btn-cuda" onclick="selectGpuPill('cuda')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">NVIDIA</button>
+                <button id="gpu-btn-directml" onclick="selectGpuPill('directml')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">AMD</button>
+                <button id="gpu-btn-cpu" onclick="selectGpuPill('cpu')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">INTEL</button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 pt-1">
+                <button onclick="pruneMissingFiles()" class="ui-card hover:brightness-95 rounded-2xl px-5 py-3.5 text-xs font-extrabold flex items-center gap-2.5 shadow-sm transition">
+                    <span>🪶</span> <span>Nettoyage du systeme</span>
+                </button>
+                <button onclick="backupDatabaseNow()" class="ui-card hover:brightness-95 rounded-2xl px-5 py-3.5 text-xs font-extrabold flex items-center gap-2.5 shadow-sm transition">
+                    <span>💾</span> <span>Sauvegarde de la base de donnée</span>
+                </button>
+            </div>
+            <div id="backup-result-msg" class="text-xs font-mono opacity-80 hidden"></div>
+
+            <textarea id="settings-scanned-folders" class="hidden"></textarea>
+            <input id="settings-takeout-dir" type="hidden"/>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES) ==================== -->
+    <div id="tab-activities" class="hidden max-w-3xl space-y-5">
+        <h1 class="text-4xl font-extrabold tracking-tight mb-6">Activités</h1>
+        <div id="activities-full-list" class="space-y-3">
+            <div class="ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">
+                Aucune activité enregistrée pour le moment.
+            </div>
+        </div>
+    </div>
+
+</main>

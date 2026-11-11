@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <title>Phototo — Galerie Photo & Vidéo IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="/static/css/theme.css" />
+</head>
+<body class="h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Barre supérieure & Popovers (Bibliothèque / Tâche) -->
+    {% include "components/topbar.html" %}
+
+    <!-- Corps principal : Barre latérale + 10 Vues -->
+    <div class="flex-1 flex overflow-hidden px-4 pb-4 gap-6">
+        {% include "components/sidebar.html" %}
+        {% include "components/views.html" %}
+    </div>
+
+    <!-- Fenêtres modales (Lightbox, Assistant Import, Studio, EXIF, Visages) -->
+    {% include "components/modals.html" %}
+
+    <!-- Scripts modulaires -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/import_wizard.js"></script>
+    <script src="/static/js/gallery.js"></script>
+    <script src="/static/js/ai_views.js"></script>
+    <script src="/static/js/studio_exif.js"></script>
+</body>
+</html>

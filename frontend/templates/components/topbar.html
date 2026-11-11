@@ -1,0 +1,155 @@
+<header class="h-20 px-6 flex items-center gap-6 z-30 shrink-0">
+    <!-- Gauche (même largeur w-48 que la sidebar) : Logo Phototo -->
+    <div id="topbar-logo-box" onclick="toggleSidebarMini()" title="Cliquer pour réduire / agrandir le menu latéral"
+         class="w-48 flex items-center gap-2.5 cursor-pointer group shrink-0 transition-all duration-200">
+        <svg class="w-7 h-7 text-[#593E5A] group-hover:scale-110 transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+        </svg>
+        <span id="topbar-logo-text" class="text-2xl font-extrabold tracking-tight text-[#593E5A]">Phototo</span>
+    </div>
+
+    <!-- Zone alignée avec le titre de la page : Barre de recherche à gauche + Cloche Notifications & Bibliothèque à droite -->
+    <div class="flex-1 flex items-center justify-between gap-4">
+        <div class="w-full max-w-md">
+            <div class="relative flex items-center">
+                <svg class="w-4 h-4 absolute left-4 opacity-60" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
+                </svg>
+                <input id="global-search-input" type="text" placeholder="Rechercher..."
+                       onkeydown="if(event.key==='Enter') runGlobalSearch()"
+                       class="ui-card w-full rounded-full pl-11 pr-4 py-2.5 text-sm outline-none shadow-sm focus:ring-2 focus:ring-[#593E5A]"/>
+            </div>
+        </div>
+
+        <div class="relative flex items-center gap-4">
+            <!-- Bouton Cloche Notifications -->
+            <button id="notif-bell-btn" onclick="toggleNotificationsPopover(event)" title="Notifications d'activités"
+                    class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5 transition relative">
+                <svg class="w-5 h-5 text-[#593E5A]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span id="notif-unread-dot" class="hidden absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white"></span>
+            </button>
+
+            <!-- Pilule Bibliothèque + Sismographe -->
+            <div class="ui-card rounded-full pl-5 pr-1 py-1 flex items-center gap-3 shadow-sm">
+                <button id="lib-name-btn" onclick="toggleLibMenuPopover(event)"
+                        class="text-sm font-semibold opacity-75 hover:opacity-100 pr-2 truncate max-w-[180px]">
+                    Nom de la bibliotheque
+                </button>
+                <button id="task-pulse-btn" onclick="toggleTaskPopover(event)"
+                        class="plum-btn w-9 h-9 rounded-full flex items-center justify-center shadow transition relative">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-7 4 14 3-7h4"/>
+                    </svg>
+                    <span id="pulse-badge" class="hidden absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white animate-ping"></span>
+                </button>
+            </div>
+
+            <!-- POPOVER CLOCHE : NOTIFICATIONS DES ACTIVITÉS TERMINÉES / ÉCHOUÉES -->
+            <div id="notif-popover" class="hidden absolute right-48 top-14 w-80 ui-card rounded-3xl shadow-2xl p-4 z-50 space-y-3" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between border-b border-black/10 pb-2">
+                    <span class="text-xs font-extrabold uppercase tracking-wider">Notifications</span>
+                    <button onclick="switchTab('activities'); document.getElementById('notif-popover').classList.add('hidden')" class="text-[11px] font-bold text-[#593E5A] hover:underline">
+                        Tout voir
+                    </button>
+                </div>
+                <div id="notif-popover-list" class="space-y-2 max-h-64 overflow-y-auto text-xs">
+                    <div class="py-4 text-center opacity-60 font-semibold">Aucune activité récente</div>
+                </div>
+            </div>
+
+            <!-- POPOVER 1 : SÉLECTEUR DE BIBLIOTHÈQUE -->
+            <div id="lib-menu-popover" class="hidden absolute right-12 top-14 w-72 ui-card rounded-3xl shadow-2xl p-4 z-50">
+                <div class="ui-pill rounded-full px-4 py-2 mb-4 flex items-center justify-between">
+                    <select id="library-selector" onchange="switchLibrary(this.value)"
+                            class="bg-transparent font-extrabold text-sm w-full outline-none cursor-pointer"></select>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <button onclick="openLibraryModal('CREATE')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:opacity-85 transition">
+                        <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shadow">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+                        </div>
+                        <span class="text-xs font-extrabold">Créer</span>
+                    </button>
+                    <button onclick="openMergeLibrariesModal()" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:opacity-85 transition">
+                        <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shadow">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        </div>
+                        <span class="text-xs font-extrabold">Fusionner</span>
+                    </button>
+                    <button onclick="openLibraryModal('EDIT')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:opacity-85 transition">
+                        <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shadow">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                        </div>
+                        <span class="text-xs font-extrabold">Modifier</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- POPOVER 2 : TÂCHE EN COURS -->
+            <div id="task-popover" class="hidden absolute right-0 top-14 w-96 z-50 space-y-3" onclick="event.stopPropagation()">
+                <div class="ui-card rounded-3xl shadow-2xl p-5 relative">
+                    <div id="task-empty-state" class="text-center space-y-4 py-2">
+                        <div class="text-base font-extrabold">Aucune tâche en cours</div>
+                        <button onclick="runTask('INGEST')" class="plum-btn w-full py-2.5 rounded-full text-xs font-bold shadow">
+                            Lancer une analyse
+                        </button>
+                    </div>
+
+                    <div id="task-active-state" class="hidden space-y-3.5">
+                        <div id="pop-step-title" class="text-base font-extrabold text-center truncate">Decompression en cours...</div>
+                        <div class="w-full ui-pill rounded-full h-3.5 overflow-hidden relative">
+                            <div id="pipe-bar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                            <span id="pop-percent-text" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow">0 %</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
+                            <div class="ui-pill rounded-2xl py-1.5 px-2 truncate" id="pop-files-pill">0 / 0<br>fichiers</div>
+                            <div class="ui-pill rounded-2xl py-1.5 px-2 truncate" id="pop-eta-pill">Temps restant estimé<br>--:--</div>
+                            <div class="ui-pill rounded-2xl py-1.5 px-2 flex items-center justify-center truncate" id="pop-speed-pill">-- Mo/s</div>
+                        </div>
+                        <div class="flex justify-center items-center gap-4 pt-1 relative">
+                            <button id="btn-pause-pipe" onclick="handlePipeActionButton()" title="Mettre en pause / Reprendre"
+                                    class="plum-btn w-10 h-10 rounded-2xl flex items-center justify-center shadow">
+                                <svg id="icon-pause-bars" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>
+                                </svg>
+                                <span id="icon-play-triangle" class="hidden text-sm font-bold">▶</span>
+                            </button>
+                            <button onclick="document.getElementById('pipe-logs-box').classList.toggle('hidden')" title="Afficher la console"
+                                    class="plum-btn w-10 h-10 rounded-2xl flex items-center justify-center font-mono text-sm font-extrabold shadow">
+                                &gt;_
+                            </button>
+                            <button onclick="stopPipelineCompletely()" title="Arrêter complètement la tâche"
+                                    class="plum-btn w-10 h-10 rounded-2xl flex items-center justify-center shadow">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <rect x="6" y="6" width="12" height="12" rx="1.5"/>
+                                </svg>
+                            </button>
+                            <button id="btn-task-warning" onclick="toggleTaskMissingMetaSubpanel(event)" title="Certaines métadonnées sont manquantes"
+                                    class="hidden absolute right-1 bottom-0.5 text-[#593E5A] hover:scale-110 transition">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="pipe-logs-box" class="hidden mt-2 bg-[#262626] text-emerald-400 rounded-2xl p-3 font-mono text-[10px] h-36 overflow-y-auto select-text shadow-inner"></div>
+                    </div>
+                </div>
+
+                <div id="task-missing-meta-popover" class="hidden ui-card rounded-3xl shadow-2xl p-5 space-y-3 relative">
+                    <div class="text-sm font-extrabold">Certaines metadonnées sont manquantes</div>
+                    <div id="task-missing-meta-list" class="text-[11px] font-semibold opacity-60 space-y-1 max-h-28 overflow-y-auto font-mono"></div>
+                    <div class="flex justify-end pt-1">
+                        <button id="btn-popover-retry-meta" onclick="retryMissingMetadataFromPopover()"
+                                class="plum-btn px-6 py-1.5 rounded-full text-xs font-bold shadow">
+                            Réessayer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
