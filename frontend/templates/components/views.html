@@ -1,85 +1,14 @@
 <main id="main-scroll-container" class="flex-1 overflow-y-auto pr-2">
 
-    <!-- LES 3 CARTES D'OPTIONS D'AFFICHAGE (Trier/Grouper | Filtrer | Disposition) -->
-    <div id="filter-drawer" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
-        <!-- Carte 1 : Trier par & Grouper par -->
-        <div class="lg:col-span-5 ui-card rounded-3xl p-4 flex flex-col justify-center gap-3 shadow-sm">
-            <div class="flex flex-wrap items-center gap-2.5">
-                <span class="text-xs font-extrabold w-24">Trier par :</span>
-                <select id="gal-sort-by" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
-                    <option value="date">Date</option>
-                    <option value="name">Nom</option>
-                    <option value="added">Date d'ajout</option>
-                </select>
-                <select id="gal-sort-order" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
-                    <option value="desc">Décroissant</option>
-                    <option value="asc">Croissant</option>
-                </select>
-            </div>
-            <div class="flex flex-wrap items-center gap-2.5">
-                <span class="text-xs font-extrabold w-24">Grouper par :</span>
-                <select id="gal-group-by" onchange="onChangeGroupBy(this.value)" class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
-                    <option value="NONE">Aucun</option>
-                    <option value="DAY">Jour</option>
-                    <option value="WEEK">Semaine</option>
-                    <option value="MONTH">Mois</option>
-                    <option value="YEAR">Année</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Carte 2 : Filtrer par (Années, Mois, Catégories, Type d'extension) -->
-        <div class="lg:col-span-5 ui-card rounded-3xl p-4 flex items-center gap-3 shadow-sm">
-            <span class="text-xs font-extrabold shrink-0">Filtrer par :</span>
-            <div class="grid grid-cols-2 gap-2 flex-1">
-                <select id="gal-year" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer"></select>
-                <select id="gal-month" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer"></select>
-                <select id="gal-type-filter" onchange="refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
-                    <option value="">Catégories</option>
-                    <option value="PHOTOS">Photos</option>
-                    <option value="VIDEOS">Vidéos</option>
-                    <option value="RAW">RAW</option>
-                    <option value="SCREENSHOTS">Captures</option>
-                </select>
-                <select id="gal-ext-select" onchange="currentExtFilter=this.value; refreshActiveMediaView()" class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
-                    <option value="">Type</option>
-                </select>
-            </div>
-            <!-- Champs cachés pour compatibilité avec les filtres Favoris / Albums -->
-            <select id="gal-album" class="hidden"></select>
-            <input id="gal-fav" type="checkbox" class="hidden"/>
-            <input id="gal-nofaces" type="checkbox" class="hidden"/>
-        </div>
-
-        <!-- Carte 3 : Disposition (Grille ou Mosaïque) -->
-        <div class="lg:col-span-2 ui-card rounded-3xl p-3 flex flex-col items-center justify-center gap-2 shadow-sm">
-            <span class="text-xs font-extrabold">Disposition</span>
-            <div class="flex items-center gap-3">
-                <button onclick="setGalleryLayout('GRID')" class="flex flex-col items-center gap-1 group">
-                    <div id="layout-btn-GRID" class="w-10 h-10 rounded-2xl nav-item-active flex items-center justify-center transition">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
-                    </div>
-                    <span class="text-[10px] font-bold opacity-70">Grille</span>
-                </button>
-                <button onclick="setGalleryLayout('MASONRY')" class="flex flex-col items-center gap-1 group">
-                    <div id="layout-btn-MASONRY" class="w-10 h-10 rounded-2xl ui-pill flex items-center justify-center transition">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
-                    </div>
-                    <span class="text-[10px] font-bold opacity-70">Mosaïque</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- BARRE FLOTTANTE D'ACTIONS PAR LOT -->
-    <div id="gal-batch-bar" class="hidden sticky top-2 z-20 ui-card rounded-2xl p-3 mb-4 flex flex-wrap justify-between items-center gap-2 shadow-xl">
+    <div id="gal-batch-bar" class="hidden sticky top-2 z-30 ui-card rounded-2xl p-3 mb-4 flex flex-wrap justify-between items-center gap-2 shadow-xl">
         <div class="flex items-center gap-3">
-            <span id="gal-batch-count" class="plum-btn text-xs font-bold px-3 py-1 rounded-full">0</span>
+            <span id="gal-batch-count" class="plum-btn text-xs font-bold px-3 py-1 rounded-full">0 sélectionné(s)</span>
             <button onclick="selectAllGalleryPage(true)" class="text-xs font-bold underline">Tout cocher</button>
             <button onclick="selectAllGalleryPage(false)" class="text-xs opacity-70 underline">Tout décocher</button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <button onclick="runGalleryBatch('FAVORITE_ADD')" class="ui-pill text-xs font-bold px-3 py-1.5 rounded-full">♥ Favoris</button>
+            <button onclick="runGalleryBatch('FAVORITE_ADD')" class="ui-pill text-xs font-bold px-3 py-1.5 rounded-full text-[#8B6B8E]">♥ Favoris</button>
             <input id="batch-album-input" type="text" placeholder="Nom d'album..." class="ui-pill rounded-full px-3 py-1 text-xs w-36 outline-none"/>
             <button onclick="runGalleryBatch('ALBUM_ADD')" class="plum-btn text-xs font-bold px-3.5 py-1.5 rounded-full">+ Album</button>
             <button onclick="openMetadataModalForSelection()" class="plum-btn text-xs font-bold px-3.5 py-1.5 rounded-full">Métadonnées / Heures</button>
@@ -88,36 +17,139 @@
     </div>
 
     <!-- ==================== VUE 1 : GALERIE ==================== -->
-    <div id="tab-gallery">
-        <div class="flex items-center justify-between mb-5">
-            <div onclick="toggleFilterBar()" title="Afficher / masquer les options de tri, filtre et disposition"
-                 class="flex items-center gap-3 cursor-pointer group">
-                <h1 id="gallery-main-heading" class="text-4xl font-extrabold tracking-tight">Galerie</h1>
-                <svg id="filter-chevron-icon" class="w-6 h-6 opacity-70 group-hover:opacity-100 transition-transform duration-200 mt-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <polyline points="6 9 12 15 18 9"/>
-                </svg>
+    <div id="tab-gallery" class="space-y-4">
+
+        <!-- En-tête : Titre "Galerie" + Bouton "..." + Badge filtre actif + Compteur -->
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-baseline gap-3">
+                <h1 id="gallery-main-title" class="text-4xl font-extrabold tracking-tight">Galerie</h1>
+                <button onclick="toggleFilterBar()" title="Afficher/Masquer les options de la galerie"
+                        class="text-2xl font-extrabold opacity-70 hover:opacity-100 transition px-2 leading-none select-none">
+                    ...
+                </button>
+                <span id="gallery-active-filter-badge" class="hidden ui-pill px-3.5 py-1 rounded-full text-xs font-extrabold items-center gap-2">
+                    <span id="gallery-active-filter-text"></span>
+                    <button onclick="resetAllGalleryFilters()" class="hover:text-rose-500 font-bold">✕</button>
+                </span>
             </div>
-            <span id="gal-total-label" class="text-xs font-bold opacity-60"></span>
+            <span id="gal-total-label" class="text-xs font-bold opacity-60">0 éléments</span>
         </div>
 
-        <div id="gallery-content-area" class="space-y-6"></div>
+        <!-- OPTIONS DE LA GALERIE SOUS LE TITRE (Trier par | Grouper par | Filtrer par | Disposition) -->
+        <div id="filter-drawer" class="grid grid-cols-12 gap-3 items-stretch">
+            <!-- Colonne Gauche (10 cols) : Ligne 1 (Trier + Grouper) & Ligne 2 (Filtrer) -->
+            <div class="col-span-12 lg:col-span-10 flex flex-col justify-between gap-2.5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <!-- Pilule Trier par -->
+                    <div class="ui-card rounded-full px-5 py-2.5 flex flex-wrap items-center gap-3 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Trier par :</span>
+                        <select id="gal-sort-by" onchange="refreshActiveMediaView()"
+                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="date">Date</option>
+                            <option value="name">Nom</option>
+                            <option value="added">Date d'ajout</option>
+                        </select>
+                        <select id="gal-sort-order" onchange="refreshActiveMediaView()"
+                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="desc">Décroissant</option>
+                            <option value="asc">Croissant</option>
+                        </select>
+                    </div>
 
-        <!-- Sentinelle de Défilement Infini (Galerie) -->
-        <div id="gallery-scroll-sentinel" class="py-8 flex justify-center items-center">
-            <div id="gallery-loading-spinner" class="hidden text-xs font-extrabold opacity-60 animate-pulse">
-                Chargement de la suite...
+                    <!-- Pilule Grouper par -->
+                    <div class="ui-card rounded-full px-5 py-2.5 flex flex-wrap items-center gap-3 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Grouper par :</span>
+                        <select id="gal-group-by" onchange="onChangeGroupBy(this.value)"
+                                class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="NONE">Aucun</option>
+                            <option value="DAY">Jour</option>
+                            <option value="WEEK">Semaine</option>
+                            <option value="MONTH">Mois</option>
+                            <option value="YEAR">Année</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Pilule Filtrer par -->
+                <div class="ui-card rounded-full px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="shrink-0">Filtrer par :</span>
+                        <select id="gal-year" onchange="onGalleryYearOrMonthSelectChange()"
+                                class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="">Années</option>
+                        </select>
+                        <select id="gal-month" onchange="onGalleryYearOrMonthSelectChange()"
+                                class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="">Mois</option>
+                            <option value="01">Janvier</option><option value="02">Février</option>
+                            <option value="03">Mars</option><option value="04">Avril</option>
+                            <option value="05">Mai</option><option value="06">Juin</option>
+                            <option value="07">Juillet</option><option value="08">Août</option>
+                            <option value="09">Septembre</option><option value="10">Octobre</option>
+                            <option value="11">Novembre</option><option value="12">Décembre</option>
+                        </select>
+                        <span class="opacity-75 px-1">et/ou</span>
+                        <select id="gal-type-filter" onchange="refreshActiveMediaView()"
+                                class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="">Catégories</option>
+                            <option value="PHOTOS">Photos</option>
+                            <option value="VIDEOS">Vidéos</option>
+                            <option value="RAW">RAW</option>
+                            <option value="SCREENSHOTS">Captures</option>
+                        </select>
+                        <select id="gal-ext-select" onchange="currentExtFilter=this.value; refreshActiveMediaView()"
+                                class="ui-pill rounded-full px-3 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="">Type</option>
+                        </select>
+                    </div>
+                    <button onclick="resetAllGalleryFilters()" class="text-[11px] font-extrabold opacity-75 hover:opacity-100 px-2">
+                        tout retirer
+                    </button>
+                </div>
+
+                <!-- Champs cachés requis par app.js (Favoris / Sans visages / Albums) -->
+                <select id="gal-album" class="hidden"></select>
+                <input id="gal-fav" type="checkbox" class="hidden"/>
+                <input id="gal-nofaces" type="checkbox" class="hidden"/>
+            </div>
+
+            <!-- Colonne Droite (2 cols) : Carte Disposition (Grille / Mosaïque) -->
+            <div class="col-span-12 lg:col-span-2 ui-card rounded-3xl p-3 flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                <span class="text-xs font-extrabold">Disposition</span>
+                <div class="flex items-center gap-3">
+                    <button onclick="setGalleryLayout('GRID')" class="flex flex-col items-center gap-1 group">
+                        <div id="layout-btn-GRID" class="w-10 h-10 rounded-2xl nav-item-active flex items-center justify-center transition">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                        </div>
+                        <span class="text-[10px] font-bold opacity-70">Grille</span>
+                    </button>
+                    <button onclick="setGalleryLayout('MASONRY')" class="flex flex-col items-center gap-1 group">
+                        <div id="layout-btn-MASONRY" class="w-10 h-10 rounded-2xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                        </div>
+                        <span class="text-[10px] font-bold opacity-70">Mosaïque</span>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Barre de défilement chronologique (Années & Mois) -->
-        <div id="timeline-scrubber" class="hidden"
-             onmousedown="startTimelineScrub(event)"
-             onmousemove="moveTimelineScrub(event)"
-             onmouseup="endTimelineScrub()">
-            <div id="timeline-tooltip" class="hidden fixed right-20 px-4 py-2 rounded-2xl plum-btn text-xs font-extrabold shadow-2xl pointer-events-none whitespace-nowrap z-50">
-                Novembre 2026
+        <!-- CORPS DE LA GALERIE : Grille de médias à gauche + Colonne Timeline dédiée à droite -->
+        <div class="flex items-start gap-4 w-full">
+            <!-- Zone Médias (prend l'espace restant sans jamais passer sous la timeline) -->
+            <div class="flex-1 min-w-0">
+                <div id="gallery-content-area" class="space-y-6"></div>
+                <div id="gallery-scroll-sentinel" class="py-8 flex justify-center items-center">
+                    <div id="gallery-loading-spinner" class="hidden text-xs font-extrabold opacity-60 animate-pulse">
+                        Chargement des médias...
+                    </div>
+                </div>
             </div>
-            <div id="timeline-items-container" class="w-full h-full flex flex-col justify-between items-end overflow-y-auto no-scrollbar"></div>
+
+            <!-- Case Timeline à droite (Dans sa propre colonne réservée, jamais superposée aux médias) -->
+            <aside id="gallery-timeline-box"
+                   class="w-16 shrink-0 sticky top-2 max-h-[calc(100vh-150px)] ui-card rounded-3xl py-3 px-1.5 flex flex-col items-center overflow-y-auto no-scrollbar select-none shadow-sm">
+                <div id="timeline-items-container" class="w-full flex flex-col items-center space-y-1.5 text-[11px] font-extrabold"></div>
+            </aside>
         </div>
     </div>
 

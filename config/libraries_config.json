@@ -27,19 +27,21 @@
         },
         "Azerty": {
             "name": "Azerty",
-            "source_type": "TAKEOUT_ZIPS",
-            "is_takeout": true,
+            "source_type": "STANDARD_FOLDER",
+            "is_takeout": false,
             "source_paths": [
                 "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-001.zip",
                 "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-002.zip",
                 "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-003.zip",
-                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-004.zip"
+                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-004.zip",
+                "D:\\Ressources\\azerty\\Import_Direct",
+                "C:/Users/Thomas/Pictures/Screenshots"
             ],
             "dest_dir": "D:\\Ressources\\azerty",
             "db_path": "D:\\Ressources\\azerty\\library_azerty.db",
             "created_at": "2026-11-05T02:56:10.566591",
             "options": {
-                "fix_takeout_json_metadata": true,
+                "fix_takeout_json_metadata": false,
                 "delete_zips_progressively": false,
                 "organize_by_year_month": true,
                 "run_deduplication": true,
