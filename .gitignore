@@ -1,0 +1,37 @@
+# --- Caches Python & Environnements Virtuels ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# --- Bases de données SQLite & Journaux WAL ---
+*.db
+*.db-wal
+*.db-shm
+*.db.bak
+progression_takeout.db
+
+# --- Configurations locales utilisateur ---
+config/libraries_config.json
+config/app_settings.json
+libraries_config.json
+app_settings.json
+
+# --- Dossiers de médias, caches & sauvegardes ---
+Photos_Triees/
+Phototo_Bibliotheque/
+**/Miniatures_Cache/
+**/Miniatures_Visages/
+**/Doublons_Quarantaine/
+**/Corbeille/
+**/Sauvegardes_DB/
+**/Import_Direct/
+**/_Temp_Takeout_Buffer/
+
+# --- Système & IDE ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

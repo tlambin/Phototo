@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import shutil
 import zipfile
@@ -8,6 +9,12 @@ import concurrent.futures
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
+
+_ROOT_DIR = Path(__file__).resolve().parents[2]
+for _sub in ("backend/core", "backend/engines", "backend/routers"):
+    _p = str(_ROOT_DIR / _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from library_manager import load_libraries, collect_zip_files, get_takeout_buffer_dir
 from settings_manager import load_settings, get_hardware_runtime_config
@@ -20,6 +27,15 @@ import indexeur_similaires as sim_ai
 import indexeur_semantique_gps as clip_gps_ai
 
 MAX_PARALLEL_ZIPS = min(4, os.cpu_count() or 4)
+
+
+def _open_worker_db(db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
+    return conn
 
 
 def format_eta(seconds: float) -> str:
@@ -91,7 +107,7 @@ class PipelineState:
                 "id": int(time.time() * 1000),
                 "time": ts,
                 "title": title,
-                "status": status,  # 'success' | 'error' | 'paused'
+                "status": status,
                 "detail": detail,
                 "read": False
             })
@@ -207,6 +223,9 @@ def run_step_ingestion(lib: dict):
 
     STATE.missing_meta_files.clear()
     conn = fusion.init_db(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
     init_zip_tracker_table(conn)
     cur = conn.cursor()
 
@@ -391,8 +410,7 @@ def run_step_deduplication(lib: dict):
     dedup.DEST_DIR = dest_dir
     dedup.QUARANTINE_DIR = dest_dir / "Doublons_Quarantaine"
 
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
+    conn = _open_worker_db(db_path)
     dedup.upgrade_db(conn)
     cur = conn.cursor()
 
@@ -436,8 +454,7 @@ def run_step_similarity(lib: dict):
         return
 
     db_path = Path(lib["db_path"])
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
+    conn = _open_worker_db(db_path)
     sim_ai.upgrade_db_for_video_similarity(conn)
     cur = conn.cursor()
     cur.execute("SELECT source_path, dest_path FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND video_hash IS NULL AND dest_path IS NOT NULL")
@@ -528,7 +545,7 @@ def run_step_faces(lib: dict):
     faces_ai.DEST_DIR = dest_dir
     faces_ai.THUMBS_DIR = dest_dir / "Miniatures_Visages"
 
-    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn = _open_worker_db(db_path)
     faces_ai.init_face_tables(conn)
     cur = conn.cursor()
     cur.execute("""
@@ -595,7 +612,7 @@ def run_step_faces(lib: dict):
 
 def run_step_ocr(lib: dict):
     db_path = Path(lib["db_path"])
-    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn = _open_worker_db(db_path)
     ocr_ai.init_ocr_tables(conn)
     cur = conn.cursor()
     cur.execute("""
@@ -667,7 +684,7 @@ def run_step_clip(lib: dict):
     import numpy as np
     from PIL import Image
     db_path = Path(lib["db_path"])
-    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn = _open_worker_db(db_path)
     clip_gps_ai.upgrade_db_for_clip_and_gps(conn)
     cur = conn.cursor()
     cur.execute("""

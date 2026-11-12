@@ -20,6 +20,12 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+_ROOT_DIR = Path(__file__).resolve().parents[2]
+for _sub in ("backend/core", "backend/engines", "backend/routers"):
+    _p = str(_ROOT_DIR / _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 from settings_manager import load_settings, save_settings, get_configured_timezone
 from library_manager import load_libraries, save_libraries, register_library, open_native_dialog
 from pipeline_runner import STATE, start_specific_task, request_stop_pipeline
@@ -44,6 +50,14 @@ EMPTY_SVG = (
     '<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#475569" font-family="sans-serif" font-size="13">Média absent</text>'
     '</svg>'
 )
+
+MISSING_META_SQL_CONDITION = """
+    is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+    AND (
+        status IN ('no_metadata', 'mtime_fallback')
+        OR timestamp IS NULL OR timestamp <= 0
+    )
+"""
 
 
 def get_active_db_and_dest() -> tuple[Path, Path]:
@@ -295,16 +309,7 @@ def api_stats():
     cur.execute("SELECT COUNT(*) FROM processed_files WHERE is_trashed = 1")
     trash_count = cur.fetchone()[0]
 
-    cur.execute("""
-        SELECT COUNT(*) FROM processed_files
-        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
-          AND (
-              status IN ('no_metadata', 'mtime_fallback')
-              OR timestamp IS NULL OR timestamp <= 0
-              OR strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch', 'localtime')) = strftime('%Y-%m-%d', 'now', 'localtime')
-              OR dest_path LIKE '%2026-11-05_%'
-          )
-    """)
+    cur.execute(f"SELECT COUNT(*) FROM processed_files WHERE {MISSING_META_SQL_CONDITION}")
     missing_meta_count = cur.fetchone()[0]
 
     conn.close()
@@ -690,22 +695,13 @@ def api_missing_metadata_report(page: int = 1, limit: int = 54):
     conn = get_db()
     cur = conn.cursor()
     offset = (page - 1) * limit
-    where_sql = """
-        is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
-        AND (
-            status IN ('no_metadata', 'mtime_fallback')
-            OR timestamp IS NULL OR timestamp <= 0
-            OR strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch', 'localtime')) = strftime('%Y-%m-%d', 'now', 'localtime')
-            OR dest_path LIKE '%2026-11-05_%'
-        )
-    """
-    cur.execute(f"SELECT COUNT(*) FROM processed_files WHERE {where_sql}")
+    cur.execute(f"SELECT COUNT(*) FROM processed_files WHERE {MISSING_META_SQL_CONDITION}")
     total = cur.fetchone()[0]
 
     cur.execute(f"""
         SELECT source_path, dest_path, timestamp, status, album_name, file_size
         FROM processed_files
-        WHERE {where_sql}
+        WHERE {MISSING_META_SQL_CONDITION}
         ORDER BY dest_path ASC
         LIMIT ? OFFSET ?
     """, (limit, offset))
@@ -720,16 +716,10 @@ def api_retry_metadata_recovery():
     cur = conn.cursor()
     _, active_dest = get_active_db_and_dest()
 
-    cur.execute("""
+    cur.execute(f"""
         SELECT source_path, dest_path, timestamp, status, latitude, longitude
         FROM processed_files
-        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
-          AND (
-              status IN ('no_metadata', 'mtime_fallback')
-              OR timestamp IS NULL OR timestamp <= 0
-              OR strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch', 'localtime')) = strftime('%Y-%m-%d', 'now', 'localtime')
-              OR dest_path LIKE '%2026-11-05_%'
-          )
+        WHERE {MISSING_META_SQL_CONDITION}
     """)
     rows = [dict(r) for r in cur.fetchall()]
     repaired = 0
@@ -1444,7 +1434,7 @@ def api_sync_faces_exif():
 @app.post("/api/faces/manual_add")
 def api_add_manual_face(payload: ManualFacePayload):
     media_path = resolve_actual_path(unquote(payload.dest_path))
-    if not media_path.exists():
+    if not media_path or not media_path.exists():
         raise HTTPException(404, "Média introuvable")
     img = cv2.imread(str(media_path))
     if img is None:

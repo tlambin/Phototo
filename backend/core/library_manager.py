@@ -1,11 +1,39 @@
 import sys
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from datetime import datetime
 from settings_manager import load_settings
 
-CONFIG_FILE = Path("libraries_config.json")
+ROOT_DIR = Path(__file__).resolve().parents[2]
+CONFIG_DIR = ROOT_DIR / "config"
+CONFIG_FILE = CONFIG_DIR / "libraries_config.json"
+LEGACY_CONFIG_FILE = ROOT_DIR / "libraries_config.json"
+
+
+def _ensure_config_file() -> Path:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if LEGACY_CONFIG_FILE.exists():
+        try:
+            legacy_data = json.loads(LEGACY_CONFIG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            legacy_data = {}
+
+        try:
+            if not CONFIG_FILE.exists():
+                shutil.copy2(str(LEGACY_CONFIG_FILE), str(CONFIG_FILE))
+            else:
+                try:
+                    current_data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+                except Exception:
+                    current_data = {}
+                if legacy_data.get("libraries") and not current_data.get("libraries"):
+                    shutil.copy2(str(LEGACY_CONFIG_FILE), str(CONFIG_FILE))
+            LEGACY_CONFIG_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return CONFIG_FILE
 
 
 def open_native_dialog(mode: str = "folder") -> list[str]:
@@ -41,9 +69,10 @@ root.destroy()
 
 
 def load_libraries() -> dict:
-    if CONFIG_FILE.exists():
+    cfg_path = _ensure_config_file()
+    if cfg_path.exists():
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(cfg_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
@@ -51,7 +80,8 @@ def load_libraries() -> dict:
 
 
 def save_libraries(data: dict):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+    cfg_path = _ensure_config_file()
+    with open(cfg_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 

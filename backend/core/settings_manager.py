@@ -1,23 +1,40 @@
 import os
 import json
+import shutil
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-SETTINGS_FILE = Path("app_settings.json")
+ROOT_DIR = Path(__file__).resolve().parents[2]
+CONFIG_DIR = ROOT_DIR / "config"
+SETTINGS_FILE = CONFIG_DIR / "app_settings.json"
+LEGACY_SETTINGS_FILE = ROOT_DIR / "app_settings.json"
 
 DEFAULT_SETTINGS = {
     "scanned_folders": [],
     "takeout_extract_dir": "",
     "timezone": "Europe/Paris",
     "language": "fr",
-    "gpu_mode": "cuda"  # "cuda" (NVIDIA), "amd" (AMD Radeon), "intel" (Intel Arc/iGPU), "cpu"
+    "gpu_mode": "cuda"  # "cuda" (NVIDIA), "directml"/"amd" (AMD Radeon), "intel"/"cpu"
 }
 
 
-def load_settings() -> dict:
-    if SETTINGS_FILE.exists():
+def _ensure_settings_file() -> Path:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if LEGACY_SETTINGS_FILE.exists():
         try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            if not SETTINGS_FILE.exists():
+                shutil.copy2(str(LEGACY_SETTINGS_FILE), str(SETTINGS_FILE))
+            LEGACY_SETTINGS_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return SETTINGS_FILE
+
+
+def load_settings() -> dict:
+    cfg_path = _ensure_settings_file()
+    if cfg_path.exists():
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
                 return {**DEFAULT_SETTINGS, **json.load(f)}
         except Exception:
             pass
@@ -25,9 +42,10 @@ def load_settings() -> dict:
 
 
 def save_settings(new_settings: dict) -> dict:
+    cfg_path = _ensure_settings_file()
     current = load_settings()
     current.update(new_settings)
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+    with open(cfg_path, "w", encoding="utf-8") as f:
         json.dump(current, f, indent=4, ensure_ascii=False)
     return current
 
@@ -71,9 +89,9 @@ def get_hardware_runtime_config() -> dict:
             "torch_device": "cuda"
         }
 
-    if mode == "amd":
+    if mode in ("amd", "directml"):
         return {
-            "mode": "amd",
+            "mode": mode,
             "onnx_providers": ["ROCMExecutionProvider", "DmlExecutionProvider", "CPUExecutionProvider"],
             "onnx_ctx_id": 0,
             "paddle_use_gpu": False,

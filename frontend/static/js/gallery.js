@@ -1,6 +1,6 @@
 // ==================== GALERIE : DÉFILEMENT INFINI, MINIATURES WEBP & SÉLECTION RAPIDE ====================
 
-let galleryPage = 1, galleryTotalPages = 1;
+let galleryPage = 1, galleryTotalPages = 1, galleryTotalItems = 0;
 let galleryIsLoading = false;
 let selectedGalleryPaths = new Set();
 let currentGalleryItems = [];
@@ -19,6 +19,8 @@ let galleryGroupBy = 'NONE';   // 'NONE' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
 
 const SHORT_MONTHS_FR = ["", "Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
 const FULL_MONTHS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+
+const FAV_HEART_SVG = `<svg class="w-5 h-5" fill="currentColor" stroke="#b91c1c" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>`;
 
 function setGalleryLayout(layout) {
     galleryLayout = layout;
@@ -44,7 +46,6 @@ function formatGroupHeading(ts, mode) {
         return String(dt.getFullYear());
     }
     if (mode === 'WEEK') {
-        // Calcul du lundi de la semaine correspondante
         const day = dt.getDay();
         const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(dt);
@@ -65,11 +66,7 @@ function renderSingleMediaTile(it, idx, isMasonry = false) {
     const isVid = isVideoFile(it.dest_path);
     const durText = formatDuration(it.duration_sec);
 
-    const favBadge = it.is_favorite
-        ? `<span class="absolute top-2.5 right-2.5 text-rose-600 drop-shadow pointer-events-none">
-             <svg class="w-5 h-5" fill="currentColor" stroke="#b91c1c" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
-           </span>`
-        : '';
+    const favBadge = `<span class="tile-fav-badge ${it.is_favorite ? '' : 'hidden'} absolute top-2.5 right-2.5 text-rose-600 drop-shadow pointer-events-none">${FAV_HEART_SVG}</span>`;
 
     const videoBadge = isVid
         ? `<div class="absolute bottom-2.5 right-2.5 bg-black/55 backdrop-blur-sm text-white text-[11px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
@@ -123,7 +120,6 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
         ? 'group-grid masonry-grid'
         : 'group-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4';
 
-    // Cas 1 : Sans groupement (Grille continue ou Mosaïque continue)
     if (galleryGroupBy === 'NONE') {
         let grid = container.querySelector('.group-grid');
         if (!grid) {
@@ -135,7 +131,6 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
         return;
     }
 
-    // Cas 2 : Groupé par Jour, Semaine, Mois ou Année (compatible Grille ET Mosaïque)
     newItems.forEach((it, i) => {
         const globalIdx = startIndex + i;
         const title = formatGroupHeading(it.timestamp, galleryGroupBy);
@@ -175,6 +170,7 @@ async function loadGalleryFilters() {
 function resetAndLoadGallery() {
     galleryPage = 1;
     galleryTotalPages = 1;
+    galleryTotalItems = 0;
     currentSkipOffset = 0;
     currentGalleryItems = [];
     const sc = document.getElementById('main-scroll-container');
@@ -190,7 +186,6 @@ async function jumpToTimelineOffset(offset, yearStr, monthStr = "") {
     const sc = document.getElementById('main-scroll-container');
     if (sc) sc.scrollTop = 0;
 
-    // Mise en évidence dans la barre chronologique
     document.querySelectorAll('.tl-year-btn').forEach(el => {
         el.classList.toggle('tl-active', el.dataset.year === yearStr);
     });
@@ -206,14 +201,16 @@ async function jumpToTimelineOffset(offset, yearStr, monthStr = "") {
 
 async function loadGalleryItems(append = false, customSkip = -1) {
     if (galleryIsLoading) return;
-    if (append && galleryPage >= galleryTotalPages) return;
+    if (append && galleryTotalItems > 0 && (currentSkipOffset + currentGalleryItems.length) >= galleryTotalItems) return;
 
     galleryIsLoading = true;
     const spinner = document.getElementById('gallery-loading-spinner');
     if (spinner) spinner.classList.remove('hidden');
 
     const targetPage = append ? galleryPage + 1 : galleryPage;
-    const effectiveSkip = (!append && customSkip >= 0) ? customSkip : (append ? currentSkipOffset + currentGalleryItems.length : -1);
+    const effectiveSkip = (!append && customSkip >= 0)
+        ? customSkip
+        : (append ? currentSkipOffset + currentGalleryItems.length : currentSkipOffset);
 
     try {
         const p = new URLSearchParams({
@@ -234,8 +231,9 @@ async function loadGalleryItems(append = false, customSkip = -1) {
         const d = await res.json();
         const newItems = d.items || [];
         galleryTotalPages = d.total_pages || 1;
+        galleryTotalItems = d.total || 0;
         if (append) galleryPage = targetPage;
-        document.getElementById('gal-total-label').textContent = `${d.total} éléments`;
+        document.getElementById('gal-total-label').textContent = `${galleryTotalItems} éléments`;
 
         if (!append) {
             currentGalleryItems = newItems;
@@ -263,6 +261,13 @@ function updateSingleTileSelectionDOM(idx, isSelected) {
         cb.classList.toggle('opacity-100', isSelected);
         cb.classList.toggle('opacity-0', !isSelected);
     }
+}
+
+function updateSingleTileFavoriteDOM(idx, isFav) {
+    const tile = document.getElementById(`media-tile-${idx}`);
+    if (!tile) return;
+    const badge = tile.querySelector('.tile-fav-badge');
+    if (badge) badge.classList.toggle('hidden', !isFav);
 }
 
 function handleGalleryCheckboxClick(e, idx, encSrc) {
@@ -520,7 +525,6 @@ function moveTimelineScrub(e) {
     const rect = scrubber.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
 
-    // Aplatir tous les mois pour trouver le mois correspondant à la hauteur de la souris
     const allMonths = [];
     cachedTimelineData.forEach(y => {
         y.months.forEach(m => allMonths.push({ year: y.year, month: m.month, offset: m.offset, count: m.count }));
@@ -557,7 +561,6 @@ function endTimelineScrub() {
 
 window.addEventListener('mouseup', endTimelineScrub);
 
-// Mise à jour automatique de l'année active dans la barre chronologique pendant le scroll normal
 window.addEventListener('DOMContentLoaded', () => {
     const sc = document.getElementById('main-scroll-container');
     if (!sc) return;
@@ -690,7 +693,6 @@ async function openLightbox(idx) {
     updateLightboxFavButton(item.is_favorite);
     document.getElementById('lightbox-modal').classList.remove('hidden');
 
-    // Préchargement automatique du lot suivant si on approche de la fin de la liste dans la visionneuse
     if (idx >= currentGalleryItems.length - 5) {
         if (currentTab === 'albums' && openedAlbumName) loadSingleAlbumItems(true);
         else loadGalleryItems(true);
@@ -749,6 +751,7 @@ async function lightboxToggleFavorite() {
         const d = await res.json();
         item.is_favorite = d.is_favorite;
         updateLightboxFavButton(d.is_favorite);
+        updateSingleTileFavoriteDOM(currentLightboxIndex, d.is_favorite);
         loadStats();
     }
 }

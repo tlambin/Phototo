@@ -30,15 +30,31 @@ function setAppTheme(mode) {
 
 function toggleSidebarMini() {
     const sb = document.getElementById('main-sidebar');
+    if (!sb) return;
     sb.classList.toggle('sidebar-mini');
+    const isMini = sb.classList.contains('sidebar-mini');
+
     const lbl = document.getElementById('import-btn-label');
     const btn = document.getElementById('btn-top-import');
-    if (sb.classList.contains('sidebar-mini')) {
-        lbl.classList.add('hidden');
-        btn.classList.replace('px-5', 'px-3');
+    const logoBox = document.getElementById('topbar-logo-box');
+    const logoTxt = document.getElementById('topbar-logo-text');
+
+    if (isMini) {
+        if (lbl) lbl.classList.add('hidden');
+        if (btn) btn.classList.replace('px-5', 'px-3');
+        if (logoTxt) logoTxt.classList.add('hidden');
+        if (logoBox) {
+            logoBox.classList.replace('w-48', 'w-14');
+            logoBox.classList.add('justify-center');
+        }
     } else {
-        lbl.classList.remove('hidden');
-        btn.classList.replace('px-3', 'px-5');
+        if (lbl) lbl.classList.remove('hidden');
+        if (btn) btn.classList.replace('px-3', 'px-5');
+        if (logoTxt) logoTxt.classList.remove('hidden');
+        if (logoBox) {
+            logoBox.classList.replace('w-14', 'w-48');
+            logoBox.classList.remove('justify-center');
+        }
     }
 }
 
@@ -85,7 +101,13 @@ function isVideoFile(path) {
 function renderMediaPreview(destPath, css = "w-full h-40 object-cover rounded-2xl") {
     const url = `/thumb?path=${encodeURIComponent(destPath)}`;
     if (isVideoFile(destPath)) {
-        return `<video src="${url}" preload="metadata" class="${css}"></video>`;
+        return `
+        <div class="relative w-full h-full">
+            <img src="${url}" loading="lazy" decoding="async" class="${css}"/>
+            <span class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
+                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </span>
+        </div>`;
     }
     return `<img src="${url}" loading="lazy" decoding="async" class="${css}"/>`;
 }
@@ -100,26 +122,34 @@ function updateGalleryMonthDropdown() {
 }
 
 function toggleFilterBar() {
-    document.getElementById('filter-drawer').classList.toggle('hidden');
+    const drawer = document.getElementById('filter-drawer');
+    if (!drawer) return;
+    drawer.classList.toggle('hidden');
+    const chev = document.getElementById('filter-chevron-icon');
+    if (chev) chev.classList.toggle('rotate-180', !drawer.classList.contains('hidden'));
 }
 
 function toggleLibMenuPopover(e) {
     e.stopPropagation();
     document.getElementById('task-popover').classList.add('hidden');
+    document.getElementById('notif-popover').classList.add('hidden');
     document.getElementById('lib-menu-popover').classList.toggle('hidden');
 }
 
 function toggleTaskPopover(e) {
     e.stopPropagation();
     document.getElementById('lib-menu-popover').classList.add('hidden');
+    document.getElementById('notif-popover').classList.add('hidden');
     document.getElementById('task-popover').classList.toggle('hidden');
 }
 
 window.addEventListener('click', e => {
     const libPop = document.getElementById('lib-menu-popover');
     const taskPop = document.getElementById('task-popover');
+    const notifPop = document.getElementById('notif-popover');
     if (libPop && !libPop.contains(e.target)) libPop.classList.add('hidden');
     if (taskPop && !taskPop.contains(e.target)) taskPop.classList.add('hidden');
+    if (notifPop && !notifPop.contains(e.target)) notifPop.classList.add('hidden');
 });
 
 // ==================== NAVIGATION PRINCIPALE ====================
@@ -417,7 +447,7 @@ setInterval(async () => {
             if (pipelineRefreshTicks % 8 === 0) {
                 const isLightboxOpen = !document.getElementById('lightbox-modal').classList.contains('hidden');
                 if (!isLightboxOpen && selectedGalleryPaths.size === 0) {
-                    if ((currentTab === 'gallery' || currentTab === 'favorites') && galleryPage === 1) loadGalleryItems(false);
+                    if ((currentTab === 'gallery' || currentTab === 'favorites') && galleryPage === 1 && currentSkipOffset === 0) loadGalleryItems(false);
                     else if (currentTab === 'faces' && selectedPersonIds.size === 0) loadPersons();
                     else if (currentTab === 'dups') loadDuplicates();
                     else if (currentTab === 'similar') loadSimilarGroups();
@@ -444,4 +474,5 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadStats();
     await loadGalleryFilters();
     await loadGalleryItems();
+    await loadGalleryTimeline();
 });
