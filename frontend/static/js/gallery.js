@@ -669,6 +669,9 @@ function openEditorFromTools(kind) {
 
 // ==================== VISIONNEUSE PLEIN ÉCRAN (LIGHTBOX) ====================
 
+let lbMiniMap = null;
+let lbMiniMarker = null;
+
 async function openLightbox(idx) {
     if (idx < 0 || idx >= currentGalleryItems.length) return;
     currentLightboxIndex = idx;
@@ -689,7 +692,6 @@ async function openLightbox(idx) {
         imgEl.src = url;
     }
 
-    document.getElementById('lb-title').textContent = `${formatDate(item.timestamp)}  —  ${item.dest_path.split(/[\\/]/).pop()}`;
     updateLightboxFavButton(item.is_favorite);
     document.getElementById('lightbox-modal').classList.remove('hidden');
 
@@ -715,7 +717,8 @@ function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
 }
 
 function closeLightbox() {
-    document.getElementById('lb-video').pause();
+    const vidEl = document.getElementById('lb-video');
+    if (vidEl) vidEl.pause();
     document.getElementById('lightbox-modal').classList.add('hidden');
 }
 
@@ -733,11 +736,16 @@ window.addEventListener('keydown', e => {
 });
 
 function updateLightboxFavButton(isFav) {
+    const icon = document.getElementById('lb-fav-icon');
     const btn = document.getElementById('lb-btn-fav');
-    btn.textContent = isFav ? "♥ Favori" : "♡ Favori";
-    btn.className = isFav
-        ? "px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-600 text-white transition"
-        : "px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20 transition";
+    if (!icon || !btn) return;
+    if (isFav) {
+        icon.setAttribute('fill', '#e11d48');
+        icon.setAttribute('stroke', '#e11d48');
+    } else {
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('stroke', 'currentColor');
+    }
 }
 
 async function lightboxToggleFavorite() {
@@ -754,6 +762,56 @@ async function lightboxToggleFavorite() {
         updateSingleTileFavoriteDOM(currentLightboxIndex, d.is_favorite);
         loadStats();
     }
+}
+
+async function lightboxAddToAlbum() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const currentAlb = item.album_name || '';
+    const alb = prompt("Nom de l'album auquel ajouter ce média :", currentAlb);
+    if (alb === null || !alb.trim()) return;
+    await fetch('/api/gallery/batch_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_paths: [item.source_path],
+            action: 'ALBUM_ADD',
+            album_name: alb.trim()
+        })
+    });
+    item.album_name = alb.trim();
+    await loadGalleryFilters();
+    if (!document.getElementById('lb-info-drawer').classList.contains('hidden')) {
+        await loadLightboxMetadataInfo();
+    }
+}
+
+async function lightboxShareMedia() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const fullUrl = `${window.location.origin}/media?path=${encodeURIComponent(item.dest_path)}`;
+    const fileName = item.dest_path.split(/[\\/]/).pop();
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: fileName, url: fullUrl });
+            return;
+        } catch (e) {}
+    }
+    try {
+        await navigator.clipboard.writeText(item.dest_path.replace(/\\/g, '/'));
+        alert(`Chemin copié dans le presse-papiers :\n${item.dest_path.replace(/\\/g, '/')}`);
+    } catch (e) {}
+}
+
+function lightboxDownloadMedia() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const a = document.createElement('a');
+    a.href = `/media?path=${encodeURIComponent(item.dest_path)}`;
+    a.download = item.dest_path.split(/[\\/]/).pop() || 'media';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 }
 
 async function lightboxDeleteMedia() {
@@ -784,22 +842,112 @@ function lightboxOpenMetadataEditor() {
 async function toggleLightboxInfoDrawer() {
     const dr = document.getElementById('lb-info-drawer');
     dr.classList.toggle('hidden');
-    if (!dr.classList.contains('hidden')) await loadLightboxMetadataInfo();
+    if (!dr.classList.contains('hidden')) {
+        await loadLightboxMetadataInfo();
+    }
 }
 
 async function loadLightboxMetadataInfo() {
     const item = currentGalleryItems[currentLightboxIndex];
     if (!item) return;
     const res = await fetch(`/api/metadata/inspect?source_path=${encodeURIComponent(item.source_path)}`);
+    if (!res.ok) return;
     const d = await res.json();
-    const mb = d.file_size ? (d.file_size / (1024*1024)).toFixed(2) + ' Mo' : 'N/A';
-    document.getElementById('lb-info-content').innerHTML = `
-        <div><span class="opacity-60">Fichier :</span> <b class="text-white">${d.dest_path.split(/[\\/]/).pop()}</b></div>
-        <div><span class="opacity-60">Date :</span> <b>${formatDate(d.timestamp)}</b></div>
-        <div><span class="opacity-60">Dimensions :</span> ${d.width || '?'} × ${d.height || '?'} px</div>
-        <div><span class="opacity-60">Taille :</span> ${mb}</div>
-        <div><span class="opacity-60">Album :</span> ${d.album_name || 'Aucun'}</div>
-        <div><span class="opacity-60">GPS :</span> ${(d.latitude || d.longitude) ? `${d.latitude}, ${d.longitude}` : 'Non'}</div>
-        <div><span class="opacity-60">Chemin :</span> <span class="text-[10px]">${d.dest_path}</span></div>
+
+    const fname = (d.dest_path || '').split(/[\\/]/).pop() || 'Média';
+    document.getElementById('lb-info-filename').textContent = fname;
+
+    // Dimensions & Mégapixels
+    if (d.width && d.height) {
+        const mpx = Math.max(1, Math.round((d.width * d.height) / 1000000));
+        document.getElementById('lb-info-dims').textContent = `${mpx} Mpx ${d.width} x ${d.height}`;
+    } else {
+        document.getElementById('lb-info-dims').textContent = 'Dimensions standard';
+    }
+
+    // Jour, Heure et Date complète
+    if (d.timestamp && d.timestamp > 0) {
+        const dt = new Date(d.timestamp * 1000);
+        const wd = dt.toLocaleDateString('fr-FR', { weekday: 'long' });
+        document.getElementById('lb-info-weekday').textContent = wd.charAt(0).toUpperCase() + wd.slice(1);
+        document.getElementById('lb-info-time').textContent = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+        document.getElementById('lb-info-date').textContent = dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    } else {
+        document.getElementById('lb-info-weekday').textContent = '';
+        document.getElementById('lb-info-time').textContent = '';
+        document.getElementById('lb-info-date').textContent = 'Date inconnue';
+    }
+
+    // Appareil & Paramètres optiques EXIF
+    document.getElementById('lb-info-camera').textContent = d.camera_model || 'Appareil standard';
+    document.getElementById('lb-info-lens').textContent = d.lens_specs || '';
+
+    // Taille en Mo avec virgule française
+    const mb = d.file_size ? (d.file_size / (1024 * 1024)).toFixed(2).replace('.', ',') + ' Mo' : '0,00 Mo';
+    document.getElementById('lb-info-size').textContent = mb;
+
+    // Carte Album
+    if (d.album_name) {
+        document.getElementById('lb-info-album-name').textContent = d.album_name;
+        document.getElementById('lb-info-album-count').textContent = `${d.album_count || 1} éléments`;
+    } else {
+        document.getElementById('lb-info-album-name').textContent = 'Aucun album';
+        document.getElementById('lb-info-album-count').textContent = 'Cliquer pour ajouter';
+    }
+
+    // Carte Personnes (Visages détectés + bouton œil "À identifier")
+    const facesHtml = (d.faces || []).map(f => `
+        <div onclick="if(${f.person_id || 0}) { closeLightbox(); switchTab('faces'); openTimeline(${f.person_id}); }"
+             class="flex flex-col items-center cursor-pointer group">
+            <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
+                 class="w-11 h-11 rounded-full object-cover bg-black/20 shadow-sm group-hover:scale-105 transition"/>
+            <span class="text-[9px] font-extrabold mt-1 max-w-[52px] truncate">${f.name}</span>
+        </div>
+    `).join('');
+
+    const addFaceBtn = `
+        <div onclick="lightboxOpenFaceTagger()" class="flex flex-col items-center cursor-pointer group">
+            <div class="w-11 h-11 rounded-full border border-black/25 flex items-center justify-center text-black/50 group-hover:text-black group-hover:border-black transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+            </div>
+            <span class="text-[9px] font-extrabold mt-1 opacity-75">A Identifié</span>
+        </div>
     `;
+    document.getElementById('lb-info-faces-list').innerHTML = facesHtml + addFaceBtn;
+
+    // Carte Lieu & Mini-Carte Leaflet
+    const mapBox = document.getElementById('lb-mini-map');
+    if (d.latitude && d.longitude && (d.latitude !== 0 || d.longitude !== 0)) {
+        document.getElementById('lb-info-place-title').textContent = `${Number(d.latitude).toFixed(3)}, ${Number(d.longitude).toFixed(3)}`;
+        mapBox.innerHTML = `<div id="lb-leaflet-inner" class="w-full h-full"></div>`;
+        setTimeout(() => {
+            const inner = document.getElementById('lb-leaflet-inner');
+            if (!inner) return;
+            if (lbMiniMap) {
+                lbMiniMap.remove();
+                lbMiniMap = null;
+            }
+            lbMiniMap = L.map('lb-leaflet-inner', { zoomControl: false, attributionControl: false }).setView([d.latitude, d.longitude], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(lbMiniMap);
+            L.marker([d.latitude, d.longitude]).addTo(lbMiniMap);
+        }, 80);
+    } else {
+        document.getElementById('lb-info-place-title').textContent = 'Lieu non défini';
+        if (lbMiniMap) {
+            lbMiniMap.remove();
+            lbMiniMap = null;
+        }
+        mapBox.innerHTML = `<span onclick="lightboxOpenMetadataEditor()" class="cursor-pointer hover:underline">+ Ajouter un lieu</span>`;
+    }
+
+    // Carte Note
+    document.getElementById('lb-info-note').textContent = d.description || 'Ajouter une note...';
+
+    // Pilule du chemin complet en bas
+    const cleanPath = (d.dest_path || '').replace(/\\/g, '/');
+    const pathPill = document.getElementById('lb-info-path-pill');
+    pathPill.textContent = cleanPath;
+    pathPill.title = cleanPath;
 }

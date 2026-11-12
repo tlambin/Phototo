@@ -1513,15 +1513,81 @@ def api_map_points():
 def api_inspect_metadata(source_path: str):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (unquote(source_path),))
+    src_clean = unquote(source_path)
+    cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (src_clean,))
     row = cur.fetchone()
-    conn.close()
     if not row:
+        conn.close()
         raise HTTPException(404, "Média introuvable")
+
     d = dict(row)
     tz = get_configured_timezone()
-    d["datetime_local_iso"] = datetime.fromtimestamp(d["timestamp"], tz=timezone.utc).astimezone(tz).strftime("%Y-%m-%dT%H:%M:%S") if d["timestamp"] else ""
-    d["description"] = ""
+    d["datetime_local_iso"] = (
+        datetime.fromtimestamp(d["timestamp"], tz=timezone.utc).astimezone(tz).strftime("%Y-%m-%dT%H:%M:%S")
+        if d.get("timestamp") else ""
+    )
+
+    # Compteur d'éléments dans l'album associé
+    album_count = 0
+    if d.get("album_name"):
+        first_alb = d["album_name"].split(",")[0].strip()
+        cur.execute(
+            "SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND album_name LIKE ?",
+            (f"%{first_alb}%",)
+        )
+        album_count = cur.fetchone()[0] or 0
+    d["album_count"] = album_count
+
+    # Visages détectés sur ce média
+    cur.execute("""
+        SELECT f.face_id, f.thumb_path, f.person_id, COALESCE(p.name, 'Inconnu') as name
+        FROM faces f
+        LEFT JOIN persons p ON f.person_id = p.person_id
+        WHERE f.source_path = ? OR f.dest_path = ?
+    """, (src_clean, d.get("dest_path") or ""))
+    d["faces"] = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    # Lecture rapide des tags EXIF (Appareil, Objectif, ISO, Note)
+    camera_model = ""
+    lens_specs = ""
+    description = ""
+    actual_p = resolve_actual_path(d.get("dest_path") or "")
+    if actual_p and actual_p.exists():
+        try:
+            with exiftool.ExifToolHelper(common_args=["-G", "-n", "-charset", "filename=utf8"]) as et:
+                meta_list = et.get_metadata([str(actual_p)])
+                if meta_list:
+                    m = meta_list[0]
+                    make = str(m.get("EXIF:Make") or m.get("QuickTime:Make") or "").strip()
+                    model = str(m.get("EXIF:Model") or m.get("QuickTime:Model") or "").strip()
+                    if model and make and not model.lower().startswith(make.lower()):
+                        camera_model = f"{make} {model}"
+                    else:
+                        camera_model = model or make
+
+                    fnum = m.get("EXIF:FNumber")
+                    exp = m.get("EXIF:ExposureTime")
+                    fl = m.get("EXIF:FocalLength")
+                    iso = m.get("EXIF:ISO")
+                    parts = []
+                    if fnum:
+                        parts.append(f"f/{round(float(fnum), 1)}".replace(".", ","))
+                    if exp:
+                        exp_f = float(exp)
+                        parts.append(f"1/{int(round(1.0 / exp_f))}" if 0 < exp_f < 1 else f"{exp_f}s")
+                    if fl:
+                        parts.append(f"{round(float(fl), 1)} mm".replace(".", ","))
+                    if iso:
+                        parts.append(f"{iso} ISO")
+                    lens_specs = " ".join(parts)
+                    description = str(m.get("EXIF:ImageDescription") or m.get("XMP:Description") or "").strip()
+        except Exception:
+            pass
+
+    d["camera_model"] = camera_model or "Appareil standard"
+    d["lens_specs"] = lens_specs
+    d["description"] = description
     return d
 
 
