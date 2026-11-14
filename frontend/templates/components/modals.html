@@ -255,12 +255,12 @@
             </button>
         </div>
 
-        <!-- ÉTAPE 3 : Confirmation & Options (Corriger les métadonnées / Supprimer les zip) -->
-        <div id="import-step-3" class="hidden space-y-5">
+        <!-- ÉTAPE 3 : Confirmation & Options (Albums, Sous-dossiers, Métadonnées, ZIP) -->
+        <div id="import-step-3" class="hidden space-y-4">
             <div class="flex justify-between items-center">
                 <div class="flex items-center gap-3">
                     <button id="import-step3-back-btn" onclick="showImportStep(2)" class="text-lg font-bold hover:scale-110 transition">←</button>
-                    <h2 id="import-step3-header" class="text-base font-extrabold">Importer depuis Google</h2>
+                    <h2 id="import-step3-header" class="text-base font-extrabold">Importer un dossier</h2>
                 </div>
                 <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
             </div>
@@ -270,17 +270,61 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <div id="import-step3-subtitle" class="text-sm font-extrabold">Fichiers ZIP</div>
-                    <div id="import-step3-paths" class="text-[11px] font-bold opacity-55 space-y-0.5 max-h-24 overflow-y-auto break-all mt-0.5"></div>
+                    <div id="import-step3-subtitle" class="text-sm font-extrabold">Dossier sélectionné</div>
+                    <div id="import-step3-paths" class="text-[11px] font-bold opacity-55 space-y-0.5 max-h-16 overflow-y-auto break-all mt-0.5"></div>
                 </div>
             </div>
 
-            <div class="space-y-2.5 pl-1">
+            <div class="space-y-3 pl-1">
+                <!-- Option 1 : Créer des albums -->
+                <div id="row-opt-create-album" class="space-y-2.5">
+                    <div onclick="toggleWizardCheck('album')" class="flex items-center gap-3 cursor-pointer select-none">
+                        <div id="wiz-chk-album" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold">✓</div>
+                        <span class="text-xs font-extrabold">Créer un ou plusieurs albums</span>
+                    </div>
+
+                    <!-- Panneau de configuration des albums & sous-dossiers -->
+                    <div id="wiz-album-config-panel" class="pl-6 space-y-2.5">
+                        <!-- Choix du mode (affiché automatiquement si des sous-dossiers existent) -->
+                        <div id="wiz-subfolder-modes" class="hidden space-y-1.5 text-[11px] font-extrabold">
+                            <label onclick="setWizardSubfolderMode('SINGLE')" class="flex items-center gap-2 cursor-pointer">
+                                <span id="wiz-rad-single" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]"></span>
+                                <span>Un seul album global pour tout le dossier</span>
+                            </label>
+                            <label onclick="setWizardSubfolderMode('ALL_SUBS')" class="flex items-center gap-2 cursor-pointer">
+                                <span id="wiz-rad-allsubs" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]">✓</span>
+                                <span>Créer un album pour chaque sous-dossier</span>
+                            </label>
+                            <label onclick="setWizardSubfolderMode('CUSTOM_SUBS')" class="flex items-center gap-2 cursor-pointer">
+                                <span id="wiz-rad-custom" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]"></span>
+                                <span>Me laisser choisir chaque sous-dossier</span>
+                            </label>
+                        </div>
+
+                        <!-- Champ Nom de l'album (Mode SINGLE) -->
+                        <div id="wiz-single-album-box">
+                            <input id="wiz-album-name-input" type="text" placeholder="Nom de l'album..."
+                                   class="ui-pill w-full rounded-full px-3.5 py-1.5 text-xs font-bold outline-none"/>
+                        </div>
+
+                        <!-- Liste interactive des sous-dossiers (Mode CUSTOM_SUBS) -->
+                        <div id="wiz-custom-subfolders-box" class="hidden space-y-1.5">
+                            <div class="flex justify-between items-center text-[10px] font-bold opacity-65 px-1">
+                                <span>Cochez les sous-dossiers à importer et leur album :</span>
+                                <button type="button" onclick="toggleAllCustomSubfolders()" class="underline hover:opacity-100">Tout basculer</button>
+                            </div>
+                            <div id="wiz-subfolders-list" class="max-h-40 overflow-y-auto space-y-1.5 pr-1"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Option 2 : Corriger les métadonnées -->
                 <div id="row-opt-fix-meta" onclick="toggleWizardCheck('fix')" class="flex items-center gap-3 cursor-pointer select-none">
                     <div id="wiz-chk-fix" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold">✓</div>
                     <span class="text-xs font-extrabold">Corriger les metadonnées</span>
                 </div>
 
+                <!-- Option 3 : Supprimer les ZIP après extraction -->
                 <div id="row-opt-del-zips" onclick="toggleWizardCheck('del')" class="hidden flex items-center gap-3 cursor-pointer select-none">
                     <div id="wiz-chk-del" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold"></div>
                     <span class="text-xs font-extrabold">Supprimer les zip apres extraction</span>
@@ -298,75 +342,286 @@
 </div>
 
 <!-- ==================== MODALES DE CONFIGURATION (CRÉER/MODIFIER BIBLIOTHÈQUE, FUSION, VISAGE, EXIF, STUDIO) ==================== -->
-<div id="library-modal" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-    <div class="ui-card rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex justify-between items-center pb-2">
-            <h2 id="lib-modal-title" class="text-lg font-extrabold">Configurer la Bibliothèque</h2>
-            <button onclick="closeLibraryModal()" class="text-lg font-bold opacity-60 hover:opacity-100">✕</button>
+<!-- ==================== 1, 2 & 3. MODALE BIBLIOTHÈQUE (CRÉER / MODIFIER / SUPPRIMER) ==================== -->
+<div id="library-modal" class="hidden fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeLibraryModal()">
+
+    <!-- ÉCRAN 1 : CRÉER UNE BIBLIOTHÈQUE (Maquette 1) -->
+    <div id="lib-view-create" class="ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-5 relative">
+        <button onclick="closeLibraryModal()" class="absolute top-5 right-5 w-6 h-6 rounded-full border-[1.8px] border-current flex items-center justify-center text-xs font-extrabold opacity-80 hover:opacity-100">✕</button>
+
+        <div class="text-center">
+            <h2 class="text-base font-extrabold pb-2">Créer une bibliotheque</h2>
+            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
         </div>
-        <input id="lib-name" type="text" placeholder="Nom de la bibliothèque (ex: Bibliotheque 1)" class="ui-pill w-full rounded-2xl px-4 py-2.5 text-xs font-semibold outline-none"/>
-        <div id="lib-source-type-row" class="grid grid-cols-3 gap-2 text-xs font-bold">
-            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="STANDARD_FOLDER" checked onchange="toggleSourceTypeUI()"/> 📁 Dossier</label>
-            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="TAKEOUT_FOLDER" onchange="toggleSourceTypeUI()"/> 📂 Takeout</label>
-            <label class="ui-pill rounded-2xl p-3 cursor-pointer flex items-center gap-2"><input type="radio" name="source_type" value="TAKEOUT_ZIPS" onchange="toggleSourceTypeUI()"/> 📦 Takeout .ZIP</label>
-        </div>
-        <div>
-            <div class="flex justify-between mb-1.5 items-center">
-                <span class="text-xs font-bold opacity-75">Dossier(s) ou Archive(s) .ZIP sources</span>
-                <div class="flex gap-2">
-                    <button id="btn-browse-zips" onclick="browseSource('zips')" class="hidden plum-btn text-xs px-3 py-1 rounded-full">📦 Choisir .ZIP</button>
-                    <button onclick="browseSource('folder')" class="ui-pill text-xs font-bold px-3 py-1 rounded-full">📂 Parcourir...</button>
+
+        <input id="lib-create-name" type="text" placeholder="Choisir un nom"
+               class="ui-pill w-full rounded-full px-4 py-2.5 text-xs font-bold outline-none placeholder:opacity-50"/>
+
+        <div class="space-y-3">
+            <div class="text-xs font-extrabold">Choisir une source :</div>
+            <div id="lib-create-selected-path" class="hidden text-[11px] font-bold opacity-60 truncate px-1"></div>
+
+            <button type="button" onclick="pickLibraryFolder('create', false)"
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
                 </div>
-            </div>
-            <textarea id="lib-paths" rows="3" class="ui-pill w-full rounded-2xl p-3 text-xs font-mono outline-none"></textarea>
+                <span class="text-xs font-extrabold">Sélectionner un dossier existant</span>
+            </button>
+
+            <button type="button" onclick="pickLibraryFolder('create', true)"
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                </div>
+                <span class="text-xs font-extrabold">Créer un nouveau dossier</span>
+            </button>
         </div>
-        <div>
-            <div class="flex justify-between mb-1.5 items-center">
-                <span class="text-xs font-bold opacity-75">Dossier de destination (Tri & Base SQLite)</span>
-                <button onclick="browseDest()" class="ui-pill text-xs font-bold px-3 py-1 rounded-full">📂 Parcourir...</button>
-            </div>
-            <input id="lib-dest" type="text" class="ui-pill w-full rounded-2xl px-4 py-2.5 text-xs font-mono outline-none"/>
-        </div>
-        <div id="takeout-only-panel" class="hidden ui-pill rounded-2xl p-3.5 space-y-2 text-xs">
-            <label class="flex items-center gap-2 cursor-pointer font-bold">
-                <input id="opt-fix-json" type="checkbox" checked/>
-                <span>Corriger les métadonnées Google Takeout (.json ➔ EXIF/GPS/Dates)</span>
-            </label>
-            <div id="takeout-zip-delete-option" class="hidden pt-1">
-                <label class="flex items-center gap-2 text-rose-600 font-bold cursor-pointer">
-                    <input id="opt-delete-zips" type="checkbox"/>
-                    <span>Supprimer les .ZIP au fur et à mesure après extraction</span>
-                </label>
-            </div>
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-            <button onclick="closeLibraryModal()" class="ui-pill px-5 py-2 rounded-full text-xs font-bold">Annuler</button>
-            <button onclick="submitLibraryModal()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow">Valider & Synchroniser</button>
+
+        <div class="flex justify-center pt-1">
+            <button type="button" onclick="submitCreateLibraryModal()" class="plum-btn px-10 py-2 rounded-full text-xs font-extrabold shadow-md">
+                Créer
+            </button>
         </div>
     </div>
+
+    <!-- ÉCRAN 2 : MODIFIER LA BIBLIOTHÈQUE (Maquette 2) -->
+    <div id="lib-view-edit" class="hidden ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-4 relative">
+        <button onclick="closeLibraryModal()" class="absolute top-5 right-5 w-6 h-6 rounded-full border-[1.8px] border-current flex items-center justify-center text-xs font-extrabold opacity-80 hover:opacity-100">✕</button>
+
+        <div class="text-center">
+            <h2 class="text-base font-extrabold pb-2">Modifier la bibliotheque</h2>
+            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+        </div>
+
+        <div class="space-y-2">
+            <div class="flex items-baseline gap-2">
+                <span class="text-xs font-extrabold">Changer de nom :</span>
+                <span id="lib-edit-current-name" class="text-[11px] font-bold opacity-45 truncate">Bibliotheque 2</span>
+            </div>
+            <input id="lib-edit-new-name" type="text" placeholder="Nouveau nom"
+                   class="ui-pill w-full rounded-full px-4 py-2.5 text-xs font-bold outline-none placeholder:opacity-50"/>
+        </div>
+
+        <div class="space-y-2.5 pt-1">
+            <div class="flex items-baseline gap-2">
+                <span class="text-xs font-extrabold shrink-0">Changer de source :</span>
+                <span id="lib-edit-current-source" class="text-[10px] font-bold opacity-45 truncate">C:/Mes Photos</span>
+            </div>
+
+            <button type="button" onclick="pickLibraryFolder('edit', false)"
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <span class="text-xs font-extrabold">Sélectionner un dossier existant</span>
+            </button>
+
+            <button type="button" onclick="pickLibraryFolder('edit', true)"
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                </div>
+                <span class="text-xs font-extrabold">Créer un nouveau dossier</span>
+            </button>
+
+            <!-- Option radio : Déplacer le contenu existant vers la nouvelle source -->
+            <div onclick="toggleMoveExistingContentOption()" class="flex items-center justify-center gap-2 pt-1 cursor-pointer">
+                <div id="lib-edit-move-radio" class="w-4 h-4 rounded-full border-[1.8px] border-current flex items-center justify-center">
+                    <div id="lib-edit-move-dot" class="hidden w-2 h-2 rounded-full bg-current"></div>
+                </div>
+                <span class="text-[10px] font-extrabold">Déplacer le contenu existant vers la nouvelle source</span>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-3 pt-2">
+            <button type="button" onclick="submitEditLibraryModal()" class="plum-btn px-10 py-2 rounded-full text-xs font-extrabold shadow-md">
+                Modifier
+            </button>
+            <button type="button" onclick="showDeleteLibraryConfirm()" title="Supprimer la bibliothèque"
+                    class="plum-btn w-9 h-9 rounded-full flex items-center justify-center shadow-md">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- ÉCRAN 3 : SUPPRIMER LA BIBLIOTHÈQUE (Maquette 3) -->
+    <div id="lib-view-delete" class="hidden ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-5 relative text-center">
+        <button onclick="backToEditLibraryModal()" class="absolute top-5 left-5 text-base font-extrabold opacity-80 hover:opacity-100">←</button>
+        <button onclick="closeLibraryModal()" class="absolute top-5 right-5 w-6 h-6 rounded-full border-[1.8px] border-current flex items-center justify-center text-xs font-extrabold opacity-80 hover:opacity-100">✕</button>
+
+        <div>
+            <h2 class="text-base font-extrabold pb-2">Supprimer la bibliotheque</h2>
+            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+        </div>
+
+        <p class="text-xs font-extrabold leading-relaxed px-2">
+            Etes-vous sur de vouloir supprimer la bibliotheque ?
+        </p>
+
+        <div class="flex items-center justify-center gap-6">
+            <button type="button" onclick="confirmDeleteActiveLibrary()" class="plum-btn px-9 py-2 rounded-full text-xs font-extrabold shadow-md">
+                OUI
+            </button>
+            <button type="button" onclick="backToEditLibraryModal()" class="plum-btn px-8 py-2 rounded-full text-xs font-extrabold shadow-md">
+                NON
+            </button>
+        </div>
+
+        <label class="inline-flex items-center justify-center gap-2 cursor-pointer text-[11px] font-extrabold pt-1">
+            <input id="lib-delete-win-files" type="checkbox" class="w-3.5 h-3.5 rounded accent-[#593E5A] cursor-pointer"/>
+            <span>Supprimer les fichiers de windows</span>
+        </label>
+    </div>
+
 </div>
 
-<div id="merge-lib-modal" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-    <div class="ui-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex justify-between items-center">
-            <h2 class="text-base font-extrabold">🔗 Fusionner des Bibliothèques</h2>
-            <button onclick="document.getElementById('merge-lib-modal').classList.add('hidden')" class="text-sm font-bold">✕</button>
+<!-- ==================== 4, 5 & 6. MODALE FUSION & GESTION DES DOUBLONS AUTOMATIQUE ==================== -->
+<div id="merge-lib-modal" class="hidden fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeMergeLibraryModal()">
+
+    <!-- ÉCRAN 4 : FUSIONNER LA BIBLIOTHÈQUE (Maquette 4) -->
+    <div id="merge-step-select" class="ui-card rounded-[28px] max-w-xs w-full p-6 shadow-2xl space-y-4 relative text-center">
+        <button onclick="closeMergeLibraryModal()" class="absolute top-5 right-5 w-6 h-6 rounded-full border-[1.8px] border-current flex items-center justify-center text-xs font-extrabold opacity-80 hover:opacity-100">✕</button>
+
+        <h2 class="text-base font-extrabold">Fusionner la bibliotheque</h2>
+
+        <!-- Sélection de la bibliothèque source -->
+        <div class="ui-pill rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+            <svg class="w-5 h-5 opacity-45 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <select id="merge-src-lib" class="bg-transparent w-full text-xs font-extrabold outline-none cursor-pointer"></select>
         </div>
-        <div class="space-y-3 text-xs font-bold">
-            <div>
-                <label class="block opacity-75 mb-1">Bibliothèque à fusionner :</label>
-                <select id="merge-src-lib" class="ui-pill w-full rounded-2xl p-2.5 outline-none"></select>
-            </div>
-            <div>
-                <label class="block opacity-75 mb-1">Vers la bibliothèque cible :</label>
-                <select id="merge-dst-lib" class="ui-pill w-full rounded-2xl p-2.5 outline-none"></select>
-            </div>
+
+        <div class="text-xs font-extrabold">vers</div>
+
+        <!-- Bibliothèque cible (Active) -->
+        <div class="ui-pill rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <span id="merge-dst-lib-label" class="text-xs font-extrabold truncate">Bibliotheque 2</span>
+            <select id="merge-dst-lib" class="hidden"></select>
         </div>
-        <div class="flex justify-end gap-2 pt-2">
-            <button onclick="document.getElementById('merge-lib-modal').classList.add('hidden')" class="ui-pill px-4 py-2 rounded-full text-xs font-bold">Annuler</button>
-            <button onclick="confirmMergeLibraries()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold">Fusionner</button>
+
+        <!-- Bouton Fusionner avec analyse -->
+        <div class="pt-1 space-y-1">
+            <button type="button" onclick="confirmMergeLibraries(false)" class="plum-btn px-9 py-2.5 rounded-full text-sm font-extrabold shadow-md">
+                Fusionner
+            </button>
+            <div class="text-[8px] font-bold opacity-65">Analyse et détecte les doublons en arrière-plan</div>
+        </div>
+
+        <!-- Bouton Fusion rapide -->
+        <div class="pt-1 space-y-1">
+            <button type="button" onclick="confirmMergeLibraries(true)" class="plum-btn px-4 py-1 rounded-full text-[9px] font-extrabold shadow">
+                Fusion rapide
+            </button>
+            <div class="text-[8px] font-bold opacity-65">Copie tous les fichiers en bloc sans analyse (crée des doublons si les fichiers existent déjà)</div>
         </div>
     </div>
+
+    <!-- ÉCRAN 5 : FUSION TERMINÉE AVEC SUCCÈS (Maquette 5) -->
+    <div id="merge-step-done" class="hidden ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-5 relative text-center">
+        <div>
+            <h2 class="text-base font-extrabold pb-2">Fusion terminée avec succès</h2>
+            <div class="w-4/5 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+        </div>
+
+        <div class="space-y-1 text-xs font-extrabold">
+            <p><span id="merge-dups-found-count">0</span> photos identiques ont été détectées.</p>
+            <p>Que voulez-vous faire ?</p>
+        </div>
+
+        <div class="flex items-center justify-center gap-4">
+            <button type="button" onclick="openAutoDuplicatesConfigStep()" class="plum-btn px-6 py-2 rounded-full text-xs font-extrabold shadow-md">
+                Automatique
+            </button>
+            <button type="button" onclick="closeMergeLibraryModal(); switchTab('dups');" class="plum-btn px-8 py-2 rounded-full text-xs font-extrabold shadow-md">
+                Manuel
+            </button>
+        </div>
+
+        <div>
+            <button type="button" onclick="closeMergeLibraryModal()" class="text-[11px] font-extrabold opacity-80 hover:opacity-100">
+                Ne rien faire
+            </button>
+        </div>
+    </div>
+
+    <!-- ÉCRAN 6 : GESTION DES DOUBLONS AUTOMATIQUE (Maquette 6) -->
+    <div id="merge-step-auto-config" class="hidden flex items-center gap-3">
+        <div class="ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-4 relative text-left">
+            <div class="text-center">
+                <h2 class="text-base font-extrabold pb-2">Gestion des doublons automatique</h2>
+                <div class="w-4/5 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+            </div>
+
+            <!-- Choix Radio : Garder les deux / Ne garder qu'un seul -->
+            <div class="space-y-2.5 pt-1 text-xs font-extrabold">
+                <div onclick="setAutoDupMode('KEEP_BOTH')" class="flex items-center gap-3 cursor-pointer">
+                    <div id="autodup-radio-both" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-[11px]"></div>
+                    <span>Garder les deux fichiers</span>
+                </div>
+                <div onclick="setAutoDupMode('KEEP_ONE')" class="flex items-center gap-3 cursor-pointer">
+                    <div id="autodup-radio-one" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-[11px]">✓</div>
+                    <span>Ne garder qu’un seul fichier</span>
+                </div>
+            </div>
+
+            <!-- Conserver en priorité -->
+            <div id="autodup-priority-section" class="space-y-3 pt-1">
+                <div class="flex items-center gap-2.5 text-xs font-extrabold">
+                    <span class="shrink-0">Conserver en priorité :</span>
+                    <button type="button" onclick="toggleAutoDupPriorityMenu()"
+                            class="ui-pill px-3.5 py-1.5 rounded-full text-[11px] font-bold flex items-center justify-between gap-2 flex-1">
+                        <span id="autodup-priority-label" class="opacity-65 truncate">la meilleure qualité</span>
+                        <span>⌄</span>
+                    </button>
+                </div>
+
+                <!-- Cases à cocher -->
+                <div class="space-y-1.5 pl-4 text-[10px] font-extrabold">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="autodup-chk-albums" type="checkbox" checked class="w-3 h-3 accent-[#593E5A]"/>
+                        <span>Mettre à jour les albums existants</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="autodup-chk-trash" type="checkbox" checked class="w-3 h-3 accent-[#593E5A]"/>
+                        <span>Déplacer les doublons dans la corbeille</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-center pt-2">
+                <button type="button" onclick="submitAutoDuplicatesResolution()" class="plum-btn px-8 py-2 rounded-full text-xs font-extrabold shadow-md">
+                    Valider
+                </button>
+            </div>
+        </div>
+
+        <!-- Menu flottant des priorités (à droite comme sur la maquette 6) -->
+        <div id="autodup-priority-menu" class="ui-card rounded-[22px] p-3.5 shadow-xl space-y-1.5 text-xs font-extrabold min-w-[155px]">
+            <div onclick="selectAutoDupPriority('BEST_QUALITY', 'la meilleure qualité')" class="cursor-pointer opacity-60 hover:opacity-100 transition">la meilleure qualité</div>
+            <div onclick="selectAutoDupPriority('NEWEST', 'le plus récent')" class="cursor-pointer opacity-60 hover:opacity-100 transition">le plus récent</div>
+            <div onclick="selectAutoDupPriority('OLDEST', 'le plus ancien')" class="cursor-pointer opacity-60 hover:opacity-100 transition">le plus ancien</div>
+            <div onclick="selectAutoDupPriority('LARGEST', 'le plus gros')" class="cursor-pointer opacity-60 hover:opacity-100 transition">le plus gros</div>
+        </div>
+    </div>
+
 </div>
 
 <div id="manual-face-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">

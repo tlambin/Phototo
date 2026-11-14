@@ -40,6 +40,7 @@ def open_native_dialog(mode: str = "folder") -> list[str]:
     script = f"""
 import tkinter as tk
 from tkinter import filedialog
+from pathlib import Path
 import json
 root = tk.Tk()
 root.withdraw()
@@ -56,9 +57,25 @@ elif "{mode}" == "audio":
         filetypes=[("Fichiers Audio", "*.mp3 *.wav *.m4a *.aac *.flac *.ogg"), ("Tous", "*.*")]
     )
     print(json.dumps([res] if res else []))
+elif "{mode}" == "create_folder":
+    res = filedialog.asksaveasfilename(
+        title="Choisissez l'emplacement et tapez le nom du nouveau dossier",
+        initialfile="Nouvelle_Bibliotheque"
+    )
+    if res:
+        p = Path(res)
+        p.mkdir(parents=True, exist_ok=True)
+        print(json.dumps([str(p)]))
+    else:
+        print(json.dumps([]))
 else:
-    res = filedialog.askdirectory(title="Sélectionnez le dossier")
-    print(json.dumps([res] if res else []))
+    res = filedialog.askdirectory(title="Sélectionnez le dossier", mustexist=False)
+    if res:
+        p = Path(res)
+        p.mkdir(parents=True, exist_ok=True)
+        print(json.dumps([str(p)]))
+    else:
+        print(json.dumps([]))
 root.destroy()
 """
     try:
