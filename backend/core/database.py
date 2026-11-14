@@ -67,6 +67,7 @@ def get_db() -> sqlite3.Connection:
         cols = {r[1] for r in init_conn.execute("PRAGMA table_info(processed_files)").fetchall()}
         if "modified_at" not in cols:
             init_conn.execute("ALTER TABLE processed_files ADD COLUMN modified_at INTEGER")
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_modified ON processed_files(is_duplicate, is_trashed, modified_at DESC)")
         init_conn.commit()
         init_conn.close()
         _INITIALIZED_DBS.add(db_key)
@@ -75,6 +76,8 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA cache_size=-65536;")
+    conn.execute("PRAGMA temp_store=MEMORY;")
     conn.execute("PRAGMA busy_timeout=30000;")
     return conn
 

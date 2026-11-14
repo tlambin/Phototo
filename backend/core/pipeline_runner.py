@@ -567,39 +567,47 @@ def run_step_faces(lib: dict):
         app = FaceAnalysis(name=faces_model, allowed_modules=['detection', 'recognition'], providers=hw["onnx_providers"])
         app.prepare(ctx_id=hw["onnx_ctx_id"], det_size=faces_ai.DET_SIZE)
 
+        from concurrent.futures import ThreadPoolExecutor
+        workers = max(1, int(hw.get("recommended_workers", 4)))
         faces_batch, scanned_batch, done = [], [], 0
-        for src_path, dest_path, ts in to_scan:
-            if STATE.stop_requested:
-                break
-            done += 1
-            STATE.update_progress(done, total, unit="médias/s")
-            frames = extract_analysis_frames(dest_path)
-            raw_cands = []
-            for f_idx_frame, img in enumerate(frames):
-                for f_idx, face in enumerate(app.get(img)):
-                    bbox = face.bbox.astype(int).tolist()
-                    if face.det_score < faces_ai.MIN_FACE_SCORE or (bbox[2] - bbox[0]) < faces_ai.MIN_FACE_PIXELS:
-                        continue
-                    raw_cands.append({
-                        "img": img, "bbox": bbox, "det_score": float(face.det_score),
-                        "emb": face.normed_embedding.astype(np.float32),
-                        "uid": f"{abs(hash(src_path))}_f{f_idx_frame}_{f_idx}"
-                    })
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for i in range(0, total, 25):
+                if STATE.stop_requested:
+                    break
+                chunk = to_scan[i:i + 25]
+                decoded_list = list(pool.map(lambda r: extract_analysis_frames(r[1]), chunk))
+                for (src_path, dest_path, ts), frames in zip(chunk, decoded_list):
+                    if STATE.stop_requested:
+                        break
+                    done += 1
+                    STATE.update_progress(done, total, unit="médias/s")
+                    raw_cands = []
+                    for f_idx_frame, img in enumerate(frames):
+                        for f_idx, face in enumerate(app.get(img)):
+                            bbox = face.bbox.astype(int).tolist()
+                            if face.det_score < faces_ai.MIN_FACE_SCORE or (bbox[2] - bbox[0]) < faces_ai.MIN_FACE_PIXELS:
+                                continue
+                            raw_cands.append({
+                                "img": img, "bbox": bbox, "det_score": float(face.det_score),
+                                "emb": face.normed_embedding.astype(np.float32),
+                                "uid": f"{abs(hash(src_path))}_f{f_idx_frame}_{f_idx}"
+                            })
 
-            for mf in faces_ai.deduplicate_video_faces(raw_cands):
-                thumb = faces_ai.save_face_thumbnail(mf["img"], mf["bbox"], mf["uid"])
-                b = mf["bbox"]
-                faces_batch.append((src_path, dest_path, ts or 0, f"{b[0]},{b[1]},{b[2]},{b[3]}", mf["det_score"], mf["emb"].tobytes(), thumb))
+                    for mf in faces_ai.deduplicate_video_faces(raw_cands):
+                        thumb = faces_ai.save_face_thumbnail(mf["img"], mf["bbox"], mf["uid"])
+                        b = mf["bbox"]
+                        faces_batch.append((src_path, dest_path, ts or 0, f"{b[0]},{b[1]},{b[2]},{b[3]}", mf["det_score"], mf["emb"].tobytes(), thumb))
 
-            scanned_batch.append((src_path,))
-            if len(scanned_batch) >= 25:
-                if faces_batch:
-                    cur.executemany("INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)", faces_batch)
-                    faces_batch.clear()
-                cur.executemany("UPDATE processed_files SET faces_scanned = 1 WHERE source_path = ?", scanned_batch)
-                conn.commit()
-                scanned_batch.clear()
-                _assign_unclustered_faces_incremental(conn)
+                    scanned_batch.append((src_path,))
+
+                if scanned_batch:
+                    if faces_batch:
+                        cur.executemany("INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)", faces_batch)
+                        faces_batch.clear()
+                    cur.executemany("UPDATE processed_files SET faces_scanned = 1 WHERE source_path = ?", scanned_batch)
+                    conn.commit()
+                    scanned_batch.clear()
+                    _assign_unclustered_faces_incremental(conn)
 
         if faces_batch:
             cur.executemany("INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)", faces_batch)
@@ -674,43 +682,51 @@ def run_step_ocr(lib: dict):
                 return [(line[1][0], float(line[1][1])) for line in res[0] if line and len(line) >= 2]
             return _run_paddle
 
+        from concurrent.futures import ThreadPoolExecutor
+        workers = max(1, int(hw.get("recommended_workers", 4)))
         run_ocr_on_img = _make_ocr_fn()
         ocr_batch, fts_batch, scanned_batch, done = [], [], [], 0
 
-        for src_path, dest_path, ts in to_scan:
-            if STATE.stop_requested:
-                break
-            done += 1
-            STATE.update_progress(done, total, unit="médias/s")
-            frames = extract_analysis_frames(dest_path, max_dim=ocr_ai.MAX_IMG_DIM)
-            unique_lines, seen_lower, scores = [], set(), []
-            for img in frames:
-                try:
-                    items = run_ocr_on_img(img)
-                except Exception:
-                    items = []
-                for raw_txt, conf in items:
-                    txt = str(raw_txt or "").strip()
-                    if conf >= ocr_ai.MIN_CONFIDENCE and len(txt) >= 2 and txt.lower() not in seen_lower:
-                        seen_lower.add(txt.lower())
-                        unique_lines.append(txt)
-                        scores.append(conf)
-            if unique_lines:
-                full_txt = " | ".join(unique_lines)
-                avg_c = round(sum(scores) / len(scores), 3)
-                ocr_batch.append((src_path, dest_path, ts or 0, full_txt, avg_c, len(unique_lines)))
-                fts_batch.append((src_path, dest_path, full_txt))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for i in range(0, total, 40):
+                if STATE.stop_requested:
+                    break
+                chunk = to_scan[i:i + 40]
+                decoded_list = list(pool.map(lambda r: extract_analysis_frames(r[1], max_dim=ocr_ai.MAX_IMG_DIM), chunk))
+                for (src_path, dest_path, ts), frames in zip(chunk, decoded_list):
+                    if STATE.stop_requested:
+                        break
+                    done += 1
+                    STATE.update_progress(done, total, unit="médias/s")
+                    unique_lines, seen_lower, scores = [], set(), []
+                    for img in frames:
+                        try:
+                            items = run_ocr_on_img(img)
+                        except Exception:
+                            items = []
+                        for raw_txt, conf in items:
+                            txt = str(raw_txt or "").strip()
+                            if conf >= ocr_ai.MIN_CONFIDENCE and len(txt) >= 2 and txt.lower() not in seen_lower:
+                                seen_lower.add(txt.lower())
+                                unique_lines.append(txt)
+                                scores.append(conf)
+                    if unique_lines:
+                        full_txt = " | ".join(unique_lines)
+                        avg_c = round(sum(scores) / len(scores), 3)
+                        ocr_batch.append((src_path, dest_path, ts or 0, full_txt, avg_c, len(unique_lines)))
+                        fts_batch.append((src_path, dest_path, full_txt))
 
-            scanned_batch.append((src_path,))
-            if len(scanned_batch) >= 40:
-                if ocr_batch:
-                    cur.executemany("INSERT OR REPLACE INTO ocr_results VALUES (?,?,?,?,?,?)", ocr_batch)
-                    cur.executemany("INSERT INTO ocr_fts (source_path, dest_path, full_text) VALUES (?,?,?)", fts_batch)
-                    ocr_batch.clear()
-                    fts_batch.clear()
-                cur.executemany("UPDATE processed_files SET ocr_scanned = 1 WHERE source_path = ?", scanned_batch)
-                conn.commit()
-                scanned_batch.clear()
+                    scanned_batch.append((src_path,))
+
+                if scanned_batch:
+                    if ocr_batch:
+                        cur.executemany("INSERT OR REPLACE INTO ocr_results VALUES (?,?,?,?,?,?)", ocr_batch)
+                        cur.executemany("INSERT INTO ocr_fts (source_path, dest_path, full_text) VALUES (?,?,?)", fts_batch)
+                        ocr_batch.clear()
+                        fts_batch.clear()
+                    cur.executemany("UPDATE processed_files SET ocr_scanned = 1 WHERE source_path = ?", scanned_batch)
+                    conn.commit()
+                    scanned_batch.clear()
 
         if ocr_batch:
             cur.executemany("INSERT OR REPLACE INTO ocr_results VALUES (?,?,?,?,?,?)", ocr_batch)
@@ -739,40 +755,52 @@ def run_step_clip(lib: dict):
     STATE.update_progress(0, total, unit="médias/s")
 
     if total > 0:
+        from concurrent.futures import ThreadPoolExecutor
+        hw = get_hardware_runtime_config()
+        workers = max(1, int(hw.get("recommended_workers", 4)))
+        chunk_size = 64 if hw.get("torch_device") == "cuda" else 24
+        encode_bs = 128 if hw.get("torch_device") == "cuda" else 32
         vision_model, _ = clip_gps_ai.get_clip_models()
         done = 0
-        for i in range(0, total, 24):
-            if STATE.stop_requested:
-                break
-            batch_rows = to_scan[i:i + 24]
-            flat_imgs, slices, failed = [], [], []
-            for src_s, dest_s in batch_rows:
-                frames = extract_analysis_frames(dest_s, max_dim=512)
-                if not frames:
-                    failed.append((src_s,))
-                    continue
-                s_idx = len(flat_imgs)
-                for f_bgr in frames:
-                    flat_imgs.append(Image.fromarray(cv2.cvtColor(f_bgr, cv2.COLOR_BGR2RGB)))
-                slices.append((src_s, s_idx, len(flat_imgs)))
 
-            updates = []
-            if flat_imgs:
-                embs = vision_model.encode(flat_imgs, batch_size=32, normalize_embeddings=True, show_progress_bar=False)
-                for src_s, s_i, e_i in slices:
-                    m_emb = np.mean(embs[s_i:e_i], axis=0)
-                    norm = np.linalg.norm(m_emb)
-                    if norm > 0:
-                        m_emb = m_emb / norm
-                    updates.append((m_emb.astype(np.float16).tobytes(), 1, src_s))
+        def _decode_clip_item(row):
+            src_s, dest_s = row
+            frames = extract_analysis_frames(dest_s, max_dim=512)
+            pil_frames = [Image.fromarray(cv2.cvtColor(f_bgr, cv2.COLOR_BGR2RGB)) for f_bgr in frames]
+            return src_s, pil_frames
 
-            if updates:
-                cur.executemany("UPDATE processed_files SET clip_embedding=?, clip_scanned=? WHERE source_path=?", updates)
-            if failed:
-                cur.executemany("UPDATE processed_files SET clip_scanned=1 WHERE source_path=?", failed)
-            conn.commit()
-            done += len(batch_rows)
-            STATE.update_progress(done, total, unit="médias/s")
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for i in range(0, total, chunk_size):
+                if STATE.stop_requested:
+                    break
+                batch_rows = to_scan[i:i + chunk_size]
+                decoded_batch = list(pool.map(_decode_clip_item, batch_rows))
+                flat_imgs, slices, failed = [], [], []
+                for src_s, pil_frames in decoded_batch:
+                    if not pil_frames:
+                        failed.append((src_s,))
+                        continue
+                    s_idx = len(flat_imgs)
+                    flat_imgs.extend(pil_frames)
+                    slices.append((src_s, s_idx, len(flat_imgs)))
+
+                updates = []
+                if flat_imgs:
+                    embs = vision_model.encode(flat_imgs, batch_size=encode_bs, normalize_embeddings=True, show_progress_bar=False)
+                    for src_s, s_i, e_i in slices:
+                        m_emb = np.mean(embs[s_i:e_i], axis=0)
+                        norm = np.linalg.norm(m_emb)
+                        if norm > 0:
+                            m_emb = m_emb / norm
+                        updates.append((m_emb.astype(np.float16).tobytes(), 1, src_s))
+
+                if updates:
+                    cur.executemany("UPDATE processed_files SET clip_embedding=?, clip_scanned=? WHERE source_path=?", updates)
+                if failed:
+                    cur.executemany("UPDATE processed_files SET clip_scanned=1 WHERE source_path=?", failed)
+                conn.commit()
+                done += len(batch_rows)
+                STATE.update_progress(done, total, unit="médias/s")
     conn.close()
 
 

@@ -158,7 +158,7 @@ def serve_thumbnail(path: str = ""):
     thumb_path = cache_dir / f"{hash_key}.webp"
 
     if thumb_path.exists():
-        return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000"})
+        return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     ext = actual.suffix.lower()
     try:
@@ -175,14 +175,18 @@ def serve_thumbnail(path: str = ""):
                 if scale < 1.0:
                     frame = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
                 cv2.imwrite(str(thumb_path), frame, [int(cv2.IMWRITE_WEBP_QUALITY), 78])
-                return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000"})
+                return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
         else:
             with Image.open(actual) as im:
-                im.thumbnail((360, 360))
+                try:
+                    im.draft("RGB", (720, 720))
+                except Exception:
+                    pass
+                im.thumbnail((360, 360), Image.Resampling.BILINEAR)
                 if im.mode not in ("RGB", "RGBA"):
                     im = im.convert("RGB")
-                im.save(thumb_path, "WEBP", quality=78, method=4)
-                return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000"})
+                im.save(thumb_path, "WEBP", quality=78, method=1)
+                return FileResponse(thumb_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
     except Exception:
         pass
 
@@ -681,10 +685,14 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
 
     if mod_id == "faces":
         onnx_pkg = "onnxruntime-gpu" if effective_mode == "cuda" else ("onnxruntime-directml" if effective_mode == "directml" else "onnxruntime")
-        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, onnx_pkg, "numpy<2"])
+        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, onnx_pkg])
         if rc1 != 0 and onnx_pkg != "onnxruntime":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "onnxruntime", "numpy<2"])
-        rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "insightface>=0.7.3,<0.8.0", "numpy<2"])
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "onnxruntime"])
+        if onnx_pkg != "onnxruntime":
+            # insightface 2.1 déclare 'onnxruntime' (CPU) dans ses métadonnées ; --no-deps préserve onnxruntime-gpu/directml
+            rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "--no-deps", "insightface>=2.1"])
+        else:
+            rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "insightface>=2.1"])
         if rc1 != 0 or rc2 != 0:
             return False
         faces_model = _active_faces_model()
@@ -693,21 +701,24 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
             sys.executable, "-c",
             f"from insightface.app import FaceAnalysis; app=FaceAnalysis(name='{faces_model}', allowed_modules=['detection','recognition']); app.prepare(ctx_id=-1, det_size=(640,640)); print('InsightFace {faces_model} OK')"
         ])
-        _run_cmd_logged([sys.executable, "-m", "pip", "check"])
         detect_system_hardware(refresh=True)
         return rc3 == 0
 
     if mod_id == "clip":
         if effective_mode == "cuda":
             torch_ver = _pkg_version("torch") or ""
+            cuda_tag = hw_info.get("cuda_index") or "cu128"
             cuda_flags = ["--force-reinstall"] if (not hw_info.get("torch_cuda_available") or "+cpu" in torch_ver) else up_flag
-            _append_ai_log("Installation de PyTorch avec support NVIDIA CUDA (cu124)...")
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "numpy<2", "--index-url", "https://download.pytorch.org/whl/cu124"])
+            _append_ai_log(f"Installation de PyTorch avec support NVIDIA CUDA ({cuda_tag})...")
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", f"https://download.pytorch.org/whl/{cuda_tag}"])
+            if rc1 != 0 and cuda_tag != "cu124":
+                _append_ai_log("Repli sur l'index CUDA compatible cu124...")
+                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu124"])
             if rc1 != 0:
-                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision", "numpy<2"])
+                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision"])
         else:
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision", "numpy<2"])
-        rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "sentence-transformers>=2.7.0", "numpy<2"])
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision"])
+        rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "sentence-transformers>=3.0.0"])
         if rc1 != 0 or rc2 != 0:
             return False
         clip_key = _active_clip_model()
@@ -726,16 +737,15 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
     if mod_id == "ocr":
         ocr_eng = _active_ocr_engine()
         if ocr_eng == "rapidocr":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "rapidocr-onnxruntime", "numpy<2"])
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "rapidocr-onnxruntime"])
             if rc1 != 0:
                 return False
             _append_ai_log("Vérification de RapidOCR (ONNX)...")
             rc2 = _run_cmd_logged([sys.executable, "-c", "from rapidocr_onnxruntime import RapidOCR; RapidOCR(); print('RapidOCR OK')"])
-            _run_cmd_logged([sys.executable, "-m", "pip", "check"])
             return rc2 == 0
 
         if ocr_eng == "easyocr":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "easyocr", "numpy<2"])
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "easyocr"])
             if rc1 != 0:
                 return False
             _append_ai_log("Téléchargement / vérification des modèles EasyOCR...")
@@ -744,10 +754,9 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
                 sys.executable, "-c",
                 f"import easyocr; easyocr.Reader(['fr', 'en'], gpu={use_gpu_py}); print('EasyOCR OK')"
             ])
-            _run_cmd_logged([sys.executable, "-m", "pip", "check"])
             return rc2 == 0
 
-        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "paddlepaddle>=2.6.1", "paddleocr>=2.7.3", "numpy<2"])
+        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "paddlepaddle>=3.0.0", "paddleocr>=2.7.3"])
         if rc1 != 0:
             return False
         _append_ai_log("Téléchargement / vérification des modèles PaddleOCR...")
@@ -868,9 +877,6 @@ def api_ai_check_updates():
             if latest:
                 any_online = True
             upd_avail = bool(inst_ver and latest and _parse_ver_tuple(latest) > _parse_ver_tuple(inst_ver))
-            # Respect safety cap on insightface (<0.8.0) to prevent NumPy 2.x breakage
-            if pkg == "insightface" and latest and _parse_ver_tuple(latest) >= (0, 8):
-                upd_avail = False
             if upd_avail:
                 mod_has_update = True
             pkg_updates[pkg] = {

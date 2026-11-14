@@ -178,12 +178,22 @@ function _setOptionsDrawerState(drawerId, btnId, visible) {
     }
 }
 
+function _openDrawerSafelyIfNearTop(headerId) {
+    const scroller = document.getElementById('main-scroll-container');
+    const header = document.getElementById(headerId);
+    if (scroller && scroller.scrollTop > 0 && scroller.scrollTop <= 220) {
+        scroller.scrollTop = 0;
+        if (header) header.classList.remove('is-stuck', 'is-scroll-hidden');
+    }
+}
+
 function toggleFilterBar() {
     const drawer = document.getElementById('filter-drawer');
     if (!drawer) return;
     const willShow = drawer.classList.contains('hidden');
     _galOptionsManuallyClosed = !willShow;
     _setOptionsDrawerState('filter-drawer', 'gal-options-btn', willShow);
+    if (willShow) _openDrawerSafelyIfNearTop('gallery-sticky-header');
     _syncScrollAfterLayoutToggle();
 }
 
@@ -193,6 +203,7 @@ function toggleAlbumsOptionsBar() {
     const willShow = drawer.classList.contains('hidden');
     _albOptionsManuallyClosed = !willShow;
     _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', willShow);
+    if (willShow) _openDrawerSafelyIfNearTop('albums-sticky-header');
     _syncScrollAfterLayoutToggle();
 }
 
@@ -201,27 +212,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!scroller) return;
     _stickyScrollLastTop = scroller.scrollTop || 0;
     _stickyScrollDownDist = 0;
-    let autoCollapsed = false;
 
     scroller.addEventListener('scroll', () => {
         const curTop = scroller.scrollTop || 0;
+        const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        const headers = document.querySelectorAll('.sticky-view-header');
+
+        if (maxScroll < 180 || curTop <= 16) {
+            _stickyScrollDownDist = 0;
+            headers.forEach(h => h.classList.remove('is-stuck', 'is-scroll-hidden'));
+            _stickyScrollLastTop = curTop;
+            syncTimelineWrapperBounds();
+            return;
+        }
+
         if (Date.now() < _ignoreScrollUntil) {
             _stickyScrollLastTop = curTop;
             _stickyScrollDownDist = 0;
             return;
         }
         const delta = curTop - _stickyScrollLastTop;
-        const headers = document.querySelectorAll('.sticky-view-header');
 
-        if (curTop <= 16) {
-            _stickyScrollDownDist = 0;
-            headers.forEach(h => h.classList.remove('is-stuck', 'is-scroll-hidden'));
-            if (autoCollapsed) {
-                autoCollapsed = false;
-                if (!_galOptionsManuallyClosed) _setOptionsDrawerState('filter-drawer', 'gal-options-btn', true);
-                if (!_albOptionsManuallyClosed) _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', true);
-            }
-        } else if (delta < 0) {
+        if (delta < 0) {
             _stickyScrollDownDist = 0;
             headers.forEach(h => {
                 h.classList.add('is-stuck');
@@ -233,11 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 h.classList.add('is-stuck');
                 if (curTop > 60 && _stickyScrollDownDist > 12) {
                     h.classList.add('is-scroll-hidden');
-                    if (!autoCollapsed) {
-                        autoCollapsed = true;
-                        _setOptionsDrawerState('filter-drawer', 'gal-options-btn', false);
-                        _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', false);
-                    }
                 }
             });
         }

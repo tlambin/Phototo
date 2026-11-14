@@ -162,6 +162,10 @@ aside.sidebar-mini .nav-btn {
   transform: translateX(-2px);
 }
 
+#main-scroll-container {
+  overflow-anchor: none;
+}
+
 .sticky-view-header {
   position: sticky;
   top: 0;

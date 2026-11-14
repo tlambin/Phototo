@@ -556,7 +556,7 @@ def api_gallery_items(
     elif sort_by == "added":
         order_sql = f"COALESCE(pf.processed_at, '') {direction}, pf.rowid {direction}"
     else:
-        order_sql = f"COALESCE(pf.timestamp, 0) {direction}"
+        order_sql = f"pf.timestamp {direction}"
 
     cur.execute(f"SELECT COUNT(*) FROM processed_files pf WHERE {where_sql}", params)
     total = cur.fetchone()[0]
@@ -564,9 +564,7 @@ def api_gallery_items(
     cur.execute(f"""
         SELECT pf.source_path, pf.dest_path, pf.timestamp, pf.processed_at,
                COALESCE(pf.modified_at, CAST(strftime('%s', pf.processed_at) AS INTEGER), pf.timestamp, 0) as modified_ts,
-               pf.is_favorite, pf.album_name, pf.file_size, pf.width, pf.height, pf.duration_sec,
-               (SELECT GROUP_CONCAT(COALESCE(p.name, 'Inconnu'), ', ') FROM faces f LEFT JOIN persons p ON f.person_id = p.person_id WHERE f.dest_path = pf.dest_path) as detected_people,
-               (SELECT COUNT(*) FROM faces f WHERE f.dest_path = pf.dest_path) as face_count
+               pf.is_favorite, pf.album_name, pf.file_size, pf.width, pf.height, pf.duration_sec
         FROM processed_files pf
         WHERE {where_sql}
         ORDER BY {order_sql}
@@ -574,6 +572,27 @@ def api_gallery_items(
     """, [*params, limit, offset])
 
     items = [dict(r) for r in cur.fetchall()]
+    if items:
+        dest_list = list({it["dest_path"] for it in items if it.get("dest_path")})
+        faces_map: dict[str, tuple[str | None, int]] = {}
+        if dest_list:
+            placeholders = ",".join("?" for _ in dest_list)
+            cur.execute(f"""
+                SELECT f.dest_path,
+                       GROUP_CONCAT(COALESCE(p.name, 'Inconnu'), ', ') AS detected_people,
+                       COUNT(*) AS face_count
+                FROM faces f
+                LEFT JOIN persons p ON f.person_id = p.person_id
+                WHERE f.dest_path IN ({placeholders})
+                GROUP BY f.dest_path
+            """, dest_list)
+            for fr in cur.fetchall():
+                faces_map[fr["dest_path"]] = (fr["detected_people"], int(fr["face_count"] or 0))
+        for it in items:
+            dp = it.get("dest_path") or ""
+            people_str, f_cnt = faces_map.get(dp, (None, 0))
+            it["detected_people"] = people_str
+            it["face_count"] = f_cnt
     updated_dur = False
     for it in items:
         dp = it.get("dest_path") or ""

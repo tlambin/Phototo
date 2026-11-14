@@ -13,6 +13,7 @@ IMAGE_EXTS = ALL_MEDIA_EXTS
 _vision_model = None
 _text_model = None
 _loaded_clip_key = None
+_search_matrix_cache = {"key": None, "rows": [], "matrix": None}
 
 
 def upgrade_db_for_clip_and_gps(conn: sqlite3.Connection):
@@ -51,32 +52,53 @@ def search_photos_by_natural_text(db_path: Path, query_fr: str, top_k: int = 60,
         return []
     _, text_model = get_clip_models()
     text_emb = text_model.encode([query_fr.strip()], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
+    expected_dim = int(text_emb.shape[0])
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("""
-        SELECT source_path, dest_path, timestamp, album_name, is_favorite, clip_embedding
-        FROM processed_files
+        SELECT COUNT(*) FROM processed_files
         WHERE is_duplicate = 0 AND is_trashed = 0 AND clip_embedding IS NOT NULL
     """)
-    rows = cur.fetchall()
-    conn.close()
-    if not rows:
+    total_emb = int(cur.fetchone()[0] or 0)
+    if total_emb == 0:
+        conn.close()
         return []
 
-    expected_dim = int(text_emb.shape[0])
-    valid_rows = []
-    vectors = []
-    for r in rows:
-        vec = np.frombuffer(r["clip_embedding"], dtype=np.float16).astype(np.float32)
-        if vec.shape[0] == expected_dim:
-            valid_rows.append(r)
-            vectors.append(vec)
-    if not vectors:
-        return []
+    cache_key = (str(Path(db_path).resolve()), total_emb, expected_dim)
+    if _search_matrix_cache["key"] == cache_key and _search_matrix_cache["matrix"] is not None:
+        conn.close()
+        valid_rows = _search_matrix_cache["rows"]
+        matrix = _search_matrix_cache["matrix"]
+    else:
+        cur.execute("""
+            SELECT source_path, dest_path, timestamp, album_name, is_favorite, clip_embedding
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND clip_embedding IS NOT NULL
+        """)
+        rows = cur.fetchall()
+        conn.close()
+        valid_rows = []
+        vectors = []
+        for r in rows:
+            vec = np.frombuffer(r["clip_embedding"], dtype=np.float16).astype(np.float32)
+            if vec.shape[0] == expected_dim:
+                valid_rows.append({
+                    "source_path": r["source_path"],
+                    "dest_path": r["dest_path"],
+                    "timestamp": r["timestamp"],
+                    "album_name": r["album_name"],
+                    "is_favorite": r["is_favorite"],
+                })
+                vectors.append(vec)
+        if not vectors:
+            return []
+        matrix = np.vstack(vectors)
+        _search_matrix_cache["key"] = cache_key
+        _search_matrix_cache["rows"] = valid_rows
+        _search_matrix_cache["matrix"] = matrix
 
-    matrix = np.vstack(vectors)
     scores = np.dot(matrix, text_emb)
     best_indices = np.argsort(scores)[::-1][:top_k]
 

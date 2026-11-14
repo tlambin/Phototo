@@ -1,12 +1,12 @@
 # Installation / mise à jour avec support NVIDIA CUDA (recommandé) :
-#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128
 #
 # =====================================================================
-# 1. SOCLE SCIENTIFIQUE VERROUILLÉ (Anti-conflit NumPy 2.x)
+# 1. SOCLE SCIENTIFIQUE
 # =====================================================================
-numpy==1.26.4
-ml-dtypes==0.5.1
-onnx==1.17.0
+numpy>=2.0.0
+ml-dtypes>=0.5.0
+onnx>=1.17.0
 scikit-learn>=1.5.0
 
 # =====================================================================
@@ -22,7 +22,7 @@ tqdm>=4.66.0
 # =====================================================================
 # 3. TRAITEMENT MÉDIA, EMPREINTES & MÉTADONNÉES EXIF
 # =====================================================================
-opencv-python-headless>=4.9.0.80,<4.12.0
+opencv-python-headless>=4.11.0
 Pillow>=10.4.0
 ImageHash>=4.3.1
 blake3>=0.4.1
@@ -33,7 +33,7 @@ tzdata>=2024.1
 # =====================================================================
 # 4. MOTEURS D'IA LOCAUX (Visages, OCR & Recherche Sémantique CLIP)
 # =====================================================================
-insightface>=0.7.3,<0.8.0
+insightface>=2.1
 onnxruntime-gpu>=1.19.0; platform_system != "Darwin"
 onnxruntime>=1.19.0; platform_system == "Darwin"
 paddlepaddle>=3.0.0

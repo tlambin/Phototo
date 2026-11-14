@@ -4,7 +4,7 @@
     "timezone": "Europe/Paris",
     "language": "fr",
     "gpu_mode": "auto",
-    "ocr_engine": "paddleocr",
+    "ocr_engine": "rapidocr",
     "faces_model": "buffalo_l",
-    "clip_model": "vit-b-32"
+    "clip_model": "vit-l-14"
 }

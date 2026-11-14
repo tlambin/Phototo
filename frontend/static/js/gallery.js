@@ -370,6 +370,7 @@ async function loadGalleryItems(append = false, customSkip = -1) {
     const effectiveSkip = (!append && customSkip >= 0)
         ? customSkip
         : (append ? currentSkipOffset + currentGalleryItems.length : 0);
+    if (!append) currentSkipOffset = effectiveSkip;
 
     try {
         const p = new URLSearchParams({
@@ -404,12 +405,84 @@ async function loadGalleryItems(append = false, customSkip = -1) {
             appendMediaBatchToContainer('gallery-content-area', newItems, startIdx, false);
         }
         updateGalleryBatchBar();
+        updateGalleryPrevBar();
         requestAnimationFrame(updateActiveTimelineFromScroll);
     } finally {
         galleryIsLoading = false;
         if (spinner) spinner.classList.add('hidden');
     }
 }
+
+function updateGalleryPrevBar() {
+    const bar = document.getElementById('gallery-prev-bar');
+    if (bar) bar.classList.toggle('hidden', currentSkipOffset <= 0);
+}
+
+function jumpToGalleryTop() {
+    const sc = document.getElementById('main-scroll-container');
+    if (sc) sc.scrollTop = 0;
+    loadGalleryItems(false, 0);
+}
+
+async function loadPreviousGalleryItems() {
+    if (galleryIsLoading || currentSkipOffset <= 0) return;
+    galleryIsLoading = true;
+    const spinner = document.getElementById('gallery-loading-spinner');
+    if (spinner) spinner.classList.remove('hidden');
+
+    const prevLimit = Math.min(60, currentSkipOffset);
+    const newSkip = currentSkipOffset - prevLimit;
+    const sc = document.getElementById('main-scroll-container');
+    const prevH = sc ? sc.scrollHeight : 0;
+    const prevTop = sc ? sc.scrollTop : 0;
+
+    try {
+        const p = new URLSearchParams({
+            year: document.getElementById('gal-year')?.value || '',
+            month: document.getElementById('gal-month')?.value || '',
+            album: document.getElementById('gal-album')?.value || '',
+            media_type: document.getElementById('gal-type-filter')?.value || '',
+            ext_filter: currentExtFilter || '',
+            favorites_only: document.getElementById('gal-fav')?.checked || false,
+            no_faces_only: document.getElementById('gal-nofaces')?.checked || false,
+            sort_by: document.getElementById('gal-sort-by')?.value || 'date',
+            sort_order: document.getElementById('gal-sort-order')?.value || 'desc',
+            page: 1,
+            limit: prevLimit,
+            skip_to: newSkip
+        });
+        const res = await fetch(`/api/gallery/items?${p.toString()}`);
+        const d = await res.json();
+        const prevItems = d.items || [];
+        if (prevItems.length > 0) {
+            currentSkipOffset = newSkip;
+            currentGalleryItems = [...prevItems, ...currentGalleryItems];
+            appendMediaBatchToContainer('gallery-content-area', currentGalleryItems, 0, true);
+            if (sc) {
+                const deltaH = sc.scrollHeight - prevH;
+                sc.scrollTop = prevTop + Math.max(0, deltaH);
+            }
+        }
+        updateGalleryBatchBar();
+        updateGalleryPrevBar();
+        requestAnimationFrame(updateActiveTimelineFromScroll);
+    } finally {
+        galleryIsLoading = false;
+        if (spinner) spinner.classList.add('hidden');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sc = document.getElementById('main-scroll-container');
+    if (!sc) return;
+    sc.addEventListener('wheel', (e) => {
+        const galTab = document.getElementById('tab-gallery');
+        if (!galTab || galTab.classList.contains('hidden')) return;
+        if (e.deltaY < 0 && sc.scrollTop <= 5 && currentSkipOffset > 0 && !galleryIsLoading) {
+            loadPreviousGalleryItems();
+        }
+    }, { passive: true });
+});
 
 function _getActiveMediaTileEl(idx) {
     const containerId = openedAlbumName ? 'album-single-content-area' : 'gallery-content-area';
@@ -619,7 +692,7 @@ function renderTimelineScrubberDOM() {
 
         let monthsHtml = '';
         if (isYearActive && yObj.months && yObj.months.length) {
-            monthsHtml = `<div class="flex flex-col items-center space-y-0.5 py-1 w-full">` +
+            monthsHtml = `<div class="flex flex-col items-end space-y-0.5 py-1 w-full">` +
                 yObj.months.map(mObj => {
                     const mCode = String(mObj.month).padStart(2, '0');
                     const mNum = parseInt(mObj.month, 10);
@@ -627,10 +700,10 @@ function renderTimelineScrubberDOM() {
                     const isMonthFiltered = isYearFiltered && String(selectedMonth) === mCode;
                     const isMonthVisible = String(activeMonth) === mCode;
                     const mClass = isMonthFiltered
-                        ? 'plum-btn px-2 py-0.5 rounded-full text-[9px] font-extrabold shadow-sm cursor-pointer transition'
+                        ? 'plum-btn pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none text-[9px] font-extrabold shadow-sm cursor-pointer transition text-right'
                         : (isMonthVisible
-                            ? 'nav-item-active px-2 py-0.5 rounded-full text-[9px] font-extrabold shadow-sm cursor-pointer transition'
-                            : 'text-[8px] font-bold opacity-55 hover:opacity-100 cursor-pointer py-0.5 transition');
+                            ? 'nav-item-active pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none text-[9px] font-extrabold shadow-sm cursor-pointer transition text-right'
+                            : 'text-[8px] font-bold opacity-55 hover:opacity-100 cursor-pointer py-0.5 pl-1 pr-2 transition text-right');
                     return `<div onclick="event.stopPropagation(); selectTimelineMonth('${yObj.year}', '${mCode}')"
                                  title="${FULL_MONTHS_FR[mNum]} ${yObj.year} (${mObj.count})"
                                  class="${mClass}">${mName}</div>`;
@@ -656,38 +729,42 @@ function renderTimelineScrubberDOM() {
     }
 }
 
-function selectTimelineYear(yearStr) {
+function _jumpToTimelineOffset(yearStr, monthCode = '') {
+    const yObj = cachedTimelineData.find(y => String(y.year) === String(yearStr));
+    if (!yObj) return;
+    let targetOffset = Number(yObj.offset || 0);
+    let targetMonth = '';
+    if (monthCode && Array.isArray(yObj.months)) {
+        const mPad = String(monthCode).padStart(2, '0');
+        const mObj = yObj.months.find(m => String(m.month).padStart(2, '0') === mPad);
+        if (mObj) {
+            targetOffset = Number(mObj.offset || 0);
+            targetMonth = mPad;
+        }
+    }
+
+    // La timeline navigue dans la galerie sans appliquer de filtre année/mois
     const ySel = document.getElementById('gal-year');
     const mSel = document.getElementById('gal-month');
-    if (!ySel) return;
-
-    if (ySel.value === String(yearStr) && (!mSel || !mSel.value)) {
-        // Re-cliquer sur l'année active retire le filtre d'année
-        ySel.value = '';
-    } else {
-        ySel.value = String(yearStr);
-        if (mSel) mSel.value = '';
-    }
+    if (ySel && ySel.value) ySel.value = '';
+    if (mSel && mSel.value) mSel.value = '';
     updateActiveFilterBadge();
+
+    activeScrollTimelineYear = String(yearStr);
+    activeScrollTimelineMonth = targetMonth || (yObj.months && yObj.months[0] ? String(yObj.months[0].month).padStart(2, '0') : '');
     renderTimelineScrubberDOM();
-    loadGalleryItems(false);
+
+    const sc = document.getElementById('main-scroll-container');
+    if (sc) sc.scrollTop = 0;
+    loadGalleryItems(false, targetOffset);
+}
+
+function selectTimelineYear(yearStr) {
+    _jumpToTimelineOffset(yearStr, '');
 }
 
 function selectTimelineMonth(yearStr, monthCode) {
-    const ySel = document.getElementById('gal-year');
-    const mSel = document.getElementById('gal-month');
-    if (!ySel || !mSel) return;
-
-    if (ySel.value === String(yearStr) && mSel.value === String(monthCode)) {
-        // Re-cliquer sur le mois actif revient à l'année entière
-        mSel.value = '';
-    } else {
-        ySel.value = String(yearStr);
-        mSel.value = String(monthCode);
-    }
-    updateActiveFilterBadge();
-    renderTimelineScrubberDOM();
-    loadGalleryItems(false);
+    _jumpToTimelineOffset(yearStr, monthCode);
 }
 
 // ==================== VUE ALBUMS & SOUS-ALBUMS AVEC DÉFILEMENT INFINI ====================

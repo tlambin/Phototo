@@ -54,6 +54,8 @@ def init_face_tables(conn: sqlite3.Connection):
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_faces_person ON faces(person_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_faces_ts ON faces(timestamp)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_faces_dest ON faces(dest_path)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_faces_src ON faces(source_path)")
     conn.commit()
 
 

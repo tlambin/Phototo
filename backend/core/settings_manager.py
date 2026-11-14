@@ -212,9 +212,10 @@ def detect_system_hardware(refresh: bool = False) -> dict:
         pass
 
     smi_gpus: list[dict] = []
+    driver_version = ""
     try:
         smi = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=2
         )
         if smi.returncode == 0 and smi.stdout.strip():
@@ -222,6 +223,8 @@ def detect_system_hardware(refresh: bool = False) -> dict:
                 parts = [p.strip() for p in line.split(",")]
                 if parts and parts[0]:
                     vram = round(float(parts[1]) / 1024.0, 1) if len(parts) > 1 and parts[1].replace(".", "", 1).isdigit() else 0.0
+                    if len(parts) > 2 and parts[2] and not driver_version:
+                        driver_version = parts[2]
                     smi_gpus.append({"name": parts[0], "vram_gb": vram})
     except Exception:
         pass
@@ -275,6 +278,21 @@ def detect_system_hardware(refresh: bool = False) -> dict:
     else:
         power_tier = "Standard"
 
+    cuda_index = "cu128"
+    if driver_version:
+        try:
+            drv_major = float(driver_version.split(".")[0])
+            if drv_major >= 570:
+                cuda_index = "cu128"
+            elif drv_major >= 550:
+                cuda_index = "cu124"
+            elif drv_major >= 530:
+                cuda_index = "cu121"
+            else:
+                cuda_index = "cu118"
+        except Exception:
+            cuda_index = "cu128"
+
     info = {
         "os": f"{platform.system()} {platform.release()}",
         "cpu_name": cpu_name,
@@ -283,6 +301,8 @@ def detect_system_hardware(refresh: bool = False) -> dict:
         "gpu_name": gpu_name,
         "gpu_vendor": gpu_vendor,
         "vram_gb": torch_vram_gb,
+        "driver_version": driver_version,
+        "cuda_index": cuda_index if gpu_vendor == "nvidia" else "",
         "torch_cuda_available": torch_cuda,
         "onnx_providers": onnx_providers,
         "recommended_mode": recommended_mode,
