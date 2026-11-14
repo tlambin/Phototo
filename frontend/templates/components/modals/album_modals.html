@@ -1,0 +1,80 @@
+<!-- Album Create / Sub-album / Rename Modal -->
+<div id="album-form-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/55 backdrop-blur-sm p-4"
+     onclick="if (event.target === this) closeAlbumFormModal()">
+    <div class="ui-card rounded-3xl shadow-2xl w-full max-w-md p-6 border border-white/10" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 id="album-form-title" class="text-lg font-semibold">Nouvel album</h3>
+                <p id="album-form-subtitle" class="text-xs opacity-60 mt-0.5 hidden"></p>
+            </div>
+            <button type="button" onclick="closeAlbumFormModal()" class="ui-pill w-8 h-8 flex items-center justify-center text-sm opacity-75 hover:opacity-100">✕</button>
+        </div>
+        <form onsubmit="submitAlbumFormModal(event)" class="space-y-4">
+            <div>
+                <label for="album-form-name-input" class="block text-xs font-medium opacity-75 mb-1.5">Nom de l'album</label>
+                <input id="album-form-name-input" type="text" required autocomplete="off"
+                       placeholder="Ex: Vacances 2026"
+                       class="w-full px-3.5 py-2.5 rounded-2xl bg-black/20 border border-white/15 text-sm focus:outline-none focus:border-purple-400">
+                <p id="album-form-error" class="text-xs text-rose-400 mt-1.5 hidden"></p>
+            </div>
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" onclick="closeAlbumFormModal()" class="ui-pill px-4 py-2 text-xs font-medium">Annuler</button>
+                <button id="album-form-submit-btn" type="submit" class="plum-btn px-5 py-2 rounded-full text-xs font-semibold">Créer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Album Delete Confirmation Modal -->
+<div id="album-delete-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/55 backdrop-blur-sm p-4"
+     onclick="if (event.target === this) closeAlbumDeleteModal()">
+    <div class="ui-card rounded-3xl shadow-2xl w-full max-w-md p-6 border border-white/10" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-rose-400">Supprimer l'album</h3>
+            <button type="button" onclick="closeAlbumDeleteModal()" class="ui-pill w-8 h-8 flex items-center justify-center text-sm opacity-75 hover:opacity-100">✕</button>
+        </div>
+        <p class="text-sm opacity-85 leading-relaxed">
+            Voulez-vous vraiment supprimer l'album <span id="album-delete-name" class="font-semibold"></span> et ses sous-albums éventuels ?
+        </p>
+        <p class="text-xs opacity-60 mt-2">Les photos et vidéos resteront conservées dans votre Galerie.</p>
+        <p id="album-delete-error" class="text-xs text-rose-400 mt-2 hidden"></p>
+        <div class="flex justify-end gap-2 mt-5">
+            <button type="button" onclick="closeAlbumDeleteModal()" class="ui-pill px-4 py-2 text-xs font-medium">Annuler</button>
+            <button type="button" onclick="confirmDeleteAlbumModal()" class="px-5 py-2 rounded-full text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition">Supprimer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Album Picker Modal (Add media to existing or new album) -->
+<div id="album-picker-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/55 backdrop-blur-sm p-4"
+     onclick="if (event.target === this) closeAlbumPickerModal()">
+    <div class="ui-card rounded-3xl shadow-2xl w-full max-w-md p-6 border border-white/10" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-lg font-semibold">Ajouter à un album</h3>
+                <p id="album-picker-subtitle" class="text-xs opacity-60 mt-0.5">Sélectionnez un album existant ou créez-en un nouveau.</p>
+            </div>
+            <button type="button" onclick="closeAlbumPickerModal()" class="ui-pill w-8 h-8 flex items-center justify-center text-sm opacity-75 hover:opacity-100">✕</button>
+        </div>
+
+        <form onsubmit="submitAlbumPickerModal(event)" class="space-y-3">
+            <div>
+                <label for="album-picker-input" class="block text-xs font-medium opacity-75 mb-1.5">Nom ou chemin (ex: Voyage/Japon)</label>
+                <input id="album-picker-input" type="text" autocomplete="off"
+                       placeholder="Saisir un album ou sous-album..."
+                       class="w-full px-3.5 py-2.5 rounded-2xl bg-black/20 border border-white/15 text-sm focus:outline-none focus:border-purple-400">
+            </div>
+
+            <div class="max-h-56 overflow-y-auto space-y-1.5 pr-1" id="album-picker-list">
+                <!-- Populated dynamically -->
+            </div>
+
+            <p id="album-picker-error" class="text-xs text-rose-400 hidden"></p>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeAlbumPickerModal()" class="ui-pill px-4 py-2 text-xs font-medium">Annuler</button>
+                <button type="submit" class="plum-btn px-5 py-2 rounded-full text-xs font-semibold">Ajouter</button>
+            </div>
+        </form>
+    </div>
+</div>

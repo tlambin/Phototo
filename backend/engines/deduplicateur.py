@@ -103,9 +103,9 @@ def merge_metadata_and_clean(conn: sqlite3.Connection, winner: dict, losers: lis
 
         cur.execute("""
             UPDATE processed_files
-            SET is_duplicate = 1, master_path = ?, dup_type = ?, dest_path = ?
+            SET is_duplicate = 1, duplicate_of = ?, master_path = ?, dup_type = ?, dest_path = ?
             WHERE source_path = ?
-        """, (str(win_path), l.get("dup_type", "BLAKE3"), str(q_target), l["source_path"]))
+        """, (winner["source_path"], str(win_path), l.get("dup_type", "BLAKE3"), str(q_target), l["source_path"]))
 
     final_albums = ", ".join(sorted(albums)) if albums else None
     cur.execute("""

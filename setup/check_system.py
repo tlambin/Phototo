@@ -184,7 +184,7 @@ if __name__ == "__main__":
 
     print(f"\n{BOLD}================================================================{RESET}")
     if pkgs_ok and tools_ok:
-        print(f"{GREEN}{BOLD}🎉 TOUT EST PRÊT ! Vous pouvez lancer `start.bat` (ou `python dashboard_complet.py`).{RESET}")
+        print(f"{GREEN}{BOLD}🎉 TOUT EST PRÊT ! Vous pouvez lancer `start.bat` (ou `python main.py`).{RESET}")
     else:
         print(f"{YELLOW}{BOLD}⚠ Certains outils ou modules manquent ci-dessus. Corrigez-les avant de lancer l'analyse.{RESET}")
     print(f"{BOLD}================================================================{RESET}")

@@ -1,0 +1,22 @@
+<div id="manual-face-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-4xl w-full p-5 flex flex-col max-h-[90vh]">
+        <div class="flex justify-between items-center pb-3 mb-3">
+            <h2 class="text-base font-extrabold">🎯 Encadrer un visage à la souris</h2>
+            <button onclick="closeManualFaceModal()" class="font-bold">✕</button>
+        </div>
+        <div class="flex-1 overflow-auto flex justify-center items-center bg-black rounded-2xl p-2">
+            <div id="tagger-stage" class="relative inline-block cursor-crosshair">
+                <img id="tagger-img" draggable="false" class="max-h-[58vh] w-auto block select-none"/>
+                <div id="tagger-draw-box" class="hidden absolute border-2 border-amber-400 bg-amber-400/20 pointer-events-none"></div>
+            </div>
+        </div>
+        <div class="mt-4 pt-3 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex gap-2">
+                <select id="manual-person-select" class="ui-pill rounded-full px-4 py-1.5 text-xs font-bold"></select>
+                <input id="manual-new-name" type="text" placeholder="Ou nouveau prénom..." class="ui-pill rounded-full px-4 py-1.5 text-xs font-bold outline-none"/>
+            </div>
+            <button id="btn-save-manual-face" onclick="saveManualFaceBox()" disabled class="plum-btn disabled:opacity-40 font-bold px-6 py-2 rounded-full text-xs">Enregistrer ce visage</button>
+        </div>
+    </div>
+</div>
+

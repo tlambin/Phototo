@@ -1,5 +1,6 @@
 :root, html[data-theme="light"] {
   --bg-app: #DCDCDC;
+  --bg-app-rgb: 220, 220, 220;
   --bg-card: #EFEFEF;
   --bg-pill: #E2DEE2;
   --bg-active: #D8D0D8;
@@ -12,6 +13,7 @@
 }
 html[data-theme="dark"] {
   --bg-app: #1E1E1E;
+  --bg-app-rgb: 30, 30, 30;
   --bg-card: #121212;
   --bg-pill: #252327;
   --bg-active: #3B2D3D;
@@ -73,7 +75,15 @@ aside.sidebar-mini .nav-btn {
 .masonry-grid { column-count: 2; column-gap: 1rem; }
 @media (min-width: 768px) { .masonry-grid { column-count: 4; } }
 @media (min-width: 1280px) { .masonry-grid { column-count: 5; } }
+.masonry-grid.masonry-sm { column-count: 3; column-gap: 0.625rem; }
+@media (min-width: 768px) { .masonry-grid.masonry-sm { column-count: 6; } }
+@media (min-width: 1280px) { .masonry-grid.masonry-sm { column-count: 8; } }
+.masonry-grid.masonry-lg { column-count: 1; column-gap: 1.25rem; }
+@media (min-width: 768px) { .masonry-grid.masonry-lg { column-count: 2; } }
+@media (min-width: 1280px) { .masonry-grid.masonry-lg { column-count: 3; } }
 .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
+.masonry-sm .masonry-item { margin-bottom: 0.625rem; }
+.masonry-lg .masonry-item { margin-bottom: 1.25rem; }
 
 /* Optimisation GPU & DOM pour le défilement infini */
 .media-tile {
@@ -150,4 +160,36 @@ aside.sidebar-mini .nav-btn {
   color: var(--accent-bar);
   font-weight: 800;
   transform: translateX(-2px);
+}
+
+.sticky-view-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+}
+.sticky-view-header.is-stuck {
+  background-color: var(--bg-app);
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-radius: 0;
+}
+.sticky-view-header.is-scroll-hidden {
+  transform: translateY(-130%);
+  opacity: 0;
+  pointer-events: none;
+}
+.scroll-fade-bottom {
+  position: sticky;
+  bottom: 0;
+  height: 48px;
+  margin-top: -48px;
+  z-index: 20;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(var(--bg-app-rgb), 0.82) 0%,
+    rgba(var(--bg-app-rgb), 0.40) 42%,
+    rgba(var(--bg-app-rgb), 0) 100%
+  );
 }

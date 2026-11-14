@@ -1,0 +1,99 @@
+<div id="studio-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-6xl w-full p-5 flex flex-col max-h-[94vh]">
+        <div class="flex justify-between items-center pb-3 mb-3">
+            <h2 class="text-lg font-extrabold">🎨 Studio d'Édition Photo & Vidéo</h2>
+            <button onclick="closeStudioModal()" class="text-xl font-bold">✕</button>
+        </div>
+        <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden">
+            <div class="lg:col-span-7 flex flex-col bg-black rounded-2xl p-3 overflow-hidden">
+                <div class="flex justify-between items-center pb-2 mb-2 text-xs text-white">
+                    <div class="flex gap-2">
+                        <button onclick="setStudioMouseTool('CROP')" class="plum-btn font-bold px-3 py-1 rounded-full">✂️ Rognage</button>
+                        <button onclick="setStudioMouseTool('ERASER')" class="bg-white/10 text-rose-300 px-3 py-1 rounded-full">🪄 Gomme Magique</button>
+                    </div>
+                    <button onclick="clearStudioDrawings()" class="opacity-70 underline">Effacer les tracés</button>
+                </div>
+                <div class="flex-1 flex items-center justify-center overflow-auto select-none">
+                    <div id="studio-stage" class="relative inline-block cursor-crosshair">
+                        <img id="studio-img" draggable="false" class="hidden max-h-[54vh] w-auto block select-none"/>
+                        <video id="studio-video" controls class="hidden max-h-[54vh] w-auto block select-none"></video>
+                        <div id="studio-crop-box" class="hidden absolute border-2 border-sky-400 bg-sky-400/15 pointer-events-none"></div>
+                        <div id="studio-eraser-boxes" class="absolute inset-0 pointer-events-none"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-5 overflow-y-auto space-y-3 pr-1 text-xs">
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">🔄 Pivoter & Retourner</div>
+                    <div class="grid grid-cols-4 gap-2 font-bold">
+                        <button onclick="studioRotate(-90)" class="ui-card py-1.5 rounded-xl">↺ -90°</button>
+                        <button onclick="studioRotate(90)" class="ui-card py-1.5 rounded-xl">↻ +90°</button>
+                        <button onclick="studioFlip('H')" class="ui-card py-1.5 rounded-xl">↔ Miroir H</button>
+                        <button onclick="studioFlip('V')" class="ui-card py-1.5 rounded-xl">↕ Miroir V</button>
+                    </div>
+                </div>
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">☀️ Luminosité, Contraste & Couleurs</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Luminosité</label><input id="st-bright" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Contraste</label><input id="st-contrast" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Saturation</label><input id="st-sat" type="range" min="0.0" max="2.5" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                        <div><label>Netteté</label><input id="st-sharp" type="range" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+                    </div>
+                </div>
+                <div class="ui-pill rounded-2xl p-3 space-y-2">
+                    <div class="font-extrabold">🔤 Ajouter du Texte</div>
+                    <div class="flex gap-2">
+                        <input id="st-text-val" type="text" placeholder="Texte..." class="flex-1 ui-card rounded-xl px-2.5 py-1"/>
+                        <input id="st-text-color" type="color" value="#ffffff" class="w-8 h-7 bg-transparent"/>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input id="st-text-x" type="number" value="5" placeholder="X%" class="ui-card rounded-xl px-2 py-1"/>
+                        <input id="st-text-y" type="number" value="88" placeholder="Y%" class="ui-card rounded-xl px-2 py-1"/>
+                        <input id="st-text-size" type="number" value="40" placeholder="Taille" class="ui-card rounded-xl px-2 py-1"/>
+                    </div>
+                </div>
+                <div id="studio-video-panel" class="hidden ui-pill rounded-2xl p-3 space-y-2.5">
+                    <div class="font-extrabold">🎬 Outils Vidéo</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Début (sec)</label><input id="st-vid-start" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
+                        <div><label>Fin (0 = fin)</label><input id="st-vid-end" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 items-center">
+                        <select id="st-vid-speed" class="ui-card rounded-xl px-2 py-1.5">
+                            <option value="0.5">Vitesse 0.5x</option>
+                            <option value="1.0" selected>Vitesse 1.0x</option>
+                            <option value="1.5">Vitesse 1.5x</option>
+                            <option value="2.0">Vitesse 2.0x</option>
+                        </select>
+                        <label class="flex items-center gap-1.5 font-bold"><input id="st-vid-mute" type="checkbox"/> 🔇 Muet</label>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="st-vid-audio" type="text" placeholder="Fichier audio..." class="flex-1 ui-card rounded-xl px-2 py-1 font-mono"/>
+                        <button onclick="browseStudioAudio()" class="ui-card px-2.5 py-1 rounded-xl">📂 Audio</button>
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <button onclick="applyStudioChanges('SPLIT')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">✂️ Séparer en 2</button>
+                        <button onclick="applyStudioChanges('GIF')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">🎞️ Créer GIF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-4 pt-3 text-xs">
+            <div class="flex items-center gap-4 ui-pill px-4 py-2 rounded-full">
+                <label class="flex items-center gap-1.5 font-bold cursor-pointer">
+                    <input type="radio" name="studio_save_mode" value="copy" checked/>
+                    <span>Enregistrer une copie (<code>_edit</code>)</span>
+                </label>
+                <label class="flex items-center gap-1.5 font-semibold cursor-pointer">
+                    <input type="radio" name="studio_save_mode" value="overwrite"/>
+                    <span>Remplacer l'original</span>
+                </label>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeStudioModal()" class="ui-pill px-5 py-2 rounded-full font-bold">Annuler</button>
+                <button onclick="applyStudioChanges('EDIT')" class="plum-btn font-bold px-6 py-2 rounded-full">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+</div>

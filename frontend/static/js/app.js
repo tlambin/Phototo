@@ -129,13 +129,121 @@ function updateGalleryMonthDropdown() {
     sel.value = cur;
 }
 
+let _galOptionsManuallyClosed = false;
+let _albOptionsManuallyClosed = false;
+let _ignoreScrollUntil = 0;
+let _stickyScrollLastTop = 0;
+let _stickyScrollDownDist = 0;
+
+function syncTimelineWrapperBounds() {
+    const wrapper = document.getElementById('gallery-timeline-wrapper');
+    const header = document.getElementById('gallery-sticky-header');
+    if (!wrapper) return;
+
+    if (!header || !header.classList.contains('is-stuck') || header.classList.contains('is-scroll-hidden')) {
+        wrapper.style.top = '0.5rem';
+        wrapper.style.height = 'calc(100vh - 135px)';
+        return;
+    }
+
+    const headerH = Math.ceil(header.getBoundingClientRect().height || 0);
+    const topPx = headerH + 10;
+    wrapper.style.top = `${topPx}px`;
+    wrapper.style.height = `calc(100vh - ${topPx + 105}px)`;
+}
+
+function _syncScrollAfterLayoutToggle() {
+    _ignoreScrollUntil = Date.now() + 350;
+    _stickyScrollDownDist = 0;
+    const scroller = document.getElementById('main-scroll-container');
+    if (scroller) _stickyScrollLastTop = scroller.scrollTop || 0;
+    syncTimelineWrapperBounds();
+    requestAnimationFrame(() => {
+        if (scroller) _stickyScrollLastTop = scroller.scrollTop || 0;
+        _stickyScrollDownDist = 0;
+        syncTimelineWrapperBounds();
+    });
+}
+
+function _setOptionsDrawerState(drawerId, btnId, visible) {
+    const drawer = document.getElementById(drawerId);
+    if (drawer) drawer.classList.toggle('hidden', !visible);
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.classList.toggle('nav-item-active', visible);
+        btn.classList.toggle('ui-card', !visible);
+    }
+}
+
 function toggleFilterBar() {
     const drawer = document.getElementById('filter-drawer');
     if (!drawer) return;
-    drawer.classList.toggle('hidden');
-    const chev = document.getElementById('filter-chevron-icon');
-    if (chev) chev.classList.toggle('rotate-180', !drawer.classList.contains('hidden'));
+    const willShow = drawer.classList.contains('hidden');
+    _galOptionsManuallyClosed = !willShow;
+    _setOptionsDrawerState('filter-drawer', 'gal-options-btn', willShow);
+    _syncScrollAfterLayoutToggle();
 }
+
+function toggleAlbumsOptionsBar() {
+    const drawer = document.getElementById('albums-options-drawer');
+    if (!drawer) return;
+    const willShow = drawer.classList.contains('hidden');
+    _albOptionsManuallyClosed = !willShow;
+    _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', willShow);
+    _syncScrollAfterLayoutToggle();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const scroller = document.getElementById('main-scroll-container');
+    if (!scroller) return;
+    _stickyScrollLastTop = scroller.scrollTop || 0;
+    _stickyScrollDownDist = 0;
+    let autoCollapsed = false;
+
+    scroller.addEventListener('scroll', () => {
+        const curTop = scroller.scrollTop || 0;
+        if (Date.now() < _ignoreScrollUntil) {
+            _stickyScrollLastTop = curTop;
+            _stickyScrollDownDist = 0;
+            return;
+        }
+        const delta = curTop - _stickyScrollLastTop;
+        const headers = document.querySelectorAll('.sticky-view-header');
+
+        if (curTop <= 16) {
+            _stickyScrollDownDist = 0;
+            headers.forEach(h => h.classList.remove('is-stuck', 'is-scroll-hidden'));
+            if (autoCollapsed) {
+                autoCollapsed = false;
+                if (!_galOptionsManuallyClosed) _setOptionsDrawerState('filter-drawer', 'gal-options-btn', true);
+                if (!_albOptionsManuallyClosed) _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', true);
+            }
+        } else if (delta < 0) {
+            _stickyScrollDownDist = 0;
+            headers.forEach(h => {
+                h.classList.add('is-stuck');
+                h.classList.remove('is-scroll-hidden');
+            });
+        } else if (delta > 0) {
+            _stickyScrollDownDist += delta;
+            headers.forEach(h => {
+                h.classList.add('is-stuck');
+                if (curTop > 60 && _stickyScrollDownDist > 12) {
+                    h.classList.add('is-scroll-hidden');
+                    if (!autoCollapsed) {
+                        autoCollapsed = true;
+                        _setOptionsDrawerState('filter-drawer', 'gal-options-btn', false);
+                        _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', false);
+                    }
+                }
+            });
+        }
+        _stickyScrollLastTop = curTop;
+        syncTimelineWrapperBounds();
+    }, { passive: true });
+    window.addEventListener('resize', syncTimelineWrapperBounds, { passive: true });
+    syncTimelineWrapperBounds();
+});
 
 function hideAllTopPopovers() {
     ['lib-menu-popover', 'library-dropdown-menu', 'task-popover', 'notif-popover'].forEach(id => {
@@ -581,663 +689,3 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadGalleryTimeline();
 });
 
-// ==================== GESTION DES BIBLIOTHÈQUES (LISTE, CRÉER, MODIFIER, SUPPRIMER, FUSIONNER, DOUBLONS AUTO) ====================
-
-async function loadLibrariesDropdown() {
-    const res = await fetch('/api/libraries');
-    if (!res.ok) return;
-    cachedLibrariesData = await res.json();
-    librariesConfig = cachedLibrariesData;
-
-    const active = cachedLibrariesData.active_library;
-    const libs = cachedLibrariesData.libraries || {};
-    const names = Object.keys(libs);
-
-    // Mise à jour du bouton #lib-name-btn dans topbar.html
-    const nameBtn = document.getElementById('lib-name-btn');
-    if (nameBtn) {
-        nameBtn.textContent = active || 'Nom de la bibliotheque';
-    }
-
-    // Mise à jour du <select id="library-selector"> dans topbar.html
-    const selEl = document.getElementById('library-selector');
-    if (selEl) {
-        if (!names.length) {
-            selEl.innerHTML = `<option value="">Aucune bibliothèque</option>`;
-        } else {
-            selEl.innerHTML = names.map(n => `<option value="${n}" ${n === active ? 'selected' : ''}>${n}</option>`).join('');
-        }
-    }
-}
-
-const loadLibrariesList = loadLibrariesDropdown;
-
-async function switchLibrary(name) {
-    if (!name) return;
-    hideAllTopPopovers();
-    const res = await fetch('/api/libraries/select', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name})
-    });
-    if (res.ok) {
-        await loadLibrariesDropdown();
-        await loadStats();
-        await loadGalleryFilters();
-        refreshActiveMediaView();
-    }
-}
-
-const selectLibrary = switchLibrary;
-
-// Fonctions appelées par les 3 boutons de topbar.html
-function openLibraryModal(mode = 'CREATE') {
-    if (String(mode).toUpperCase() === 'EDIT') {
-        openEditLibraryModal();
-    } else {
-        openCreateLibraryModal();
-    }
-}
-
-function openMergeLibrariesModal() {
-    openMergeLibraryModal();
-}
-
-function showLibraryModalView(viewId) {
-    ['lib-view-create', 'lib-view-edit', 'lib-view-delete'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.toggle('hidden', id !== viewId);
-    });
-    document.getElementById('library-modal').classList.remove('hidden');
-}
-
-function openCreateLibraryModal() {
-    hideAllTopPopovers();
-    pendingCreateLibFolder = '';
-    const nameInput = document.getElementById('lib-create-name');
-    if (nameInput) nameInput.value = '';
-    const pathLbl = document.getElementById('lib-create-selected-path');
-    if (pathLbl) {
-        pathLbl.textContent = '';
-        pathLbl.classList.add('hidden');
-    }
-    showLibraryModalView('lib-view-create');
-}
-
-function openEditLibraryModal() {
-    hideAllTopPopovers();
-    const active = librariesConfig.active_library;
-    if (!active || !librariesConfig.libraries || !librariesConfig.libraries[active]) {
-        return openCreateLibraryModal();
-    }
-    const lib = librariesConfig.libraries[active];
-    pendingEditLibFolder = '';
-    editMoveExistingContent = false;
-
-    document.getElementById('lib-edit-current-name').textContent = lib.name;
-    document.getElementById('lib-edit-new-name').value = '';
-    const curSrc = (lib.source_paths && lib.source_paths[0]) ? lib.source_paths[0] : (lib.dest_dir || '');
-    document.getElementById('lib-edit-current-source').textContent = curSrc.replace(/\\/g, '/');
-    document.getElementById('lib-edit-move-dot').classList.add('hidden');
-
-    showLibraryModalView('lib-view-edit');
-}
-
-function closeLibraryModal() {
-    document.getElementById('library-modal').classList.add('hidden');
-}
-
-async function pickLibraryFolder(mode, createNewSubfolder = false) {
-    // Si createNewSubfolder est vrai, on appelle mode=create_folder qui ouvre la boîte de création directe de dossier Windows
-    const dialogMode = createNewSubfolder ? 'create_folder' : 'folder';
-    const res = await fetch(`/api/dialog/browse?mode=${dialogMode}`);
-    if (!res.ok) return;
-    const d = await res.json();
-    if (!d.paths || !d.paths.length) return;
-    const chosenPath = d.paths[0];
-
-    if (mode === 'create') {
-        pendingCreateLibFolder = chosenPath;
-        const pathLbl = document.getElementById('lib-create-selected-path');
-        if (pathLbl) {
-            pathLbl.textContent = chosenPath.replace(/\\/g, '/');
-            pathLbl.classList.remove('hidden');
-        }
-        // Si le champ nom de la bibliothèque est encore vide, le pré-remplir avec le nom du dossier créé
-        const nameInput = document.getElementById('lib-create-name');
-        if (nameInput && !nameInput.value.trim()) {
-            nameInput.value = chosenPath.split(/[\\/]/).filter(Boolean).pop() || '';
-        }
-    } else {
-        pendingEditLibFolder = chosenPath;
-        document.getElementById('lib-edit-current-source').textContent = chosenPath.replace(/\\/g, '/');
-    }
-}
-
-async function submitCreateLibraryModal() {
-    const name = (document.getElementById('lib-create-name').value || '').trim();
-    if (!name) {
-        alert("Veuillez choisir un nom pour la bibliothèque.");
-        return;
-    }
-    if (!pendingCreateLibFolder) {
-        alert("Veuillez sélectionner un dossier existant ou créer un nouveau dossier.");
-        return;
-    }
-
-    const res = await fetch('/api/libraries/create', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            name: name,
-            source_type: 'STANDARD_FOLDER',
-            source_paths_raw: pendingCreateLibFolder,
-            dest_dir: pendingCreateLibFolder,
-            fix_takeout_json_metadata: true,
-            delete_zips_progressively: false,
-            organize_by_year_month: true
-        })
-    });
-    if (res.ok) {
-        closeLibraryModal();
-        await loadLibrariesDropdown();
-        await loadGalleryFilters();
-        refreshActiveMediaView();
-        loadStats();
-    }
-}
-
-function toggleMoveExistingContentOption() {
-    editMoveExistingContent = !editMoveExistingContent;
-    document.getElementById('lib-edit-move-dot').classList.toggle('hidden', !editMoveExistingContent);
-}
-
-async function submitEditLibraryModal() {
-    const origName = librariesConfig.active_library;
-    if (!origName) return;
-    const newName = (document.getElementById('lib-edit-new-name').value || '').trim() || origName;
-
-    const res = await fetch('/api/libraries/update', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            original_name: origName,
-            new_name: newName,
-            new_source: pendingEditLibFolder,
-            move_existing_content: editMoveExistingContent
-        })
-    });
-    if (res.ok) {
-        closeLibraryModal();
-        await loadLibrariesDropdown();
-        await loadGalleryFilters();
-        refreshActiveMediaView();
-        loadStats();
-    }
-}
-
-function showDeleteLibraryConfirm() {
-    document.getElementById('lib-delete-win-files').checked = false;
-    showLibraryModalView('lib-view-delete');
-}
-
-function backToEditLibraryModal() {
-    showLibraryModalView('lib-view-edit');
-}
-
-async function confirmDeleteActiveLibrary() {
-    const active = librariesConfig.active_library;
-    if (!active) return;
-    const delWin = document.getElementById('lib-delete-win-files').checked;
-
-    const res = await fetch('/api/libraries/delete', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            name: active,
-            delete_windows_files: delWin
-        })
-    });
-    if (res.ok) {
-        closeLibraryModal();
-        await loadLibrariesDropdown();
-        await loadGalleryFilters();
-        refreshActiveMediaView();
-        loadStats();
-    }
-}
-
-// ==================== FUSION DE BIBLIOTHÈQUES & DOUBLONS AUTOMATIQUES ====================
-
-function showMergeStep(stepId) {
-    ['merge-step-select', 'merge-step-done', 'merge-step-auto-config'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.toggle('hidden', id !== stepId);
-    });
-    document.getElementById('merge-lib-modal').classList.remove('hidden');
-}
-
-function openMergeLibraryModal() {
-    hideAllTopPopovers();
-    const names = Object.keys(librariesConfig.libraries || {});
-    if (names.length < 2) {
-        alert("Créez au moins 2 bibliothèques pour pouvoir les fusionner.");
-        return;
-    }
-    const active = librariesConfig.active_library || names[0];
-    const otherNames = names.filter(n => n !== active);
-
-    document.getElementById('merge-src-lib').innerHTML =
-        `<option value="" disabled selected>Selectionnez la biblioteque</option>` +
-        otherNames.map(n => `<option value="${n}">${n}</option>`).join('');
-
-    document.getElementById('merge-dst-lib-label').textContent = active;
-    document.getElementById('merge-dst-lib').innerHTML = `<option value="${active}" selected>${active}</option>`;
-
-    showMergeStep('merge-step-select');
-}
-
-function closeMergeLibraryModal() {
-    document.getElementById('merge-lib-modal').classList.add('hidden');
-}
-
-async function confirmMergeLibraries(fastMerge = false) {
-    const srcEl = document.getElementById('merge-src-lib');
-    const src = srcEl ? srcEl.value : '';
-    const dst = librariesConfig.active_library || document.getElementById('merge-dst-lib')?.value || '';
-
-    if (!src) {
-        alert("Veuillez d'abord dérouler la liste et sélectionner la bibliothèque à fusionner.");
-        return;
-    }
-
-    const res = await fetch('/api/libraries/merge', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            source_lib_name: src,
-            target_lib_name: dst,
-            fast_merge: Boolean(fastMerge)
-        })
-    });
-
-    if (!res.ok) {
-        try {
-            const err = await res.json();
-            alert(err.detail || "Erreur lors de la fusion des bibliothèques.");
-        } catch (e) {
-            alert("Erreur lors de la fusion des bibliothèques.");
-        }
-        return;
-    }
-
-    const d = await res.json();
-
-    await loadLibrariesDropdown();
-    await loadGalleryFilters();
-    refreshActiveMediaView();
-    loadStats();
-
-    if (fastMerge) {
-        closeMergeLibraryModal();
-        return;
-    }
-
-    const countEl = document.getElementById('merge-dups-found-count');
-    if (countEl) countEl.textContent = d.duplicates_detected || 0;
-    showMergeStep('merge-step-done');
-}
-
-function openAutoDuplicatesConfigStep() {
-    hideAllTopPopovers();
-    setAutoDupMode('KEEP_ONE');
-    selectAutoDupPriority('BEST_QUALITY', 'la meilleure qualité');
-    showMergeStep('merge-step-auto-config');
-}
-
-function setAutoDupMode(mode) {
-    autoDupMode = mode;
-    document.getElementById('autodup-radio-both').textContent = (mode === 'KEEP_BOTH') ? '✓' : '';
-    document.getElementById('autodup-radio-one').textContent = (mode === 'KEEP_ONE') ? '✓' : '';
-    const prioSec = document.getElementById('autodup-priority-section');
-    const prioMenu = document.getElementById('autodup-priority-menu');
-    if (prioSec) prioSec.classList.toggle('opacity-40', mode === 'KEEP_BOTH');
-    if (prioMenu) prioMenu.classList.toggle('hidden', mode === 'KEEP_BOTH');
-}
-
-function toggleAutoDupPriorityMenu() {
-    const menu = document.getElementById('autodup-priority-menu');
-    if (menu) menu.classList.toggle('hidden');
-}
-
-function selectAutoDupPriority(code, label) {
-    autoDupPriority = code;
-    const lbl = document.getElementById('autodup-priority-label');
-    if (lbl) lbl.textContent = label;
-}
-
-async function submitAutoDuplicatesResolution() {
-    const res = await fetch('/api/duplicates/auto_resolve', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            mode: autoDupMode,
-            priority: autoDupPriority,
-            update_albums: document.getElementById('autodup-chk-albums').checked,
-            move_to_trash: document.getElementById('autodup-chk-trash').checked
-        })
-    });
-    if (res.ok) {
-        closeMergeLibraryModal();
-        refreshActiveMediaView();
-        loadStats();
-    }
-}
-
-
-// ==================== ASSISTANT D'IMPORTATION EN 3 ÉTAPES (DOSSIERS, SOUS-DOSSIERS & TAKEOUT) ====================
-
-var wizardImportSourceType = 'STANDARD_FOLDER';
-var wizardSelectedPaths = [];
-var wizardOptFixMeta = true;
-var wizardOptDelZips = false;
-var wizardOptCreateAlbum = true;
-var wizardSubfolderMode = 'SINGLE'; // 'SINGLE' | 'ALL_SUBS' | 'CUSTOM_SUBS'
-var wizardDetectedSubfolders = [];
-
-function openImportWizard() {
-    if (typeof hideAllTopPopovers === 'function') hideAllTopPopovers();
-    wizardSelectedPaths = [];
-    wizardDetectedSubfolders = [];
-    wizardOptFixMeta = true;
-    wizardOptDelZips = false;
-    wizardOptCreateAlbum = true;
-    wizardSubfolderMode = 'SINGLE';
-    updateWizardCheckDOM();
-    showImportStep(1);
-    const modal = document.getElementById('import-wizard-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-var openImportModal = openImportWizard;
-var startImportFlow = openImportWizard;
-
-function closeImportWizard() {
-    const modal = document.getElementById('import-wizard-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-var closeImportModal = closeImportWizard;
-
-function showImportStep(stepNum) {
-    [1, 2, 3].forEach(n => {
-        const el = document.getElementById(`import-step-${n}`);
-        if (el) el.classList.toggle('hidden', n !== stepNum);
-    });
-}
-
-function updateWizardCheckDOM() {
-    const chkFix = document.getElementById('wiz-chk-fix');
-    const chkDel = document.getElementById('wiz-chk-del');
-    const chkAlb = document.getElementById('wiz-chk-album');
-    const cfgPanel = document.getElementById('wiz-album-config-panel');
-
-    if (chkFix) chkFix.textContent = wizardOptFixMeta ? '✓' : '';
-    if (chkDel) chkDel.textContent = wizardOptDelZips ? '✓' : '';
-    if (chkAlb) chkAlb.textContent = wizardOptCreateAlbum ? '✓' : '';
-    if (cfgPanel) cfgPanel.classList.toggle('hidden', !wizardOptCreateAlbum);
-
-    const rSingle = document.getElementById('wiz-rad-single');
-    const rAll = document.getElementById('wiz-rad-allsubs');
-    const rCustom = document.getElementById('wiz-rad-custom');
-    if (rSingle) rSingle.textContent = (wizardSubfolderMode === 'SINGLE') ? '✓' : '';
-    if (rAll) rAll.textContent = (wizardSubfolderMode === 'ALL_SUBS') ? '✓' : '';
-    if (rCustom) rCustom.textContent = (wizardSubfolderMode === 'CUSTOM_SUBS') ? '✓' : '';
-
-    const singleBox = document.getElementById('wiz-single-album-box');
-    const customBox = document.getElementById('wiz-custom-subfolders-box');
-    if (singleBox) singleBox.classList.toggle('hidden', wizardSubfolderMode !== 'SINGLE');
-    if (customBox) customBox.classList.toggle('hidden', wizardSubfolderMode !== 'CUSTOM_SUBS');
-}
-
-function toggleWizardCheck(which) {
-    if (which === 'fix') wizardOptFixMeta = !wizardOptFixMeta;
-    if (which === 'del') wizardOptDelZips = !wizardOptDelZips;
-    if (which === 'album') wizardOptCreateAlbum = !wizardOptCreateAlbum;
-    updateWizardCheckDOM();
-}
-
-function setWizardSubfolderMode(mode) {
-    wizardSubfolderMode = mode;
-    updateWizardCheckDOM();
-}
-
-function renderCustomSubfoldersList() {
-    const listEl = document.getElementById('wiz-subfolders-list');
-    if (!listEl) return;
-
-    listEl.innerHTML = wizardDetectedSubfolders.map((sf, idx) => `
-        <div class="ui-pill rounded-2xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px]">
-            <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer font-bold">
-                <input type="checkbox" ${sf.include ? 'checked' : ''}
-                       onchange="wizardDetectedSubfolders[${idx}].include = this.checked"
-                       class="w-3.5 h-3.5 accent-[#593E5A] shrink-0"/>
-                <span class="truncate" title="${sf.display_name}">${sf.display_name}</span>
-                <span class="opacity-50 text-[10px] shrink-0">(${sf.media_count})</span>
-            </label>
-            <div class="flex items-center gap-1.5 shrink-0">
-                <label class="flex items-center gap-1 text-[10px] opacity-80 cursor-pointer" title="Créer un album pour ce sous-dossier">
-                    <input type="checkbox" ${sf.create_album ? 'checked' : ''}
-                           onchange="wizardDetectedSubfolders[${idx}].create_album = this.checked; document.getElementById('wiz-sf-alb-${idx}').disabled = !this.checked;"
-                           class="w-3 h-3 accent-[#593E5A]"/>
-                    <span>Album:</span>
-                </label>
-                <input id="wiz-sf-alb-${idx}" type="text" value="${(sf.album_name || '').replace(/"/g, '&quot;')}"
-                       oninput="wizardDetectedSubfolders[${idx}].album_name = this.value"
-                       class="ui-card rounded-full px-2.5 py-0.5 text-[10px] font-bold w-28 outline-none"/>
-            </div>
-        </div>
-    `).join('');
-}
-
-function toggleAllCustomSubfolders() {
-    const allChecked = wizardDetectedSubfolders.every(s => s.include);
-    wizardDetectedSubfolders.forEach(s => { s.include = !allChecked; });
-    renderCustomSubfoldersList();
-}
-
-async function pickStandardFolderForImport() {
-    const res = await fetch('/api/dialog/browse?mode=folder');
-    if (!res.ok) return;
-    const d = await res.json();
-    if (!d.paths || !d.paths.length) return;
-
-    wizardImportSourceType = 'STANDARD_FOLDER';
-    wizardSelectedPaths = d.paths;
-    wizardOptCreateAlbum = true;
-
-    const folderName = d.paths[0].split(/[\\/]/).filter(Boolean).pop() || 'Nouvel Album';
-    const albInput = document.getElementById('wiz-album-name-input');
-    if (albInput) albInput.value = folderName;
-
-    let subData = {has_subfolders: false, folders: []};
-    try {
-        const subRes = await fetch('/api/import/inspect_subfolders', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({source_paths: d.paths})
-        });
-        if (subRes.ok) subData = await subRes.json();
-    } catch (e) {}
-
-    wizardDetectedSubfolders = (subData.folders || []).map(f => ({
-        folder_path: f.folder_path,
-        display_name: f.display_name,
-        media_count: f.media_count,
-        include: true,
-        create_album: true,
-        album_name: f.suggested_album
-    }));
-
-    const modesBox = document.getElementById('wiz-subfolder-modes');
-    if (subData.has_subfolders && wizardDetectedSubfolders.length > 1) {
-        if (modesBox) modesBox.classList.remove('hidden');
-        wizardSubfolderMode = 'ALL_SUBS';
-        renderCustomSubfoldersList();
-    } else {
-        if (modesBox) modesBox.classList.add('hidden');
-        wizardSubfolderMode = 'SINGLE';
-    }
-
-    prepareImportStep3('Importer un dossier', 'Dossier sélectionné', false);
-}
-
-async function pickTakeoutSource(sourceType) {
-    const browseMode = (sourceType === 'TAKEOUT_ZIPS') ? 'zips' : 'folder';
-    const res = await fetch(`/api/dialog/browse?mode=${browseMode}`);
-    if (!res.ok) return;
-    const d = await res.json();
-    if (!d.paths || !d.paths.length) return;
-
-    wizardImportSourceType = sourceType;
-    wizardSelectedPaths = d.paths;
-    wizardOptCreateAlbum = false;
-    wizardSubfolderMode = 'SINGLE';
-
-    const modesBox = document.getElementById('wiz-subfolder-modes');
-    if (modesBox) modesBox.classList.add('hidden');
-
-    const folderName = d.paths[0].split(/[\\/]/).filter(Boolean).pop()?.replace(/\.zip$/i, '') || 'Import Takeout';
-    const albInput = document.getElementById('wiz-album-name-input');
-    if (albInput) albInput.value = folderName;
-
-    const subTitle = (sourceType === 'TAKEOUT_ZIPS') ? 'Fichiers ZIP' : 'Dossier décompressé';
-    prepareImportStep3('Importer depuis Google', subTitle, true);
-}
-
-function prepareImportStep3(headerText, subtitleText, isGoogle) {
-    const hEl = document.getElementById('import-step3-header');
-    const sEl = document.getElementById('import-step3-subtitle');
-    const pEl = document.getElementById('import-step3-paths');
-    const backBtn = document.getElementById('import-step3-back-btn');
-    const rowDel = document.getElementById('row-opt-del-zips');
-
-    if (hEl) hEl.textContent = headerText;
-    if (sEl) sEl.textContent = subtitleText;
-    if (pEl) {
-        pEl.innerHTML = wizardSelectedPaths
-            .map(p => `<div class="truncate">${p.replace(/\\/g, '/')}</div>`)
-            .join('');
-    }
-    if (backBtn) {
-        backBtn.setAttribute('onclick', `showImportStep(${isGoogle ? 2 : 1})`);
-    }
-    if (rowDel) {
-        rowDel.classList.toggle('hidden', wizardImportSourceType !== 'TAKEOUT_ZIPS');
-    }
-
-    updateWizardCheckDOM();
-    showImportStep(3);
-}
-
-function rePickStep3Paths() {
-    if (wizardImportSourceType === 'STANDARD_FOLDER') {
-        pickStandardFolderForImport();
-    } else {
-        pickTakeoutSource(wizardImportSourceType);
-    }
-}
-
-async function handleDroppedFiles(event) {
-    event.preventDefault();
-    const dz = document.getElementById('drop-zone');
-    if (dz) dz.classList.remove('ring-2', 'ring-[#593E5A]');
-    if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
-        await handleSelectedFilesInput(event.dataTransfer.files);
-    }
-}
-
-async function handleSelectedFilesInput(fileList) {
-    if (!fileList || !fileList.length) return;
-    const formData = new FormData();
-    for (let i = 0; i < fileList.length; i++) {
-        formData.append('files', fileList[i]);
-    }
-    closeImportWizard();
-    const res = await fetch('/api/import/upload_files', {
-        method: 'POST',
-        body: formData
-    });
-    if (res.ok) {
-        await loadStats();
-        await loadGalleryFilters();
-        refreshActiveMediaView();
-    }
-}
-
-async function confirmWizardImport() {
-    if (!wizardSelectedPaths.length) {
-        alert("Aucun dossier sélectionné.");
-        return;
-    }
-    const customAlbumName = (document.getElementById('wiz-album-name-input')?.value || '').trim();
-    closeImportWizard();
-
-    const active = librariesConfig?.active_library;
-    if (!active || !librariesConfig.libraries || !librariesConfig.libraries[active]) {
-        const folderName = wizardSelectedPaths[0].split(/[\\/]/).filter(Boolean).pop() || 'Ma Bibliothèque';
-        await fetch('/api/libraries/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                name: folderName,
-                source_type: wizardImportSourceType,
-                source_paths_raw: wizardImportSourceType === 'STANDARD_FOLDER' ? '' : wizardSelectedPaths.join('\n'),
-                dest_dir: wizardSelectedPaths[0],
-                fix_takeout_json_metadata: wizardOptFixMeta,
-                delete_zips_progressively: wizardOptDelZips,
-                organize_by_year_month: true
-            })
-        });
-        await loadLibrariesDropdown();
-    }
-
-    const res = await fetch('/api/import/add_sources', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            source_type: wizardImportSourceType,
-            source_paths: wizardSelectedPaths,
-            fix_takeout_json_metadata: Boolean(wizardOptFixMeta),
-            delete_zips_progressively: Boolean(wizardOptDelZips),
-            create_album: Boolean(wizardOptCreateAlbum),
-            album_mode: wizardOptCreateAlbum ? wizardSubfolderMode : 'NONE',
-            album_name: customAlbumName,
-            subfolder_rules: wizardDetectedSubfolders.map(sf => ({
-                folder_path: sf.folder_path,
-                include: Boolean(sf.include),
-                create_album: Boolean(wizardOptCreateAlbum && sf.create_album),
-                album_name: sf.album_name || ''
-            }))
-        })
-    });
-
-    if (!res.ok) {
-        try {
-            const err = await res.json();
-            alert("Erreur lors de l'importation : " + (err.detail || res.statusText));
-        } catch (e) {
-            alert("Erreur serveur lors de l'importation.");
-        }
-        return;
-    }
-
-    await loadStats();
-    await loadGalleryFilters();
-    refreshActiveMediaView();
-    if (currentTab === 'albums' && typeof loadAlbumsView === 'function') loadAlbumsView();
-
-    if (wizardImportSourceType !== 'STANDARD_FOLDER') {
-        await runTask('INGEST');
-    }
-}

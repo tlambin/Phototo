@@ -11,6 +11,14 @@ DEFAULT_DB = Path("progression_takeout.db")
 DEFAULT_DEST = Path("./Photos_Triees")
 RAW_EXTS = {'.dng', '.cr2', '.cr3', '.nef', '.arw', '.orf', '.rw2'}
 
+MISSING_META_SQL_CONDITION = """
+    is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+    AND (
+        status IN ('no_metadata', 'mtime_fallback')
+        OR timestamp IS NULL OR timestamp <= 0
+    )
+"""
+
 EMPTY_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">'
     '<rect width="200" height="200" fill="#0f172a"/>'
@@ -42,6 +50,23 @@ def get_db() -> sqlite3.Connection:
         upgrade_db_for_video_similarity(init_conn)
         init_conn.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)")
         init_conn.execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('trash_retention_days', '30')")
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS albums (
+                album_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                full_path TEXT NOT NULL UNIQUE,
+                parent_id INTEGER,
+                cover_path TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(parent_id) REFERENCES albums(album_id) ON DELETE CASCADE
+            )
+        """)
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_gallery ON processed_files(is_duplicate, is_trashed, timestamp DESC)")
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_album ON processed_files(album_name)")
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_fav ON processed_files(is_favorite)")
+        cols = {r[1] for r in init_conn.execute("PRAGMA table_info(processed_files)").fetchall()}
+        if "modified_at" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN modified_at INTEGER")
         init_conn.commit()
         init_conn.close()
         _INITIALIZED_DBS.add(db_key)

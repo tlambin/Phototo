@@ -1,0 +1,46 @@
+<div id="metadata-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="ui-card rounded-3xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="flex justify-between items-center pb-2">
+            <h2 class="text-base font-extrabold">✏️ Modifier les Métadonnées (Date / Heure / Lieu)</h2>
+            <button onclick="closeMetadataModal()" class="font-bold">✕</button>
+        </div>
+        <div class="ui-pill rounded-2xl p-4 space-y-3 text-xs">
+            <label class="block font-extrabold">📅 Date & Heure</label>
+            <input id="meta-datetime" type="datetime-local" step="1" onchange="updateSequentialPreview()" class="ui-card w-full rounded-xl px-3 py-2 font-bold outline-none"/>
+            <div id="meta-sequence-panel" class="hidden pt-2 space-y-2">
+                <div class="font-bold">⏱️ Suite horaire automatique</div>
+                <div class="flex gap-3">
+                    <label><input type="radio" name="time_seq_mode" value="PRESERVE_GAPS" checked onchange="updateSequentialPreview()"/> Conserver les écarts</label>
+                    <label><input type="radio" name="time_seq_mode" value="FIXED_STEP" onchange="updateSequentialPreview()"/> Pas fixe (+sec)</label>
+                    <label><input type="radio" name="time_seq_mode" value="SAME" onchange="updateSequentialPreview()"/> Même seconde</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span>Intervalle (sec) :</span>
+                    <input id="meta-step-sec" type="number" value="17" min="1" oninput="updateSequentialPreview()" class="w-20 ui-card rounded px-2 py-1"/>
+                </div>
+                <div id="meta-seq-preview" class="bg-black text-emerald-400 rounded-xl p-2 font-mono text-[11px] max-h-24 overflow-y-auto"></div>
+            </div>
+        </div>
+        <div class="ui-pill rounded-2xl p-4 space-y-2 text-xs">
+            <div class="font-extrabold">📍 Position GPS</div>
+            <div class="flex gap-2">
+                <input id="meta-place-search" type="text" placeholder="Rechercher une ville..." class="flex-1 ui-card rounded-full px-3 py-1.5 outline-none"/>
+                <button onclick="searchPlaceForMetaMap()" class="plum-btn px-4 py-1.5 rounded-full font-bold">Chercher</button>
+            </div>
+            <div id="meta-picker-map" class="w-full h-44 rounded-2xl z-10"></div>
+            <div class="grid grid-cols-2 gap-2">
+                <input id="meta-lat" type="number" step="any" placeholder="Latitude" class="ui-card rounded-xl px-3 py-1.5"/>
+                <input id="meta-lon" type="number" step="any" placeholder="Longitude" class="ui-card rounded-xl px-3 py-1.5"/>
+            </div>
+            <input id="meta-desc" type="text" placeholder="Description / Légende EXIF..." class="w-full ui-card rounded-xl px-3 py-1.5"/>
+        </div>
+        <div class="flex justify-between items-center pt-2 text-xs">
+            <div class="flex gap-2">
+                <button onclick="stripMetadata(true, false)" class="bg-rose-600/20 text-rose-600 font-bold px-4 py-1.5 rounded-full">Effacer GPS</button>
+                <button onclick="stripMetadata(false, true)" class="bg-rose-600 text-white font-bold px-4 py-1.5 rounded-full">Purger EXIF</button>
+            </div>
+            <button onclick="saveMetadataChanges()" class="plum-btn font-bold px-6 py-2 rounded-full">Appliquer</button>
+        </div>
+    </div>
+</div>
+
