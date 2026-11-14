@@ -561,7 +561,10 @@ def run_step_faces(lib: dict):
         from insightface.app import FaceAnalysis
         import numpy as np
         hw = get_hardware_runtime_config()
-        app = FaceAnalysis(name="buffalo_l", allowed_modules=['detection', 'recognition'], providers=hw["onnx_providers"])
+        faces_model = str(load_settings().get("faces_model", "buffalo_l")).strip()
+        if faces_model not in ("buffalo_s", "buffalo_l", "antelopev2"):
+            faces_model = "buffalo_l"
+        app = FaceAnalysis(name=faces_model, allowed_modules=['detection', 'recognition'], providers=hw["onnx_providers"])
         app.prepare(ctx_id=hw["onnx_ctx_id"], det_size=faces_ai.DET_SIZE)
 
         faces_batch, scanned_batch, done = [], [], 0
@@ -625,13 +628,53 @@ def run_step_ocr(lib: dict):
     STATE.update_progress(0, total, unit="médias/s")
 
     if total > 0:
-        from paddleocr import PaddleOCR
         hw = get_hardware_runtime_config()
-        lang_cfg = load_settings().get("language", "fr")
-        ocr_engine = PaddleOCR(
-            use_angle_cls=True, lang=lang_cfg,
-            use_gpu=hw["paddle_use_gpu"], enable_mkldnn=hw["paddle_enable_mkldnn"], show_log=False
-        )
+        cfg = load_settings()
+        lang_cfg = cfg.get("language", "fr")
+        ocr_choice = str(cfg.get("ocr_engine", "paddleocr")).strip().lower()
+
+        def _make_ocr_fn():
+            if ocr_choice == "rapidocr":
+                from rapidocr_onnxruntime import RapidOCR
+                use_cuda = "CUDAExecutionProvider" in hw.get("onnx_providers", [])
+                try:
+                    eng = RapidOCR(det_use_cuda=use_cuda, cls_use_cuda=use_cuda, rec_use_cuda=use_cuda)
+                except TypeError:
+                    eng = RapidOCR()
+                def _run_rapid(img):
+                    res, _ = eng(img)
+                    return [(item[1], float(item[2])) for item in (res or []) if len(item) >= 3]
+                return _run_rapid
+
+            if ocr_choice == "easyocr":
+                import easyocr
+                langs = [lang_cfg, "en"] if lang_cfg != "en" else ["en"]
+                reader = easyocr.Reader(langs, gpu=(hw["torch_device"] == "cuda"))
+                def _run_easy(img):
+                    res = reader.readtext(img)
+                    return [(item[1], float(item[2])) for item in (res or []) if len(item) >= 3]
+                return _run_easy
+
+            try:
+                import torch  # noqa: F401 - charger torch avant paddle sous Windows (évite conflit shm.dll)
+            except Exception:
+                pass
+            from paddleocr import PaddleOCR
+            try:
+                eng = PaddleOCR(
+                    use_angle_cls=True, lang=lang_cfg,
+                    use_gpu=hw["paddle_use_gpu"], enable_mkldnn=hw["paddle_enable_mkldnn"], show_log=False
+                )
+            except (TypeError, ValueError):
+                eng = PaddleOCR(lang=lang_cfg)
+            def _run_paddle(img):
+                res = eng.ocr(img, cls=True)
+                if not res or not res[0]:
+                    return []
+                return [(line[1][0], float(line[1][1])) for line in res[0] if line and len(line) >= 2]
+            return _run_paddle
+
+        run_ocr_on_img = _make_ocr_fn()
         ocr_batch, fts_batch, scanned_batch, done = [], [], [], 0
 
         for src_path, dest_path, ts in to_scan:
@@ -643,16 +686,15 @@ def run_step_ocr(lib: dict):
             unique_lines, seen_lower, scores = [], set(), []
             for img in frames:
                 try:
-                    res = ocr_engine.ocr(img, cls=True)
+                    items = run_ocr_on_img(img)
                 except Exception:
-                    res = None
-                if res and res[0]:
-                    for line in res[0]:
-                        txt, conf = line[1][0].strip(), float(line[1][1])
-                        if conf >= ocr_ai.MIN_CONFIDENCE and len(txt) >= 2 and txt.lower() not in seen_lower:
-                            seen_lower.add(txt.lower())
-                            unique_lines.append(txt)
-                            scores.append(conf)
+                    items = []
+                for raw_txt, conf in items:
+                    txt = str(raw_txt or "").strip()
+                    if conf >= ocr_ai.MIN_CONFIDENCE and len(txt) >= 2 and txt.lower() not in seen_lower:
+                        seen_lower.add(txt.lower())
+                        unique_lines.append(txt)
+                        scores.append(conf)
             if unique_lines:
                 full_txt = " | ".join(unique_lines)
                 avg_c = round(sum(scores) / len(scores), 3)

@@ -491,9 +491,9 @@
     </div>
 
     <!-- ==================== VUE 10 : PARAMÈTRES ==================== -->
-    <div id="tab-settings" class="hidden max-w-4xl">
-        <div class="flex items-center justify-between mb-8">
-            <h1 class="text-4xl font-extrabold tracking-tight">Parametres</h1>
+    <div id="tab-settings" class="hidden max-w-5xl pb-10 space-y-6">
+        <div class="sticky-view-header flex items-center justify-between mb-2">
+            <h1 class="text-4xl font-extrabold tracking-tight">Paramètres</h1>
             <div class="flex items-center gap-3">
                 <button onclick="restartApplication()" title="Redémarrer le logiciel"
                         class="w-11 h-11 rounded-2xl bg-[#E5C168] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
@@ -506,69 +506,129 @@
             </div>
         </div>
 
-        <div class="space-y-6">
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
-                    <span>🌡️</span> <span>Choisir le theme</span>
-                </div>
-                <button id="theme-btn-light" onclick="setAppTheme('light')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
-                    <span>☀️</span> <span>Clair</span>
-                </button>
-                <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
-                    <span>🌙</span> <span>Sombre</span>
-                </button>
-                <button id="theme-btn-system" onclick="setAppTheme('system')" class="ui-card rounded-2xl px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-sm">
-                    <span>🖥️</span> <span>Système</span>
-                </button>
+        <!-- SECTION 1 : APPARENCE & LANGUE -->
+        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-5">
+            <div>
+                <h2 class="text-base font-extrabold">Apparence & Langue</h2>
+                <p class="text-xs opacity-65 mt-0.5">Personnalisez le thème visuel, la langue de l'interface et le fuseau horaire.</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
-                    <span>🌐</span> <span>Choix de la langue</span>
-                </div>
-                <div class="ui-card rounded-2xl px-4 py-2.5 shadow-sm">
-                    <select id="settings-lang" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
-                        <option value="fr">Français</option>
-                        <option value="en">English</option>
-                    </select>
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
+                        <span>🌡️</span> <span>Thème</span>
+                    </div>
+                    <button id="theme-btn-light" onclick="setAppTheme('light')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
+                        <span>☀️</span> <span>Clair</span>
+                    </button>
+                    <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
+                        <span>🌙</span> <span>Sombre</span>
+                    </button>
+                    <button id="theme-btn-system" onclick="setAppTheme('system')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
+                        <span>🖥️</span> <span>Système</span>
+                    </button>
                 </div>
 
-                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm ml-2">
-                    <span>🕒</span> <span>Fuseau horaire</span>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
+                        <span>🌐</span> <span>Langue</span>
+                    </div>
+                    <div class="ui-pill rounded-2xl px-4 py-2">
+                        <select id="settings-lang" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
+                            <option value="fr">Français</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+
+                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2 sm:ml-2">
+                        <span>🕒</span> <span>Fuseau horaire</span>
+                    </div>
+                    <div class="ui-pill rounded-2xl px-4 py-2">
+                        <select id="settings-timezone" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
+                            <option value="Europe/Paris">Paris/France</option>
+                            <option value="Europe/London">London/UK</option>
+                            <option value="America/New_York">New York/USA</option>
+                            <option value="America/Montreal">Montréal/Canada</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="ui-card rounded-2xl px-4 py-2.5 shadow-sm">
-                    <select id="settings-timezone" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
-                        <option value="Europe/Paris">Paris/France</option>
-                        <option value="Europe/London">London/UK</option>
-                        <option value="America/New_York">New York/USA</option>
-                        <option value="America/Montreal">Montréal/Canada</option>
-                        <option value="UTC">UTC</option>
-                    </select>
+            </div>
+        </section>
+
+        <!-- SECTION 2 : PERFORMANCE & MATÉRIEL -->
+        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-extrabold">Performance & Matériel</h2>
+                    <p class="text-xs opacity-65 mt-0.5">Détection automatique de la puissance système et sélection du moteur d'accélération.</p>
+                </div>
+                <button type="button" onclick="loadHardwareInfo(true)" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">↻ Re-détecter</button>
+            </div>
+            <div id="hardware-specs-box" class="ui-pill rounded-2xl p-4 text-xs opacity-70">
+                Analyse de la configuration matérielle...
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
+                    <span>🔲</span> <span>Accélération Matérielle</span>
+                </div>
+                <button id="gpu-btn-auto" onclick="selectGpuPill('auto')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">✨ Auto (Recommandé)</button>
+                <button id="gpu-btn-cuda" onclick="selectGpuPill('cuda')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">NVIDIA (CUDA)</button>
+                <button id="gpu-btn-directml" onclick="selectGpuPill('directml')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">AMD (DirectML)</button>
+                <button id="gpu-btn-cpu" onclick="selectGpuPill('cpu')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">INTEL / CPU</button>
+            </div>
+        </section>
+
+        <!-- SECTION 3 : INTELLIGENCE ARTIFICIELLE LOCALE -->
+        <section id="settings-ai-section" class="ui-card rounded-3xl p-6 shadow-sm space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-extrabold">Intelligence Artificielle Locale</h2>
+                    <p class="text-xs opacity-65 mt-0.5">Installez, vérifiez, mettez à jour ou désinstallez les modèles IA exécutés 100 % en local.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" onclick="loadAiModulesStatus()" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">↻ Actualiser</button>
+                    <button id="ai-check-updates-btn" type="button" onclick="checkAiUpdates()" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">🔍 Rechercher des MÀJ</button>
+                    <button type="button" onclick="runAiModuleAction('all', 'verify')" class="ui-pill px-4 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">Tout vérifier</button>
+                    <button type="button" onclick="runAiModuleAction('all', 'install')" class="plum-btn px-4 py-2 rounded-full text-xs font-bold shadow-sm transition">Tout installer</button>
                 </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="ui-card rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 shadow-sm">
-                    <span>🔲</span> <span>Accélération Materielle</span>
-                </div>
-                <button id="gpu-btn-cuda" onclick="selectGpuPill('cuda')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">NVIDIA</button>
-                <button id="gpu-btn-directml" onclick="selectGpuPill('directml')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">AMD</button>
-                <button id="gpu-btn-cpu" onclick="selectGpuPill('cpu')" class="ui-card rounded-2xl px-6 py-3 text-xs font-extrabold shadow-sm">INTEL</button>
+            <div id="ai-summary-bar" class="hidden rounded-2xl ui-pill px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs"></div>
+
+            <div id="ai-modules-list" class="grid grid-cols-1 gap-4">
+                <div class="ui-pill rounded-2xl p-4 text-xs opacity-60">Chargement de l'état des modules IA...</div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3 pt-1">
-                <button onclick="pruneMissingFiles()" class="ui-card hover:brightness-95 rounded-2xl px-5 py-3.5 text-xs font-extrabold flex items-center gap-2.5 shadow-sm transition">
-                    <span>🪶</span> <span>Nettoyage du systeme</span>
+            <!-- Journal en direct des opérations IA -->
+            <div id="ai-task-log-box" class="hidden rounded-2xl bg-black/80 text-emerald-300 p-4 space-y-2">
+                <div class="flex items-center justify-between text-xs font-bold">
+                    <span id="ai-task-status-label">Opération en cours...</span>
+                    <button type="button" onclick="document.getElementById('ai-task-log-box').classList.add('hidden')" class="opacity-70 hover:opacity-100">✕</button>
+                </div>
+                <pre id="ai-task-log-content" class="text-[11px] font-mono max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed opacity-90"></pre>
+            </div>
+        </section>
+
+        <!-- SECTION 4 : MAINTENANCE & SAUVEGARDE -->
+        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-4">
+            <div>
+                <h2 class="text-base font-extrabold">Maintenance & Sauvegarde</h2>
+                <p class="text-xs opacity-65 mt-0.5">Nettoyez les entrées orphelines et sauvegardez la base de données de votre bibliothèque.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button onclick="pruneMissingFiles()" class="ui-pill hover:brightness-95 rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 transition">
+                    <span>🪶</span> <span>Nettoyage du système</span>
                 </button>
-                <button onclick="backupDatabaseNow()" class="ui-card hover:brightness-95 rounded-2xl px-5 py-3.5 text-xs font-extrabold flex items-center gap-2.5 shadow-sm transition">
-                    <span>💾</span> <span>Sauvegarde de la base de donnée</span>
+                <button onclick="backupDatabaseNow()" class="ui-pill hover:brightness-95 rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 transition">
+                    <span>💾</span> <span>Sauvegarde de la base de données</span>
                 </button>
             </div>
             <div id="backup-result-msg" class="text-xs font-mono opacity-80 hidden"></div>
+        </section>
 
-            <textarea id="settings-scanned-folders" class="hidden"></textarea>
-            <input id="settings-takeout-dir" type="hidden"/>
-        </div>
+        <textarea id="settings-scanned-folders" class="hidden"></textarea>
+        <input id="settings-takeout-dir" type="hidden"/>
     </div>
 
     <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES) ==================== -->

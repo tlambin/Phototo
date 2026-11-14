@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from media_frames import ALL_MEDIA_EXTS, extract_analysis_frames
-from settings_manager import get_hardware_runtime_config
+from settings_manager import get_hardware_runtime_config, load_settings, CLIP_MODEL_SPECS
 
 DB_PATH = Path("progression_takeout.db")
 BATCH_SIZE = 32
@@ -12,6 +12,7 @@ IMAGE_EXTS = ALL_MEDIA_EXTS
 
 _vision_model = None
 _text_model = None
+_loaded_clip_key = None
 
 
 def upgrade_db_for_clip_and_gps(conn: sqlite3.Connection):
@@ -25,8 +26,11 @@ def upgrade_db_for_clip_and_gps(conn: sqlite3.Connection):
 
 
 def get_clip_models():
-    global _vision_model, _text_model
-    if _vision_model is None:
+    global _vision_model, _text_model, _loaded_clip_key
+    clip_key = str(load_settings().get("clip_model", "vit-b-32")).strip().lower()
+    if clip_key not in CLIP_MODEL_SPECS:
+        clip_key = "vit-b-32"
+    if _vision_model is None or _loaded_clip_key != clip_key:
         from sentence_transformers import SentenceTransformer
         import torch
         hw = get_hardware_runtime_config()
@@ -35,8 +39,10 @@ def get_clip_models():
             dev = "cpu"
         elif dev == "xpu" and not (hasattr(torch, "xpu") and torch.xpu.is_available()):
             dev = "cpu"
-        _vision_model = SentenceTransformer("clip-ViT-B-32", device=dev)
-        _text_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32-multilingual-v1", device=dev)
+        spec = CLIP_MODEL_SPECS[clip_key]
+        _vision_model = SentenceTransformer(spec["vision_model"], device=dev)
+        _text_model = _vision_model if spec["text_model"] == spec["vision_model"] else SentenceTransformer(spec["text_model"], device=dev)
+        _loaded_clip_key = clip_key
     return _vision_model, _text_model
 
 
@@ -59,7 +65,18 @@ def search_photos_by_natural_text(db_path: Path, query_fr: str, top_k: int = 60,
     if not rows:
         return []
 
-    matrix = np.vstack([np.frombuffer(r["clip_embedding"], dtype=np.float16).astype(np.float32) for r in rows])
+    expected_dim = int(text_emb.shape[0])
+    valid_rows = []
+    vectors = []
+    for r in rows:
+        vec = np.frombuffer(r["clip_embedding"], dtype=np.float16).astype(np.float32)
+        if vec.shape[0] == expected_dim:
+            valid_rows.append(r)
+            vectors.append(vec)
+    if not vectors:
+        return []
+
+    matrix = np.vstack(vectors)
     scores = np.dot(matrix, text_emb)
     best_indices = np.argsort(scores)[::-1][:top_k]
 
@@ -68,7 +85,7 @@ def search_photos_by_natural_text(db_path: Path, query_fr: str, top_k: int = 60,
         sc = float(scores[idx])
         if sc < min_score:
             break
-        r = rows[int(idx)]
+        r = valid_rows[int(idx)]
         results.append({
             "source_path": r["source_path"],
             "dest_path": r["dest_path"],

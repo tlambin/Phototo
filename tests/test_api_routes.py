@@ -257,6 +257,43 @@ class TestApiRoutes(unittest.TestCase):
         by_mod_asc = [i["source_path"] for i in gallery_router.api_gallery_items(sort_by="modified", sort_order="asc")["items"]]
         self.assertEqual(by_mod_asc, ["src_b", "src_c", "src_a"])
 
+    def test_settings_sections_and_ai_status_endpoint(self):
+        html = main.templates.get_template("index.html").render()
+        for token in ("settings-ai-section", "ai-modules-list", "ai-task-log-box", "hardware-specs-box", "gpu-btn-auto", "ai-check-updates-btn"):
+            self.assertIn(token, html)
+
+        hw = system_router.api_get_hardware()
+        self.assertIn("hardware", hw)
+        self.assertIn("runtime", hw)
+        self.assertGreaterEqual(hw["hardware"]["cpu_cores"], 1)
+        self.assertIn(hw["hardware"]["recommended_mode"], ("cuda", "directml", "intel", "cpu"))
+        self.assertIn("recommended_workers", hw["hardware"])
+
+        st = system_router.api_ai_status()
+        self.assertIn("modules", st)
+        self.assertEqual([m["id"] for m in st["modules"]], ["faces", "clip", "ocr"])
+        for m in st["modules"]:
+            self.assertIn(m["status"], ("ready", "partial", "not_installed"))
+            self.assertIn("packages", m)
+            self.assertIn("cache_size_mb", m)
+        ocr_mod = [m for m in st["modules"] if m["id"] == "ocr"][0]
+        self.assertEqual([e["id"] for e in ocr_mod["ocr_engines"]], ["rapidocr", "easyocr", "paddleocr"])
+        faces_mod = [m for m in st["modules"] if m["id"] == "faces"][0]
+        self.assertEqual([e["id"] for e in faces_mod["model_options"]], ["buffalo_s", "buffalo_l", "antelopev2"])
+        clip_mod = [m for m in st["modules"] if m["id"] == "clip"][0]
+        self.assertEqual([e["id"] for e in clip_mod["model_options"]], ["vit-b-32", "vit-b-16", "vit-l-14"])
+
+        with unittest.mock.patch.object(system_router, "_fetch_pypi_latest_version", return_value="99.0.0"):
+            upd = system_router.api_ai_check_updates()
+            self.assertTrue(upd["network_ok"])
+            self.assertIn("updates", upd)
+            self.assertGreaterEqual(upd["total_updates"], 1)
+
+        with self.assertRaises(system_router.HTTPException):
+            system_router.api_ai_action(system_router.AiActionPayload(module="invalid", action="verify"))
+        with self.assertRaises(system_router.HTTPException):
+            system_router.api_ai_action(system_router.AiActionPayload(module="faces", action="invalid"))
+
 
 if __name__ == "__main__":
     unittest.main()

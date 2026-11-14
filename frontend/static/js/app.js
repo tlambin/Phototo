@@ -8,7 +8,10 @@ let currentLightboxIndex = -1;
 let clientPausedTask = '';
 let lastSeenActiveTask = '';
 let latestPipelineState = {};
-let currentGpuMode = 'cuda';
+let currentGpuMode = 'auto';
+let currentOcrEngine = 'paddleocr';
+let currentFacesModel = 'buffalo_l';
+let currentClipModel = 'vit-b-32';
 let checkedDuplicatePaths = new Set();
 
 let openedAlbumName = null;
@@ -68,11 +71,11 @@ function toggleSidebarMini() {
 
 function selectGpuPill(mode) {
     currentGpuMode = mode;
-    ['cuda', 'directml', 'cpu'].forEach(g => {
+    ['auto', 'cuda', 'directml', 'cpu'].forEach(g => {
         const b = document.getElementById(`gpu-btn-${g}`);
         if (b) b.classList.toggle('nav-item-active', g === mode);
     });
-    saveAppSettingsQuiet();
+    saveAppSettingsQuiet().then(() => loadHardwareInfo(false));
 }
 
 // ==================== FORMATAGE DATES & DURÉES VIDÉO ====================
@@ -521,11 +524,324 @@ async function loadAppSettings() {
     document.getElementById('settings-takeout-dir').value = d.takeout_extract_dir || '';
     document.getElementById('settings-timezone').value = d.timezone || 'Europe/Paris';
     document.getElementById('settings-lang').value = d.language || 'fr';
-    currentGpuMode = d.gpu_mode || 'cuda';
-    ['cuda', 'directml', 'cpu'].forEach(g => {
+    currentGpuMode = d.gpu_mode || 'auto';
+    currentOcrEngine = d.ocr_engine || 'paddleocr';
+    currentFacesModel = d.faces_model || 'buffalo_l';
+    currentClipModel = d.clip_model || 'vit-b-32';
+    ['auto', 'cuda', 'directml', 'cpu'].forEach(g => {
         const b = document.getElementById(`gpu-btn-${g}`);
         if (b) b.classList.toggle('nav-item-active', g === currentGpuMode);
     });
+    loadHardwareInfo(false);
+    loadAiModulesStatus();
+}
+
+function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+async function loadHardwareInfo(refresh = false) {
+    const box = document.getElementById('hardware-specs-box');
+    if (!box) return;
+    try {
+        const res = await fetch(`/api/hardware?refresh=${refresh ? 'true' : 'false'}`);
+        if (!res.ok) {
+            box.textContent = `Détection indisponible (HTTP ${res.status}).`;
+            return;
+        }
+        const d = await res.json();
+        const hw = d.hardware || {};
+        const rt = d.runtime || {};
+        const vramTxt = hw.vram_gb ? ` · ${hw.vram_gb} Go VRAM` : '';
+        const tierBadge = hw.power_tier === 'Élevée'
+            ? 'bg-emerald-500/20 text-emerald-300'
+            : (hw.power_tier === 'Moyenne' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 opacity-85');
+        box.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                    <div class="opacity-60 text-[11px] font-bold">Processeur</div>
+                    <div class="font-extrabold mt-0.5">${hw.cpu_cores || '?'} cœurs · ${escapeHtml(hw.os || '')}</div>
+                </div>
+                <div>
+                    <div class="opacity-60 text-[11px] font-bold">Mémoire RAM</div>
+                    <div class="font-extrabold mt-0.5">${hw.ram_total_gb ? hw.ram_total_gb + ' Go' : 'Inconnue'}</div>
+                </div>
+                <div>
+                    <div class="opacity-60 text-[11px] font-bold">Carte Graphique</div>
+                    <div class="font-extrabold mt-0.5 leading-snug" title="${escapeHtml(hw.gpu_name || '')}">${escapeHtml(hw.gpu_name || 'Inconnue')}${vramTxt}</div>
+                </div>
+                <div>
+                    <div class="opacity-60 text-[11px] font-bold">Profil détecté</div>
+                    <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${tierBadge}">Puissance ${escapeHtml(hw.power_tier || 'Standard')}</span>
+                        <span class="font-extrabold">${escapeHtml(hw.accel_label || 'CPU')} · ${hw.recommended_workers || 1} workers</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2 pt-2 border-t border-white/10 text-[11px] opacity-70">
+                Moteur actif : <b>${escapeHtml((rt.mode || 'cpu').toUpperCase())}</b>${rt.requested_mode === 'auto' ? ' (sélectionné automatiquement)' : ' (forcé manuellement)'}
+            </div>
+        `;
+    } catch (e) {
+        box.textContent = 'Impossible de détecter le matériel.';
+    }
+}
+
+let _aiTaskPollTimer = null;
+let _aiModulesCache = [];
+let _aiUpdatesCache = null;
+let _aiUpdatesSummary = null;
+
+async function loadAiModulesStatus() {
+    const listEl = document.getElementById('ai-modules-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/ai/status');
+        if (!res.ok) return;
+        const d = await res.json();
+        _aiModulesCache = d.modules || [];
+        renderAiModulesList(_aiModulesCache, d.task || {});
+        if (d.task && d.task.running) {
+            updateAiLogBox(d.task);
+            startAiTaskPolling();
+        }
+    } catch (e) {
+        listEl.innerHTML = `<div class="ui-pill rounded-2xl p-4 text-xs text-rose-400">Impossible de vérifier l'état de l'IA locale.</div>`;
+    }
+}
+
+async function checkAiUpdates() {
+    const btn = document.getElementById('ai-check-updates-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Recherche...';
+    }
+    try {
+        const res = await fetch('/api/ai/check_updates');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const d = await res.json();
+        _aiUpdatesCache = d.updates || {};
+        _aiUpdatesSummary = {
+            network_ok: !!d.network_ok,
+            total_updates: d.total_updates || 0,
+            checked_at: d.checked_at || '',
+        };
+        renderAiModulesList(_aiModulesCache, {});
+    } catch (e) {
+        _aiUpdatesSummary = { network_ok: false, total_updates: 0, checked_at: '', error: true };
+        renderAiModulesList(_aiModulesCache, {});
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔍 Rechercher des MÀJ';
+        }
+    }
+}
+
+function renderAiSummaryBar(modules) {
+    const bar = document.getElementById('ai-summary-bar');
+    if (!bar) return;
+    if (!modules || !modules.length) {
+        bar.classList.add('hidden');
+        return;
+    }
+    bar.classList.remove('hidden');
+    const readyCount = modules.filter(m => m.status === 'ready').length;
+    const totalMb = modules.reduce((acc, m) => acc + (Number(m.cache_size_mb) || 0), 0);
+    const cacheTxt = totalMb >= 1024 ? `${(totalMb / 1024).toFixed(2)} Go` : `${totalMb.toFixed(1)} Mo`;
+
+    let updHtml = `<span class="opacity-65">Mises à jour non vérifiées</span>`;
+    if (_aiUpdatesSummary) {
+        if (_aiUpdatesSummary.error || !_aiUpdatesSummary.network_ok) {
+            updHtml = `<span class="text-rose-400 font-bold">PyPI inaccessible (hors-ligne)</span>`;
+        } else if (_aiUpdatesSummary.total_updates === 0) {
+            updHtml = `<span class="text-emerald-400 font-bold">✓ Tout est à jour (${escapeHtml(_aiUpdatesSummary.checked_at)})</span>`;
+        } else {
+            updHtml = `<span class="text-sky-400 font-bold">⬆ ${_aiUpdatesSummary.total_updates} module(s) à mettre à jour (${escapeHtml(_aiUpdatesSummary.checked_at)})</span>`;
+        }
+    }
+
+    bar.innerHTML = `
+        <div class="flex flex-wrap items-center gap-4">
+            <span class="font-extrabold">${readyCount}/${modules.length} modules prêts</span>
+            <span class="opacity-40">|</span>
+            <span>Stockage modèles : <b>${cacheTxt}</b></span>
+            <span class="opacity-40">|</span>
+            ${updHtml}
+        </div>
+        ${(_aiUpdatesSummary && _aiUpdatesSummary.total_updates > 0)
+            ? `<button type="button" onclick="runAiModuleAction('all', 'update')" class="plum-btn px-3.5 py-1.5 rounded-full text-[11px] font-bold shadow-sm transition">Tout mettre à jour</button>`
+            : ''}
+    `;
+}
+
+function renderAiModulesList(modules, task) {
+    const listEl = document.getElementById('ai-modules-list');
+    if (!listEl) return;
+    const isBusy = !!(task && task.running);
+    renderAiSummaryBar(modules);
+
+    const icons = { faces: '👤', clip: '✨', ocr: '📝' };
+
+    listEl.innerHTML = modules.map(m => {
+        let badgeCls = 'bg-zinc-500/20 text-zinc-400';
+        let badgeTxt = 'Non installé';
+        if (m.status === 'ready') {
+            badgeCls = 'bg-emerald-500/20 text-emerald-400';
+            badgeTxt = 'Installé & prêt';
+        } else if (m.status === 'partial') {
+            badgeCls = 'bg-amber-500/20 text-amber-400';
+            badgeTxt = 'Modèle à télécharger';
+        }
+
+        const modUpd = (_aiUpdatesCache && _aiUpdatesCache[m.id]) || null;
+        const updBadge = (modUpd && modUpd.has_update)
+            ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/20 text-sky-400">⬆ MÀJ dispo</span>`
+            : '';
+
+        const devLabel = m.device_label || 'CPU';
+        const isGpu = devLabel.toUpperCase().includes('GPU');
+        const devBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isGpu ? 'bg-violet-500/20 text-violet-300' : 'bg-white/10 opacity-75'}">${isGpu ? '⚡' : '🖥'} ${escapeHtml(devLabel)}</span>`;
+        const cacheBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 opacity-80">💾 ${m.model_cached ? m.cache_size_mb + ' Mo' : '0 Mo'}</span>`;
+
+        const pkgPills = Object.entries(m.packages || {}).map(([pkg, ver]) => {
+            const ok = !!ver;
+            const pUpd = modUpd && modUpd.packages && modUpd.packages[pkg];
+            const latestTxt = (pUpd && pUpd.update_available && pUpd.latest) ? ` → v${pUpd.latest}` : '';
+            return `<span class="px-2.5 py-1 rounded-xl text-[10px] font-mono ${ok ? 'bg-black/15 dark:bg-white/5 border border-white/10' : 'bg-rose-500/15 text-rose-400'}">${pkg}${ver ? ' v' + ver : ' (absent)'}${latestTxt ? `<b class="text-sky-400">${latestTxt}</b>` : ''}</span>`;
+        }).join('');
+
+        const disAttr = isBusy ? 'disabled opacity-50 pointer-events-none' : '';
+        const modelOptions = Array.isArray(m.model_options) ? m.model_options : [];
+        const modelSelector = modelOptions.length > 0
+            ? `<div class="flex flex-wrap items-center gap-2 pt-1">
+                <span class="text-[11px] font-bold opacity-60">${m.id === 'ocr' ? 'Moteur :' : 'Modèle :'}</span>
+                ${modelOptions.map(opt => {
+                    const active = opt.id === m.selected_model;
+                    const cachedDot = opt.cached ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5" title="Présent en local"></span>' : '';
+                    return `<button type="button" onclick="selectAiModuleModel('${m.id}', '${opt.id}')" title="${escapeHtml(opt.description || '')}"
+                        class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center ${active ? 'nav-item-active shadow-sm' : 'ui-card opacity-80 hover:opacity-100'} ${disAttr}">${cachedDot}${escapeHtml(opt.label)}</button>`;
+                }).join('')}
+               </div>`
+            : '';
+
+        return `
+        <div class="ui-pill rounded-2xl p-5 space-y-3">
+            <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                <div class="space-y-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-base">${icons[m.id] || '🤖'}</span>
+                        <span class="text-sm font-extrabold">${escapeHtml(m.name)}</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${badgeCls}">${badgeTxt}</span>
+                        ${devBadge}
+                        ${cacheBadge}
+                        ${updBadge}
+                    </div>
+                    <p class="text-xs opacity-70 pl-6">${escapeHtml(m.description)}</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 shrink-0 pl-6 lg:pl-0">
+                    <button type="button" onclick="runAiModuleAction('${m.id}', 'verify')"
+                            class="ui-card px-3.5 py-1.5 rounded-full text-xs font-bold hover:opacity-85 transition ${disAttr}">Vérifier</button>
+                    ${m.status === 'not_installed'
+                        ? `<button type="button" onclick="runAiModuleAction('${m.id}', 'install')" title="Installe les packages et télécharge le modèle sélectionné"
+                                   class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold shadow-sm transition ${disAttr}">Installer</button>`
+                        : m.status === 'partial'
+                        ? `<button type="button" onclick="runAiModuleAction('${m.id}', 'install')" title="Télécharge le modèle sélectionné en local"
+                                   class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold shadow-sm transition ${disAttr}">Télécharger le modèle</button>
+                           <button type="button" onclick="confirmUninstallAiModule(this, '${m.id}')"
+                                   class="bg-rose-600/85 hover:bg-rose-600 text-white px-3.5 py-1.5 rounded-full text-xs font-bold transition ${disAttr}">Désinstaller</button>`
+                        : `${(modUpd && modUpd.has_update)
+                            ? `<button type="button" onclick="runAiModuleAction('${m.id}', 'update')" title="Met à jour les packages Python du module vers la dernière version"
+                                       class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold shadow-sm transition ${disAttr}">⬆ Mettre à jour</button>`
+                            : ''}
+                           <button type="button" onclick="confirmUninstallAiModule(this, '${m.id}')"
+                                   class="bg-rose-600/85 hover:bg-rose-600 text-white px-3.5 py-1.5 rounded-full text-xs font-bold transition ${disAttr}">Désinstaller</button>`
+                    }
+                </div>
+            </div>
+            <div class="pl-6 space-y-2.5 pt-1 border-t border-white/10">
+                ${modelSelector}
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-[10px] font-bold uppercase tracking-wider opacity-45 mr-1">Packages</span>
+                    ${pkgPills}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function confirmUninstallAiModule(btn, moduleId) {
+    if (btn.dataset.armed === '1') {
+        btn.dataset.armed = '';
+        runAiModuleAction(moduleId, 'uninstall');
+        return;
+    }
+    btn.dataset.armed = '1';
+    const orig = btn.textContent;
+    btn.textContent = 'Confirmer ?';
+    setTimeout(() => {
+        if (btn && btn.dataset.armed === '1') {
+            btn.dataset.armed = '';
+            btn.textContent = orig;
+        }
+    }, 4000);
+}
+
+function updateAiLogBox(task) {
+    const box = document.getElementById('ai-task-log-box');
+    const lbl = document.getElementById('ai-task-status-label');
+    const pre = document.getElementById('ai-task-log-content');
+    if (!box || !lbl || !pre) return;
+    box.classList.remove('hidden');
+    if (task.running) {
+        lbl.textContent = `⏳ Opération '${task.action}' sur '${task.module}' en cours...`;
+    } else if (task.success === true) {
+        lbl.textContent = `✓ Opération '${task.action}' sur '${task.module}' réussie`;
+    } else if (task.success === false) {
+        lbl.textContent = `⚠ Opération '${task.action}' sur '${task.module}' terminée avec avertissements`;
+    }
+    pre.textContent = (task.logs || []).join('\n');
+    pre.scrollTop = pre.scrollHeight;
+}
+
+function startAiTaskPolling() {
+    if (_aiTaskPollTimer) return;
+    _aiTaskPollTimer = setInterval(async () => {
+        try {
+            const res = await fetch('/api/ai/task_status');
+            if (!res.ok) return;
+            const t = await res.json();
+            updateAiLogBox(t);
+            if (!t.running) {
+                clearInterval(_aiTaskPollTimer);
+                _aiTaskPollTimer = null;
+                await loadAiModulesStatus();
+            }
+        } catch (e) {}
+    }, 1000);
+}
+
+async function runAiModuleAction(moduleId, action) {
+    const res = await fetch('/api/ai/action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({module: moduleId, action: action})
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        updateAiLogBox({ running: false, action, module: moduleId, success: false, logs: [err.detail || "Erreur lors du lancement de l'opération."] });
+        return;
+    }
+    updateAiLogBox({ running: true, action, module: moduleId, logs: [`Démarrage de '${action}' sur '${moduleId}'...`] });
+    startAiTaskPolling();
+}
+
+async function selectAiModuleModel(moduleId, modelId) {
+    if (moduleId === 'ocr') currentOcrEngine = modelId;
+    else if (moduleId === 'faces') currentFacesModel = modelId;
+    else if (moduleId === 'clip') currentClipModel = modelId;
+    await saveAppSettingsQuiet();
+    await loadAiModulesStatus();
 }
 
 async function saveAppSettingsQuiet() {
@@ -536,7 +852,10 @@ async function saveAppSettingsQuiet() {
             takeout_extract_dir: document.getElementById('settings-takeout-dir').value,
             timezone: document.getElementById('settings-timezone').value,
             language: document.getElementById('settings-lang').value || 'fr',
-            gpu_mode: currentGpuMode
+            gpu_mode: currentGpuMode,
+            ocr_engine: currentOcrEngine,
+            faces_model: currentFacesModel,
+            clip_model: currentClipModel
         })
     });
 }

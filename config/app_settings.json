@@ -3,5 +3,8 @@
     "takeout_extract_dir": "",
     "timezone": "Europe/Paris",
     "language": "fr",
-    "gpu_mode": "cuda"
+    "gpu_mode": "auto",
+    "ocr_engine": "paddleocr",
+    "faces_model": "buffalo_l",
+    "clip_model": "vit-b-32"
 }
