@@ -176,12 +176,27 @@ class TestApiRoutes(unittest.TestCase):
     def test_smart_categories_and_animated_summary(self):
         img = self.dest_dir / "photo.jpg"
         gif = self.dest_dir / "anim.gif"
+        apng = self.dest_dir / "anim.apng"
+        webp_anim = self.dest_dir / "anim.webp"
+        motion_jpg = self.dest_dir / "motion.jpg"
+        live_jpg = self.dest_dir / "IMG_100.jpg"
+        live_mov = self.dest_dir / "IMG_100.mov"
         vid = self.dest_dir / "clip.mp4"
-        for f in (img, gif, vid):
-            f.write_bytes(b"data")
+
+        img.write_bytes(b"plain-jpeg")
+        gif.write_bytes(b"GIF89a")
+        apng.write_bytes(b"apng-data")
+        webp_anim.write_bytes(b"RIFF\x00\x00\x00\x00WEBPVP8XANIM")
+        motion_jpg.write_bytes(b"\xff\xd8\xff\xe1GCamera:MotionPhoto=\"1\"")
+        live_jpg.write_bytes(b"live-still")
+        live_mov.write_bytes(b"live-mov")
+        vid.write_bytes(b"mp4-data")
 
         conn = database.get_db()
-        for src, dst in [("sp1", img), ("sp2", gif), ("sp3", vid)]:
+        for src, dst in [
+            ("sp1", img), ("sp2", gif), ("sp3", apng), ("sp4", webp_anim),
+            ("sp5", motion_jpg), ("sp6", live_jpg), ("sp7", live_mov), ("sp8", vid),
+        ]:
             conn.execute(
                 "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', 1700000000, 100, 0, 0)",
                 (src, str(dst), str(dst)),
@@ -191,8 +206,11 @@ class TestApiRoutes(unittest.TestCase):
 
         summary = gallery_router.api_types_summary()
         self.assertEqual(summary["categories"]["PHOTOS"]["count"], 1)
-        self.assertEqual(summary["categories"]["ANIMATED"]["count"], 1)
-        self.assertEqual(summary["categories"]["VIDEOS"]["count"], 1)
+        self.assertEqual(summary["categories"]["ANIMATED"]["count"], 5)
+        self.assertEqual(summary["categories"]["VIDEOS"]["count"], 2)
+
+        anim_items = gallery_router.api_gallery_items(media_type="ANIMATED")
+        self.assertEqual({it["source_path"] for it in anim_items["items"]}, {"sp2", "sp3", "sp4", "sp5", "sp6"})
 
         cats = gallery_router.api_categories_list()["categories"]
         self.assertEqual(cats, [])
@@ -405,6 +423,694 @@ class TestApiRoutes(unittest.TestCase):
             system_router.api_ai_action(system_router.AiActionPayload(module="invalid", action="verify"))
         with self.assertRaises(system_router.HTTPException):
             system_router.api_ai_action(system_router.AiActionPayload(module="faces", action="invalid"))
+
+    def test_inspect_metadata_with_binary_clip_embedding(self):
+        from fastapi.encoders import jsonable_encoder
+        import metadata_studio_router
+
+        img = self.dest_dir / "analyzed.jpg"
+        img.write_bytes(b"fake-jpg")
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, clip_embedding, clip_scanned, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', 1700000000, 8, ?, 1, 0, 0)",
+            ("src_analyzed", str(img), str(img), b"\xff\xfe\x80\x00\x9a\xbc"),
+        )
+        conn.commit()
+        conn.close()
+
+        res = metadata_studio_router.api_inspect_metadata("src_analyzed")
+        encoded = jsonable_encoder(res)
+        self.assertEqual(encoded["source_path"], "src_analyzed")
+        self.assertNotIn("clip_embedding", encoded)
+
+
+    def test_analyze_single_media_faces_detects_and_rescans(self):
+        import numpy as np
+        from PIL import Image
+        import metadata_studio_router
+        import settings_manager
+
+        img_path = self.dest_dir / "face_test.jpg"
+        Image.new("RGB", (320, 320), color=(200, 180, 160)).save(img_path, format="JPEG")
+
+        conn = database.get_db()
+        conn.execute(
+            """
+            INSERT INTO processed_files (source_path, dest_path, timestamp, faces_scanned)
+            VALUES (?, ?, ?, ?)
+            """,
+            (str(img_path), str(img_path), 1700000000, 1),
+        )
+        conn.commit()
+        conn.close()
+
+        class _FakeFace:
+            def __init__(self):
+                self.bbox = np.array([40, 40, 180, 180], dtype=np.float32)
+                self.det_score = 0.96
+                vec = np.ones(512, dtype=np.float32)
+                self.normed_embedding = vec / np.linalg.norm(vec)
+
+        class _FakeFaceAnalysis:
+            def __init__(self, **kwargs):
+                pass
+
+            def prepare(self, **kwargs):
+                pass
+
+            def get(self, img):
+                return [_FakeFace()]
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(settings_manager, "get_hardware_runtime_config", return_value={"onnx_providers": ["CPUExecutionProvider"], "onnx_ctx_id": -1}), \
+             patch("insightface.app.FaceAnalysis", _FakeFaceAnalysis):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(
+                    source_path=str(img_path),
+                    run_faces=True,
+                    run_visual=False,
+                )
+            )
+
+        self.assertEqual(res["status"], "ok")
+        self.assertIsNone(res["faces_error"])
+        self.assertEqual(len(res["faces"]), 1)
+        self.assertIsNotNone(res["faces"][0]["person_id"])
+        self.assertTrue(Path(res["faces"][0]["thumb_path"]).exists())
+
+    def test_analyze_single_media_visual_uses_en_prompts_and_handles_dim_mismatch(self):
+        import numpy as np
+        from PIL import Image
+        import metadata_studio_router
+        import settings_manager
+        import indexeur_semantique_gps as clip_gps_ai
+
+        img_path = self.dest_dir / "visual_test.jpg"
+        Image.new("RGB", (240, 240), color=(90, 140, 200)).save(img_path, format="JPEG")
+
+        # Stocke un ancien embedding 512d incompatible avec vit-l-14 (768d)
+        stale_512 = np.ones(512, dtype=np.float16).tobytes()
+        conn = database.get_db()
+        clip_gps_ai.upgrade_db_for_clip_and_gps(conn)
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, clip_embedding, clip_scanned) VALUES (?, ?, ?, ?, 1)",
+            (str(img_path), str(img_path), 1700000000, stale_512),
+        )
+        conn.commit()
+        conn.close()
+
+        captured_prompts = []
+
+        class _FakeVision:
+            def encode(self, items, **kwargs):
+                vec = np.zeros(768, dtype=np.float32)
+                vec[0] = 1.0
+                return np.tile(vec, (len(items), 1))
+
+        class _FakeText:
+            def encode(self, prompts, **kwargs):
+                captured_prompts.extend(prompts)
+                out = np.zeros((len(prompts), 768), dtype=np.float32)
+                for idx, p in enumerate(prompts):
+                    if "portrait face" in p:
+                        out[idx, 0] = 0.21
+                    else:
+                        out[idx, 0] = 0.05
+                    out[idx, 1] = 0.9
+                return out
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(settings_manager, "load_settings", return_value={"clip_model": "vit-l-14"}), \
+             patch.object(clip_gps_ai, "get_clip_models", return_value=(_FakeVision(), _FakeText())):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(
+                    source_path=str(img_path),
+                    run_faces=False,
+                    run_visual=True,
+                )
+            )
+
+        self.assertIsNone(res["visual_error"])
+        self.assertTrue(any("portrait face" in p for p in captured_prompts))
+        self.assertGreaterEqual(len(res["visual_candidates"]), 1)
+        self.assertEqual(res["visual_candidates"][0]["name"], "Portraits")
+        self.assertTrue(res["visual_candidates"][0]["confident"])
+
+        apply_res = metadata_studio_router.api_apply_media_categories(
+            metadata_studio_router.ApplyMediaCategoriesPayload(
+                source_path=str(img_path),
+                categories=[res["visual_candidates"][0]],
+            )
+        )
+        self.assertEqual(apply_res["status"], "ok")
+
+    def test_custom_french_category_auto_translates_to_english_for_clip(self):
+        import numpy as np
+        from PIL import Image
+        import metadata_studio_router
+        import settings_manager
+        import indexeur_semantique_gps as clip_gps_ai
+        import prompt_translator
+
+        prompt_translator._FR_EN_CACHE.clear()
+        created = gallery_router.api_categories_create(
+            gallery_router.SmartCategoryCreatePayload(name="Gâteau d'anniversaire", prompt="Gâteau d'anniversaire")
+        )
+        self.assertEqual(created["status"], "ok")
+
+        conn = database.get_db()
+        sc_row = conn.execute("SELECT name, prompt, prompt_en FROM smart_categories WHERE category_id = ?", (created["category_id"],)).fetchone()
+        conn.close()
+        self.assertIsNotNone(sc_row)
+        self.assertEqual(sc_row["name"], "Gâteau d'anniversaire")
+        self.assertIn("cake", sc_row["prompt_en"].lower())
+        self.assertIn("birthday", sc_row["prompt_en"].lower())
+
+        img_path = self.dest_dir / "cake_test.jpg"
+        Image.new("RGB", (200, 200), color=(255, 220, 180)).save(img_path, format="JPEG")
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp) VALUES (?, ?, ?)",
+            (str(img_path), str(img_path), 1700000000),
+        )
+        conn.commit()
+        conn.close()
+
+        seen_prompts = []
+
+        class _FakeVision:
+            def encode(self, items, **kwargs):
+                v = np.zeros(768, dtype=np.float32)
+                v[0] = 1.0
+                return np.tile(v, (len(items), 1))
+
+        class _FakeText:
+            def encode(self, prompts, **kwargs):
+                seen_prompts.extend(prompts)
+                out = np.zeros((len(prompts), 768), dtype=np.float32)
+                for idx, p in enumerate(prompts):
+                    if "cake" in p.lower() and "birthday" in p.lower():
+                        out[idx, 0] = 0.25
+                    else:
+                        out[idx, 0] = 0.02
+                return out
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(settings_manager, "load_settings", return_value={"clip_model": "vit-l-14"}), \
+             patch.object(clip_gps_ai, "get_clip_models", return_value=(_FakeVision(), _FakeText())):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(
+                    source_path=str(img_path),
+                    run_faces=False,
+                    run_visual=True,
+                )
+            )
+
+        self.assertIsNone(res["visual_error"])
+        self.assertEqual(res["visual_candidates"][0]["name"], "Gâteau d'anniversaire")
+        self.assertTrue(any("cake" in p.lower() and "birthday" in p.lower() for p in seen_prompts))
+
+    def test_extract_frames_exif_unicode_and_sensitive_second_pass(self):
+        import numpy as np
+        from PIL import Image
+        import metadata_studio_router
+        import settings_manager
+        from media_frames import extract_analysis_frames
+
+        unicode_img = self.dest_dir / "été_noël_giroudora.jpg"
+        im = Image.new("RGB", (400, 200), color=(120, 130, 140))
+        exif = im.getexif()
+        exif[274] = 6  # Orientation = 6 (rotation 90° CW -> devient 200x400 une fois redressée)
+        im.save(unicode_img, format="JPEG", exif=exif)
+
+        frames = extract_analysis_frames(str(unicode_img))
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0].shape[:2], (400, 200))
+
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, faces_scanned) VALUES (?, ?, ?, 0)",
+            (str(unicode_img), str(unicode_img), 1700000000),
+        )
+        conn.commit()
+        conn.close()
+
+        prepare_calls = []
+
+        class _LowScoreFace:
+            def __init__(self):
+                self.bbox = np.array([20, 20, 90, 90], dtype=np.float32)
+                self.det_score = 0.40
+                v = np.ones(512, dtype=np.float32)
+                self.normed_embedding = v / np.linalg.norm(v)
+
+        class _TwoPassFaceAnalysis:
+            def __init__(self, **kwargs):
+                self.det_size = (640, 640)
+
+            def prepare(self, **kwargs):
+                self.det_size = kwargs.get("det_size", (640, 640))
+                prepare_calls.append((self.det_size, kwargs.get("det_thresh")))
+
+            def get(self, img):
+                if self.det_size == (1024, 1024):
+                    return [_LowScoreFace()]
+                return []
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(settings_manager, "get_hardware_runtime_config", return_value={"onnx_providers": ["CPUExecutionProvider"], "onnx_ctx_id": -1}), \
+             patch("insightface.app.FaceAnalysis", _TwoPassFaceAnalysis):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(
+                    source_path=str(unicode_img),
+                    run_faces=True,
+                    run_visual=False,
+                )
+            )
+
+        self.assertIsNone(res["faces_error"])
+        self.assertEqual(len(res["faces"]), 1)
+        self.assertEqual(len(prepare_calls), 2)
+        self.assertEqual(prepare_calls[1][0], (1024, 1024))
+
+    def test_resolve_nested_antelopev2_layout_and_nonempty_bare_assertion_error(self):
+        import indexeur_visages as faces_ai
+        import metadata_studio_router
+        import settings_manager
+        from PIL import Image
+
+        fake_root = self.tmp_path / ".insightface"
+        nested = fake_root / "models" / "antelopev2" / "antelopev2"
+        nested.mkdir(parents=True, exist_ok=True)
+        (nested / "scrfd_10g_bnkps.onnx").write_bytes(b"det")
+        (nested / "glintr100.onnx").write_bytes(b"rec")
+
+        resolved = faces_ai.resolve_insightface_model_arg("antelopev2", root=fake_root)
+        self.assertEqual(resolved, "antelopev2")
+        self.assertTrue((fake_root / "models" / "antelopev2" / "scrfd_10g_bnkps.onnx").exists())
+        self.assertFalse(nested.exists())
+
+        img_path = self.dest_dir / "err_check.jpg"
+        Image.new("RGB", (120, 120), color=(10, 20, 30)).save(img_path, format="JPEG")
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp) VALUES (?, ?, ?)",
+            (str(img_path), str(img_path), 1700000000),
+        )
+        conn.commit()
+        conn.close()
+
+        class _BrokenFA:
+            def __init__(self, **kwargs):
+                raise AssertionError()
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(settings_manager, "get_hardware_runtime_config", return_value={"onnx_providers": ["CPUExecutionProvider"], "onnx_ctx_id": -1}), \
+             patch("insightface.app.FaceAnalysis", _BrokenFA):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(source_path=str(img_path), run_faces=True, run_visual=False)
+            )
+        self.assertEqual(res["faces_error"], "AssertionError")
+
+    def test_paddle_ocr_v3_and_v2_output_parsing(self):
+        import indexeur_ocr as ocr_ai
+
+        class _V3Engine:
+            def predict(self, img):
+                return [{"rec_texts": ["FACTURE", "2026"], "rec_scores": [0.98, 0.95]}]
+
+        class _V2Engine:
+            def ocr(self, img):
+                return [[[[[0, 0], [10, 0], [10, 10], [0, 10]], ("BONJOUR", 0.91)]]]
+
+        self.assertEqual(
+            ocr_ai.run_paddle_ocr_image(_V3Engine(), None),
+            [("FACTURE", 0.98), ("2026", 0.95)],
+        )
+        self.assertEqual(
+            ocr_ai.run_paddle_ocr_image(_V2Engine(), None),
+            [("BONJOUR", 0.91)],
+        )
+
+    def test_model_mismatch_detection_and_selective_reindex(self):
+        import numpy as np
+        import indexeur_semantique_gps as clip_gps_ai
+
+        conn = database.get_db()
+        clip_gps_ai.upgrade_db_for_clip_and_gps(conn)
+        emb512 = np.ones(512, dtype=np.float16).tobytes()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, clip_scanned, clip_embedding, clip_model, faces_scanned, faces_model) VALUES (?, ?, ?, 1, ?, 'vit-b-32', 1, 'buffalo_l')",
+            ("s1.jpg", "d1.jpg", 1700000000, emb512),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, clip_scanned, clip_embedding, clip_model, faces_scanned, faces_model) VALUES (?, ?, ?, 1, ?, 'vit-l-14', 1, 'antelopev2')",
+            ("s2.jpg", "d2.jpg", 1700000001, np.ones(768, dtype=np.float16).tobytes()),
+        )
+        conn.commit()
+        conn.close()
+
+        mm_clip = system_router.api_ai_model_mismatch("clip", "vit-l-14", prev_model="vit-b-32")
+        self.assertEqual(mm_clip["stale_count"], 1)
+
+        mm_faces = system_router.api_ai_model_mismatch("faces", "antelopev2", prev_model="buffalo_l")
+        self.assertEqual(mm_faces["stale_count"], 1)
+
+        with patch.object(system_router, "_active_clip_model", return_value="vit-l-14"), \
+             patch.object(system_router, "start_specific_task", return_value={"status": "started", "task": "CLIP"}) as mock_start:
+            res = system_router.api_ai_reindex_model(system_router.ReindexModelPayload(module_id="clip", include_unknown=False))
+            self.assertEqual(res["task"], "CLIP")
+            mock_start.assert_called_once_with("CLIP")
+
+        conn = database.get_db()
+        rows = {r["source_path"]: dict(r) for r in conn.execute("SELECT source_path, clip_scanned, clip_model FROM processed_files").fetchall()}
+        conn.close()
+        self.assertEqual(rows["s1.jpg"]["clip_scanned"], 0)
+        self.assertIsNone(rows["s1.jpg"]["clip_model"])
+        self.assertEqual(rows["s2.jpg"]["clip_scanned"], 1)
+        self.assertEqual(rows["s2.jpg"]["clip_model"], "vit-l-14")
+
+    def test_faces_reindex_preserves_named_persons_and_manual_faces(self):
+        import numpy as np
+        import indexeur_visages as faces_ai
+
+        conn = database.get_db()
+        faces_ai.init_face_tables(conn)
+        emb_old = np.ones(512, dtype=np.float32).tobytes()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, faces_scanned, faces_model) VALUES ('p1.jpg', 'd1.jpg', 1700000000, 1, 'buffalo_l')"
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, timestamp, faces_scanned, faces_model) VALUES ('p2.jpg', 'd2.jpg', 1700000001, 1, 'buffalo_l')"
+        )
+        cur = conn.cursor()
+        cur.execute("INSERT INTO persons (name, face_count) VALUES ('Thomas', 1)")
+        pid_thomas = cur.lastrowid
+        cur.execute("INSERT INTO persons (name, face_count) VALUES ('Marie', 1)")
+        pid_marie = cur.lastrowid
+        cur.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, person_id) VALUES ('p1.jpg', 'd1.jpg', 1700000000, '50,50,180,180', 0.95, ?, ?)",
+            (emb_old, pid_thomas),
+        )
+        cur.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, person_id) VALUES ('p2.jpg', 'd2.jpg', 1700000001, '10,10,90,90', 1.0, NULL, ?)",
+            (pid_marie,),
+        )
+        conn.commit()
+        conn.close()
+
+        with patch.object(system_router, "start_specific_task", return_value={"status": "started", "task": "FACES"}):
+            res = system_router.api_ai_reindex_model(system_router.ReindexModelPayload(module_id="faces"))
+        self.assertEqual(res["task"], "FACES")
+
+        conn = database.get_db()
+        # Le visage manuel de Marie (embedding NULL) est préservé, Thomas est dans face_name_hints
+        manual_left = conn.execute("SELECT COUNT(*) FROM faces WHERE embedding IS NULL").fetchone()[0]
+        self.assertEqual(manual_left, 1)
+        hints = conn.execute("SELECT source_path, person_name FROM face_name_hints").fetchall()
+        self.assertEqual([(h[0], h[1]) for h in hints], [("p1.jpg", "Thomas")])
+
+        # Simulation de re-détection avec un nouveau modèle sur p1.jpg et p2.jpg (légèrement décalé)
+        v1 = np.zeros(512, dtype=np.float32); v1[0] = 1.0
+        v2 = np.zeros(512, dtype=np.float32); v2[1] = 1.0
+        conn.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding) VALUES ('p1.jpg', 'd1.jpg', 1700000000, '54,52,184,182', 0.92, ?)",
+            (v1.tobytes(),),
+        )
+        conn.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding) VALUES ('p2.jpg', 'd2.jpg', 1700000001, '200,200,280,280', 0.90, ?)",
+            (v2.tobytes(),),
+        )
+        conn.commit()
+
+        restored = faces_ai.apply_face_name_hints(conn)
+        self.assertEqual(restored, 1)
+        faces_ai.run_face_clustering(conn)
+
+        names_by_src = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT f.source_path, p.name FROM faces f JOIN persons p ON f.person_id = p.person_id WHERE f.embedding IS NOT NULL"
+            ).fetchall()
+        }
+        marie_cnt = conn.execute("SELECT COUNT(*) FROM persons WHERE name = 'Marie'").fetchone()[0]
+        conn.close()
+        self.assertEqual(names_by_src.get("p1.jpg"), "Thomas")
+        self.assertEqual(marie_cnt, 1)
+
+    def test_lightbox_faces_and_categories_editor_routes_and_ui(self):
+        import types
+        import cv2
+        import numpy as np
+        import indexeur_visages as faces_ai
+        import indexeur_semantique_gps as clip_gps_ai
+        import metadata_studio_router
+
+        html = main.templates.get_template("index.html").render()
+        for snippet in (
+            "lb-faces-edit-modal",
+            "openLightboxFacesEditor()",
+            "openLightboxCategoriesEditor()",
+            "Refaire l'analyse",
+        ):
+            self.assertIn(snippet, html)
+
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        for js_fn in (
+            "function openLightboxSmartCategory(",
+            "function openLightboxCategoriesEditor(",
+            "async function openLightboxFacesEditor(",
+            "async function rerunLightboxFacesAnalysis(",
+        ):
+            self.assertIn(js_fn, gallery_js)
+
+        img_path = self.dest_dir / "photo.jpg"
+        cv2.imwrite(str(img_path), np.full((240, 240, 3), 128, dtype=np.uint8))
+
+        conn = database.get_db()
+        try:
+            faces_ai.init_face_tables(conn)
+            clip_gps_ai.upgrade_db_for_clip_and_gps(conn)
+            emb_old = np.ones(512, dtype=np.float32)
+            emb_old = emb_old / np.linalg.norm(emb_old)
+
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, faces_scanned, faces_model) VALUES (?, ?, ?, 1, 'buffalo_l')",
+                ("p_lb.jpg", "photo.jpg", 1700000100),
+            )
+            cur = conn.cursor()
+            cur.execute("INSERT INTO persons (name, face_count) VALUES ('Thomas', 1)")
+            pid_thomas = cur.lastrowid
+            cur.execute("INSERT INTO persons (name, face_count) VALUES ('Marie', 1)")
+            pid_marie = cur.lastrowid
+            cur.execute(
+                "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, person_id) VALUES (?, ?, 1700000100, '10,10,80,80', 1.0, NULL, ?)",
+                ("p_lb.jpg", "photo.jpg", pid_marie),
+            )
+            cur.execute(
+                "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, person_id) VALUES (?, ?, 1700000100, '120,40,200,120', 0.95, ?, ?)",
+                ("p_lb.jpg", "photo.jpg", emb_old.astype(np.float32).tobytes(), pid_thomas),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        emb_new = np.zeros(512, dtype=np.float32)
+        emb_new[0] = 1.0
+        fake_faces = [
+            types.SimpleNamespace(bbox=np.array([12, 12, 82, 82]), det_score=0.98, normed_embedding=emb_new),
+            types.SimpleNamespace(bbox=np.array([122, 42, 202, 122]), det_score=0.94, normed_embedding=emb_new),
+        ]
+        fake_app = types.SimpleNamespace(get=lambda _img: fake_faces, prepare=lambda **_kw: None)
+
+        class _FakeTextModel:
+            def encode(self, prompts, **_kw):
+                out = np.zeros((len(prompts), 512), dtype=np.float32)
+                out[:, 0] = 1.0
+                return out
+
+        class _FakeVisionModel:
+            def encode(self, frames, **_kw):
+                out = np.zeros((len(frames), 512), dtype=np.float32)
+                out[:, 0] = 1.0
+                return out
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)), \
+             patch.object(metadata_studio_router, "resolve_actual_path", return_value=img_path), \
+             patch.object(faces_ai, "create_face_analysis", return_value=fake_app), \
+             patch.object(faces_ai, "save_face_thumbnail", return_value="thumb_test.jpg"), \
+             patch.object(clip_gps_ai, "get_clip_models", return_value=(_FakeVisionModel(), _FakeTextModel())):
+            res = metadata_studio_router.api_analyze_single_media(
+                metadata_studio_router.AnalyzeSingleMediaPayload(
+                    source_path="p_lb.jpg",
+                    run_faces=True,
+                    run_visual=True,
+                    force_faces=True,
+                )
+            )
+
+        self.assertIsNone(res["faces_error"])
+        self.assertIsNone(res["visual_error"])
+        self.assertGreater(len(res["visual_candidates"]), 0)
+
+        face_names = sorted(f["name"] for f in res["faces"])
+        self.assertEqual(face_names, ["Marie", "Thomas"])
+
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img_path):
+            inspected = metadata_studio_router.api_inspect_metadata(source_path="p_lb.jpg")
+        self.assertGreater(len(inspected["visual_suggestions"]), 0)
+        self.assertEqual(inspected["visual_suggestions"][0]["name"], res["visual_candidates"][0]["name"])
+
+    def test_lightbox_albums_card_and_editor(self):
+        import metadata_studio_router
+
+        html = main.templates.get_template("index.html").render()
+        for snippet in (
+            "lb-info-albums-card",
+            "lb-info-albums-list",
+            "lb-albums-edit-modal",
+            "lb-albums-edit-sort-by",
+            "lb-albums-edit-sort-dir-btn",
+            "lb-albums-edit-create-toggle",
+            "lb-albums-edit-create-box",
+            "lb-albums-edit-new-source-wrap",
+            "lb-albums-edit-new-source",
+            "onInputLightboxAlbumSearch",
+            "openLightboxAlbumsEditor()",
+        ):
+            self.assertIn(snippet, html)
+        self.assertNotIn("lb-albums-edit-new-parent", html)
+        self.assertNotIn("addLightboxMediaToAlbumFromInput", html)
+
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        for js_fn in (
+            "function _compareAlbumItems(",
+            "function onInputLightboxAlbumSearch(",
+            "function onChangeLightboxAlbumEditorSortBy(",
+            "function toggleLightboxAlbumEditorSortDir(",
+            "function toggleLightboxAlbumCreateBox(",
+            "function _populateLightboxAlbumCreateSourceSelect(",
+            "async function submitLightboxCreateAlbum(",
+            "function _renderLightboxAlbumRowHtml(",
+            "function toggleLightboxExtraAlbums(",
+            "lb-info-albums-extra",
+            "function _renderAlbumEditorTreeNodes(",
+            "function _renderLightboxSubalbumCreateBoxHtml(",
+            "function openLightboxSubalbumCreate(",
+            "async function submitLightboxSubalbumCreate(",
+            "+ Créer un sous-album",
+            "function toggleLightboxEditorSubalbums(",
+            "async function setLightboxPrimaryAlbum(",
+            "function openLightboxAlbum(",
+            "async function openLightboxAlbumsEditor(",
+            "async function addLightboxMediaToAlbum(",
+            "async function removeLightboxMediaFromAlbum(",
+            "async function setLightboxMediaAsAlbumCover(",
+        ):
+            self.assertIn(js_fn, gallery_js)
+
+        img1 = self.dest_dir / "a1.jpg"
+        img2 = self.dest_dir / "a2.jpg"
+        img1.write_bytes(b"img1")
+        img2.write_bytes(b"img2")
+
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp) VALUES (?, ?, ?)",
+                ("src_a1.jpg", "a1.jpg", 1700000100),
+            )
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp) VALUES (?, ?, ?)",
+                ("src_a2.jpg", "a2.jpg", 1700000200),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Ajouter src_a1.jpg à deux albums et définir a2.jpg comme couverture de Voyage
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg"], action="ALBUM_ADD", album_name="Voyage")
+        )
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg", "src_a2.jpg"], action="ALBUM_ADD", album_name="Famille")
+        )
+        albums_res = gallery_router.api_albums_list(flat=True)["all_albums"]
+        by_path = {a["full_path"]: a for a in albums_res}
+        gallery_router.api_set_album_cover(
+            gallery_router.SetAlbumCoverPayload(album_id=by_path["Famille"]["album_id"], cover_path="a2.jpg")
+        )
+
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img1):
+            inspected = metadata_studio_router.api_inspect_metadata(source_path="src_a1.jpg")
+        self.assertEqual([a["name"] for a in inspected["albums"]], ["Voyage", "Famille"])
+        albs = {a["name"]: a for a in inspected["albums"]}
+        self.assertEqual(albs["Voyage"]["cover_path"], "a1.jpg")
+        self.assertEqual(albs["Voyage"]["count"], 1)
+        self.assertEqual(albs["Famille"]["cover_path"], "a2.jpg")
+        self.assertEqual(albs["Famille"]["count"], 2)
+
+        # Ajout d'un sous-album : conserve l'ordre d'insertion après Famille
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg"], action="ALBUM_ADD", album_name="Voyage/Japon")
+        )
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img1):
+            inspected_sub = metadata_studio_router.api_inspect_metadata(source_path="src_a1.jpg")
+        self.assertEqual([a["name"] for a in inspected_sub["albums"]], ["Voyage", "Famille", "Voyage/Japon"])
+
+        # Définir Voyage/Japon comme album prioritaire affiché sur le média
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg"], action="ALBUM_SET_PRIMARY", album_name="Voyage/Japon")
+        )
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img1):
+            inspected_prio = metadata_studio_router.api_inspect_metadata(source_path="src_a1.jpg")
+        self.assertEqual([a["name"] for a in inspected_prio["albums"]], ["Voyage/Japon", "Voyage", "Famille"])
+
+        # Retirer src_a1.jpg de Voyage : Voyage n'a plus de média direct, son sous-album Voyage/Japon garde sa couverture explicite a2.jpg
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg"], action="ALBUM_REMOVE", album_name="Voyage")
+        )
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a2.jpg"], action="ALBUM_ADD", album_name="Voyage/Japon")
+        )
+        sub_row = next(a for a in gallery_router.api_albums_list(flat=True)["all_albums"] if a["full_path"] == "Voyage/Japon")
+        gallery_router.api_set_album_cover(
+            gallery_router.SetAlbumCoverPayload(album_id=sub_row["album_id"], cover_path="a2.jpg")
+        )
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img1):
+            inspected_sub2 = metadata_studio_router.api_inspect_metadata(source_path="src_a1.jpg")
+        sub_entry = next(a for a in inspected_sub2["albums"] if a["name"] == "Voyage/Japon")
+        self.assertEqual(sub_entry["cover_path"], "a2.jpg")
+        parent_row = next(a for a in gallery_router.api_albums_list(flat=True)["all_albums"] if a["full_path"] == "Voyage")
+        self.assertEqual(parent_row["cover_path"], "a2.jpg")
+
+        gallery_router.api_gallery_batch_action(
+            gallery_router.GalleryBatchActionPayload(source_paths=["src_a1.jpg"], action="ALBUM_REMOVE", album_name="Voyage/Japon")
+        )
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=img1):
+            inspected2 = metadata_studio_router.api_inspect_metadata(source_path="src_a1.jpg")
+        self.assertEqual([a["name"] for a in inspected2["albums"]], ["Famille"])
+
+        # Création d'un album racine avec choix du dossier source (multi-sources)
+        src1 = self.tmp_path / "src_a"
+        src2 = self.tmp_path / "src_b"
+        src1.mkdir(parents=True, exist_ok=True)
+        src2.mkdir(parents=True, exist_ok=True)
+        fake_cfg = {
+            "active_library": "TestLib",
+            "libraries": {"TestLib": {"source_paths": [str(src1), str(src2)], "dest_dir": str(self.dest_dir)}},
+        }
+        with patch.object(gallery_router, "load_libraries", return_value=fake_cfg):
+            created = gallery_router.api_create_album(
+                gallery_router.CreateAlbumPayload(name="MultiSourceRoot", parent_id=None, source_dir=str(src2))
+            )
+            self.assertEqual(created["album"]["parent_id"], None)
+            self.assertEqual(created["album"]["source_dir"], str(src2.resolve()))
+            self.assertTrue((src2 / "Albums" / "MultiSourceRoot").is_dir())
+            with self.assertRaises(gallery_router.HTTPException):
+                gallery_router.api_create_album(
+                    gallery_router.CreateAlbumPayload(name="BadSource", parent_id=None, source_dir=str(self.tmp_path / "other"))
+                )
 
 
 if __name__ == "__main__":

@@ -558,14 +558,17 @@ def run_step_faces(lib: dict):
     STATE.update_progress(0, total, unit="médias/s")
 
     if total > 0:
-        from insightface.app import FaceAnalysis
         import numpy as np
         hw = get_hardware_runtime_config()
         faces_model = str(load_settings().get("faces_model", "buffalo_l")).strip()
         if faces_model not in ("buffalo_s", "buffalo_l", "antelopev2"):
             faces_model = "buffalo_l"
-        app = FaceAnalysis(name=faces_model, allowed_modules=['detection', 'recognition'], providers=hw["onnx_providers"])
-        app.prepare(ctx_id=hw["onnx_ctx_id"], det_size=faces_ai.DET_SIZE)
+        app = faces_ai.create_face_analysis(
+            faces_model=faces_model,
+            providers=hw["onnx_providers"],
+            ctx_id=hw["onnx_ctx_id"],
+            det_size=faces_ai.DET_SIZE,
+        )
 
         from concurrent.futures import ThreadPoolExecutor
         workers = max(1, int(hw.get("recommended_workers", 4)))
@@ -598,26 +601,30 @@ def run_step_faces(lib: dict):
                         b = mf["bbox"]
                         faces_batch.append((src_path, dest_path, ts or 0, f"{b[0]},{b[1]},{b[2]},{b[3]}", mf["det_score"], mf["emb"].tobytes(), thumb))
 
-                    scanned_batch.append((src_path,))
+                    scanned_batch.append((faces_model, src_path))
 
                 if scanned_batch:
                     if faces_batch:
                         cur.executemany("INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)", faces_batch)
                         faces_batch.clear()
-                    cur.executemany("UPDATE processed_files SET faces_scanned = 1 WHERE source_path = ?", scanned_batch)
+                    cur.executemany("UPDATE processed_files SET faces_scanned = 1, faces_model = ? WHERE source_path = ?", scanned_batch)
                     conn.commit()
                     scanned_batch.clear()
+                    faces_ai.apply_face_name_hints(conn)
                     _assign_unclustered_faces_incremental(conn)
 
         if faces_batch:
             cur.executemany("INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)", faces_batch)
         if scanned_batch:
-            cur.executemany("UPDATE processed_files SET faces_scanned = 1 WHERE source_path = ?", scanned_batch)
+            cur.executemany("UPDATE processed_files SET faces_scanned = 1, faces_model = ? WHERE source_path = ?", scanned_batch)
         conn.commit()
 
+    faces_ai.apply_face_name_hints(conn)
     _assign_unclustered_faces_incremental(conn)
     if not STATE.stop_requested:
         faces_ai.run_face_clustering(conn)
+        cur.execute("DELETE FROM face_name_hints WHERE source_path IN (SELECT source_path FROM processed_files WHERE faces_scanned = 1)")
+        conn.commit()
     conn.close()
 
 
@@ -663,24 +670,8 @@ def run_step_ocr(lib: dict):
                     return [(item[1], float(item[2])) for item in (res or []) if len(item) >= 3]
                 return _run_easy
 
-            try:
-                import torch  # noqa: F401 - charger torch avant paddle sous Windows (évite conflit shm.dll)
-            except Exception:
-                pass
-            from paddleocr import PaddleOCR
-            try:
-                eng = PaddleOCR(
-                    use_angle_cls=True, lang=lang_cfg,
-                    use_gpu=hw["paddle_use_gpu"], enable_mkldnn=hw["paddle_enable_mkldnn"], show_log=False
-                )
-            except (TypeError, ValueError):
-                eng = PaddleOCR(lang=lang_cfg)
-            def _run_paddle(img):
-                res = eng.ocr(img, cls=True)
-                if not res or not res[0]:
-                    return []
-                return [(line[1][0], float(line[1][1])) for line in res[0] if line and len(line) >= 2]
-            return _run_paddle
+            eng = ocr_ai.create_paddle_ocr_engine(lang=lang_cfg, prefer_gpu=bool(hw.get("paddle_use_gpu")))
+            return lambda img: ocr_ai.run_paddle_ocr_image(eng, img)
 
         from concurrent.futures import ThreadPoolExecutor
         workers = max(1, int(hw.get("recommended_workers", 4)))
@@ -760,6 +751,7 @@ def run_step_clip(lib: dict):
         workers = max(1, int(hw.get("recommended_workers", 4)))
         chunk_size = 64 if hw.get("torch_device") == "cuda" else 24
         encode_bs = 128 if hw.get("torch_device") == "cuda" else 32
+        clip_key = str(load_settings().get("clip_model", "vit-b-32")).strip().lower()
         vision_model, _ = clip_gps_ai.get_clip_models()
         done = 0
 
@@ -792,12 +784,12 @@ def run_step_clip(lib: dict):
                         norm = np.linalg.norm(m_emb)
                         if norm > 0:
                             m_emb = m_emb / norm
-                        updates.append((m_emb.astype(np.float16).tobytes(), 1, src_s))
+                        updates.append((m_emb.astype(np.float16).tobytes(), 1, clip_key, src_s))
 
                 if updates:
-                    cur.executemany("UPDATE processed_files SET clip_embedding=?, clip_scanned=? WHERE source_path=?", updates)
+                    cur.executemany("UPDATE processed_files SET clip_embedding=?, clip_scanned=?, clip_model=? WHERE source_path=?", updates)
                 if failed:
-                    cur.executemany("UPDATE processed_files SET clip_scanned=1 WHERE source_path=?", failed)
+                    cur.executemany("UPDATE processed_files SET clip_scanned=1, clip_model=? WHERE source_path=?", [(clip_key, s[0]) for s in failed])
                 conn.commit()
                 done += len(batch_rows)
                 STATE.update_progress(done, total, unit="médias/s")
@@ -853,10 +845,11 @@ def _worker_single_task_thread(lib: dict, task_code: str):
             STATE.log("⏸️ Opération mise en pause. Reprise exacte disponible.")
             STATE.add_notification(clean_title, "paused", f"Mis en pause à {STATE.percent}%")
     except Exception as e:
-        STATE.current_step = f"Erreur : {e}"
+        err_msg = str(e).strip() or type(e).__name__
+        STATE.current_step = f"Erreur : {err_msg}"
         STATE.last_paused_task = task_code
-        STATE.log(f"❌ Erreur critique : {e}")
-        STATE.add_notification(clean_title, "error", f"Échec : {e}")
+        STATE.log(f"❌ Erreur critique : {err_msg}")
+        STATE.add_notification(clean_title, "error", f"Échec : {err_msg}")
     finally:
         STATE.is_running = False
         STATE.active_task = "IDLE"

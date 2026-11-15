@@ -57,6 +57,7 @@ def get_db() -> sqlite3.Connection:
                 full_path TEXT NOT NULL UNIQUE,
                 parent_id INTEGER,
                 cover_path TEXT,
+                source_dir TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(parent_id) REFERENCES albums(album_id) ON DELETE CASCADE
             )
@@ -66,6 +67,7 @@ def get_db() -> sqlite3.Connection:
                 category_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 prompt TEXT NOT NULL,
+                prompt_en TEXT,
                 source TEXT DEFAULT 'MANUAL',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -86,7 +88,22 @@ def get_db() -> sqlite3.Connection:
         cols = {r[1] for r in init_conn.execute("PRAGMA table_info(processed_files)").fetchall()}
         if "modified_at" not in cols:
             init_conn.execute("ALTER TABLE processed_files ADD COLUMN modified_at INTEGER")
+        if "is_animated" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN is_animated INTEGER DEFAULT NULL")
+        if "faces_model" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN faces_model TEXT DEFAULT NULL")
+        if "clip_model" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN clip_model TEXT DEFAULT NULL")
+        if "visual_suggestions_json" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN visual_suggestions_json TEXT DEFAULT NULL")
+        sc_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(smart_categories)").fetchall()}
+        if "prompt_en" not in sc_cols:
+            init_conn.execute("ALTER TABLE smart_categories ADD COLUMN prompt_en TEXT")
+        alb_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(albums)").fetchall()}
+        if "source_dir" not in alb_cols:
+            init_conn.execute("ALTER TABLE albums ADD COLUMN source_dir TEXT DEFAULT NULL")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_modified ON processed_files(is_duplicate, is_trashed, modified_at DESC)")
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_animated ON processed_files(is_duplicate, is_trashed, is_animated)")
         init_conn.commit()
         init_conn.close()
         _INITIALIZED_DBS.add(db_key)

@@ -50,6 +50,11 @@ class SettingsPayload(BaseModel):
     clip_model: str = "vit-b-32"
 
 
+class ReindexModelPayload(BaseModel):
+    module_id: str
+    include_unknown: bool = True
+
+
 def _pct(done: int, total: int) -> float:
     return round((done / total) * 100, 1) if total > 0 else 0.0
 
@@ -239,6 +244,9 @@ def api_get_hardware(refresh: bool = False):
 
 @router.post("/api/settings/save")
 def api_save_settings_route(payload: SettingsPayload):
+    prev = load_settings()
+    prev_faces = str(prev.get("faces_model", "buffalo_l")).strip()
+    prev_clip = str(prev.get("clip_model", "vit-b-32")).strip().lower()
     saved = save_settings({
         "scanned_folders": [p.strip() for p in payload.scanned_folders if p.strip()],
         "takeout_extract_dir": payload.takeout_extract_dir.strip(),
@@ -249,6 +257,26 @@ def api_save_settings_route(payload: SettingsPayload):
         "faces_model": (payload.faces_model or "buffalo_l").strip(),
         "clip_model": (payload.clip_model or "vit-b-32").strip().lower(),
     })
+    if prev_faces != saved["faces_model"] or prev_clip != saved["clip_model"]:
+        try:
+            db_p, _ = get_active_db_and_dest()
+            if db_p.exists():
+                conn = get_db()
+                cols = {r[1] for r in conn.execute("PRAGMA table_info(processed_files)").fetchall()}
+                if prev_faces != saved["faces_model"] and "faces_model" in cols:
+                    conn.execute(
+                        "UPDATE processed_files SET faces_model = ? WHERE faces_scanned = 1 AND (faces_model IS NULL OR faces_model = '')",
+                        (prev_faces,),
+                    )
+                if prev_clip != saved["clip_model"] and "clip_model" in cols:
+                    conn.execute(
+                        "UPDATE processed_files SET clip_model = ? WHERE clip_scanned = 1 AND (clip_model IS NULL OR clip_model = '')",
+                        (prev_clip,),
+                    )
+                conn.commit()
+                conn.close()
+        except Exception:
+            pass
     return {"status": "saved", "settings": saved}
 
 
@@ -289,7 +317,7 @@ def api_reset_tool(payload: ResetToolPayload):
     if tool == "FACES":
         cur.execute("DELETE FROM faces")
         cur.execute("DELETE FROM persons")
-        cur.execute("UPDATE processed_files SET faces_scanned = 0")
+        cur.execute("UPDATE processed_files SET faces_scanned = 0, faces_model = NULL")
         thumbs_dir = dest_dir / "Miniatures_Visages"
         if thumbs_dir.exists():
             shutil.rmtree(thumbs_dir, ignore_errors=True)
@@ -298,7 +326,7 @@ def api_reset_tool(payload: ResetToolPayload):
         cur.execute("DELETE FROM ocr_fts")
         cur.execute("UPDATE processed_files SET ocr_scanned = 0")
     elif tool == "CLIP":
-        cur.execute("UPDATE processed_files SET clip_scanned = 0, clip_embedding = NULL")
+        cur.execute("UPDATE processed_files SET clip_scanned = 0, clip_embedding = NULL, clip_model = NULL")
     elif tool == "SIMILAR":
         cur.execute("UPDATE processed_files SET phash = NULL, video_hash = NULL")
     elif tool == "DEDUP":
@@ -519,6 +547,46 @@ def _get_ai_cache_paths(module_id: str, ocr_engine: str | None = None, faces_mod
     return []
 
 
+def _count_stale_model_media(module_id: str, target_model: str, include_unknown: bool = False) -> int:
+    """Compte les médias actifs déjà analysés avec un modèle différent du modèle cible."""
+    if module_id not in ("faces", "clip") or not target_model:
+        return 0
+    try:
+        db_p, _ = get_active_db_and_dest()
+        if not db_p.exists():
+            return 0
+        conn = get_db()
+        cur = conn.cursor()
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)").fetchall()}
+        scan_col = "faces_scanned" if module_id == "faces" else "clip_scanned"
+        model_col = "faces_model" if module_id == "faces" else "clip_model"
+        if scan_col not in cols:
+            conn.close()
+            return 0
+        if model_col not in cols:
+            sql = f"SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND {scan_col} = 1"
+            cnt = int(cur.execute(sql).fetchone()[0] or 0) if include_unknown else 0
+            conn.close()
+            return cnt
+        if include_unknown:
+            sql = (
+                f"SELECT COUNT(*) FROM processed_files "
+                f"WHERE is_duplicate = 0 AND is_trashed = 0 AND {scan_col} = 1 "
+                f"AND ({model_col} IS NULL OR {model_col} = '' OR {model_col} != ?)"
+            )
+        else:
+            sql = (
+                f"SELECT COUNT(*) FROM processed_files "
+                f"WHERE is_duplicate = 0 AND is_trashed = 0 AND {scan_col} = 1 "
+                f"AND {model_col} IS NOT NULL AND {model_col} != '' AND {model_col} != ?"
+            )
+        cnt = int(cur.execute(sql, (target_model,)).fetchone()[0] or 0)
+        conn.close()
+        return cnt
+    except Exception:
+        return 0
+
+
 def _inspect_ai_module(module_id: str) -> dict:
     meta = _AI_MODULES_META[module_id]
     pkg_versions: dict[str, str | None] = {}
@@ -602,6 +670,7 @@ def _inspect_ai_module(module_id: str) -> dict:
     }
     if module_id == "faces":
         res["selected_model"] = faces_model
+        res["stale_media_count"] = _count_stale_model_media("faces", faces_model, include_unknown=False)
         res["model_options"] = [
             {
                 "id": fid,
@@ -613,6 +682,7 @@ def _inspect_ai_module(module_id: str) -> dict:
         ]
     elif module_id == "clip":
         res["selected_model"] = clip_model
+        res["stale_media_count"] = _count_stale_model_media("clip", clip_model, include_unknown=False)
         res["model_options"] = [
             {
                 "id": cid,
@@ -699,7 +769,7 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
         _append_ai_log(f"Téléchargement / vérification du modèle {faces_model}...")
         rc3 = _run_cmd_logged([
             sys.executable, "-c",
-            f"from insightface.app import FaceAnalysis; app=FaceAnalysis(name='{faces_model}', allowed_modules=['detection','recognition']); app.prepare(ctx_id=-1, det_size=(640,640)); print('InsightFace {faces_model} OK')"
+            f"import sys; sys.path.insert(0, 'backend/core'); sys.path.insert(0, 'backend/engines'); from indexeur_visages import create_face_analysis; create_face_analysis('{faces_model}', providers=['CPUExecutionProvider'], ctx_id=-1); print('InsightFace {faces_model} OK')"
         ])
         detect_system_hardware(refresh=True)
         return rc3 == 0
@@ -761,15 +831,9 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
             return False
         _append_ai_log("Téléchargement / vérification des modèles PaddleOCR...")
         init_ocr_script = (
-            "try:\n"
-            "    import torch\n"
-            "except Exception:\n"
-            "    pass\n"
-            "from paddleocr import PaddleOCR\n"
-            "try:\n"
-            "    PaddleOCR(lang='fr')\n"
-            "except TypeError:\n"
-            "    PaddleOCR(use_angle_cls=True, lang='fr', show_log=False)\n"
+            "import sys; sys.path.insert(0, 'backend/engines')\n"
+            "from indexeur_ocr import create_paddle_ocr_engine\n"
+            "create_paddle_ocr_engine(lang='fr', prefer_gpu=False)\n"
             "print('PaddleOCR OK')"
         )
         rc2 = _run_cmd_logged([sys.executable, "-c", init_ocr_script])
@@ -955,3 +1019,54 @@ def api_ai_action(payload: AiActionPayload):
 
     threading.Thread(target=_worker, daemon=True).start()
     return {"status": "started", "module": mod, "action": act}
+
+
+@router.get("/api/ai/model_mismatch")
+def api_ai_model_mismatch(module_id: str, target_model: str, prev_model: str = ""):
+    mod = (module_id or "").strip().lower()
+    if mod not in ("faces", "clip"):
+        return {"stale_count": 0}
+    target = (target_model or "").strip()
+    prev = (prev_model or "").strip()
+    include_unknown = bool(prev and prev != target)
+    return {"module_id": mod, "target_model": target, "stale_count": _count_stale_model_media(mod, target, include_unknown=include_unknown)}
+
+
+@router.post("/api/ai/reindex_model")
+def api_ai_reindex_model(payload: ReindexModelPayload):
+    if STATE.is_running:
+        raise HTTPException(status_code=409, detail="Mettez d'abord en pause le traitement en cours.")
+    mod = (payload.module_id or "").strip().lower()
+    if mod not in ("faces", "clip"):
+        raise HTTPException(status_code=400, detail="Module non ré-indexable par modèle.")
+
+    conn = get_db()
+    cur = conn.cursor()
+    _, dest_dir = get_active_db_and_dest()
+    try:
+        if mod == "faces":
+            import indexeur_visages as faces_ai
+            faces_ai.snapshot_named_face_hints(conn)
+            cur.execute("DELETE FROM faces WHERE embedding IS NOT NULL")
+            cur.execute("DELETE FROM persons WHERE person_id NOT IN (SELECT DISTINCT person_id FROM faces WHERE embedding IS NULL AND person_id IS NOT NULL)")
+            cur.execute("UPDATE processed_files SET faces_scanned = 0, faces_model = NULL")
+            conn.commit()
+            return start_specific_task("FACES")
+
+        active_clip = _active_clip_model()
+        if payload.include_unknown:
+            cur.execute(
+                "UPDATE processed_files SET clip_scanned = 0, clip_embedding = NULL, clip_model = NULL WHERE clip_scanned = 1 AND (clip_model IS NULL OR clip_model = '' OR clip_model != ?)",
+                (active_clip,),
+            )
+        else:
+            cur.execute(
+                "UPDATE processed_files SET clip_scanned = 0, clip_embedding = NULL, clip_model = NULL WHERE clip_scanned = 1 AND clip_model IS NOT NULL AND clip_model != '' AND clip_model != ?",
+                (active_clip,),
+            )
+        conn.commit()
+        return start_specific_task("CLIP")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        conn.close()

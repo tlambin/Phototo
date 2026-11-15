@@ -11,7 +11,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from database import RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path
-from media_frames import VIDEO_EXTS, IMAGE_EXTS
+from library_manager import load_libraries
+from media_frames import VIDEO_EXTS, IMAGE_EXTS, detect_is_animated
 
 router = APIRouter()
 
@@ -45,6 +46,7 @@ class AutoResolveDuplicatesPayload(BaseModel):
 class CreateAlbumPayload(BaseModel):
     name: str
     parent_id: int | None = None
+    source_dir: str | None = None
 
 
 class RenameAlbumPayload(BaseModel):
@@ -132,15 +134,41 @@ def _media_type_sql(media_type: str) -> str:
     if media_type == "VIDEOS":
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in VIDEO_EXTS]) + ")"
     if media_type == "ANIMATED":
-        return "(LOWER(pf.dest_path) LIKE '%.gif' OR LOWER(pf.dest_path) LIKE '%live%')"
+        return "(COALESCE(pf.is_animated, 0) = 1 OR LOWER(pf.dest_path) LIKE '%.gif' OR LOWER(pf.dest_path) LIKE '%.apng')"
     if media_type == "RAW":
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in RAW_EXTS]) + ")"
     if media_type == "SCREENSHOTS":
         return "(LOWER(pf.dest_path) LIKE '%screenshot%' OR LOWER(pf.dest_path) LIKE '%capture%' OR LOWER(pf.dest_path) LIKE '%ecran%')"
     if media_type == "PHOTOS":
-        std_imgs = IMAGE_EXTS - RAW_EXTS - {".gif"}
+        std_imgs = IMAGE_EXTS - RAW_EXTS - {".gif", ".apng"}
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in std_imgs]) + ")"
     return ""
+
+
+def _ensure_animated_flags(conn) -> None:
+    cur = conn.cursor()
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)").fetchall()}
+    if "is_animated" not in cols:
+        cur.execute("ALTER TABLE processed_files ADD COLUMN is_animated INTEGER DEFAULT NULL")
+        conn.commit()
+    pending = cur.execute("""
+        SELECT source_path, dest_path FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL AND is_animated IS NULL
+    """).fetchall()
+    if not pending:
+        return
+    mov_rows = cur.execute("""
+        SELECT dest_path FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND LOWER(dest_path) LIKE '%.mov'
+    """).fetchall()
+    sibling_mov_stems = {(str(Path(r["dest_path"]).parent).lower(), Path(r["dest_path"]).stem.lower()) for r in mov_rows}
+    updates = []
+    for r in pending:
+        flag = detect_is_animated(r["dest_path"], sibling_mov_stems=sibling_mov_stems)
+        updates.append((flag, r["source_path"]))
+    if updates:
+        cur.executemany("UPDATE processed_files SET is_animated = ? WHERE source_path = ?", updates)
+        conn.commit()
 
 
 def _build_gallery_where(
@@ -327,7 +355,7 @@ def api_albums_list(parent_id: int | None = None, flat: bool = False):
     _sync_albums_from_files(conn)
     cur = conn.cursor()
 
-    cur.execute("SELECT album_id, name, full_path, parent_id, cover_path, created_at, CAST(strftime('%s', created_at) AS INTEGER) as created_ts FROM albums ORDER BY full_path ASC")
+    cur.execute("SELECT album_id, name, full_path, parent_id, cover_path, source_dir, created_at, CAST(strftime('%s', created_at) AS INTEGER) as created_ts FROM albums ORDER BY full_path ASC")
     all_rows = [dict(r) for r in cur.fetchall()]
 
     cur.execute("""
@@ -358,6 +386,8 @@ def api_albums_list(parent_id: int | None = None, flat: bool = False):
         if pid is not None:
             children_count[pid] = children_count.get(pid, 0) + 1
 
+    explicit_covers = {a["full_path"]: a["cover_path"] for a in all_rows if a.get("cover_path")}
+
     enriched = []
     for a in all_rows:
         fp = a["full_path"]
@@ -367,10 +397,16 @@ def api_albums_list(parent_id: int | None = None, flat: bool = False):
         max_ts = direct_st["max_ts"]
         max_mod_ts = direct_st["max_mod_ts"]
         prefix = fp + "/"
+        sub_explicit_cover = None
+        if not a.get("cover_path") and not fallback_cover:
+            for sub_fp, sub_cov in explicit_covers.items():
+                if sub_fp.startswith(prefix):
+                    sub_explicit_cover = sub_cov
+                    break
         for other_fp, ost in stats_by_album.items():
             if other_fp.startswith(prefix):
                 recursive_count += ost["count"]
-                if not fallback_cover:
+                if ost["max_ts"] >= max_ts or not fallback_cover:
                     fallback_cover = ost["cover_path"]
                 if ost["max_ts"] > max_ts:
                     max_ts = ost["max_ts"]
@@ -386,7 +422,8 @@ def api_albums_list(parent_id: int | None = None, flat: bool = False):
             "count": recursive_count,
             "direct_count": direct_st["count"],
             "subalbums_count": children_count.get(a["album_id"], 0),
-            "cover_path": a["cover_path"] or fallback_cover or "",
+            "cover_path": a["cover_path"] or sub_explicit_cover or fallback_cover or "",
+            "source_dir": a.get("source_dir") or "",
             "max_ts": max_ts,
             "modified_ts": max_mod_ts or (a.get("created_ts") or 0),
             "created_at": a.get("created_at") or "",
@@ -426,17 +463,31 @@ def api_create_album(payload: CreateAlbumPayload):
         conn.close()
         raise HTTPException(400, "Un album portant ce nom existe déjà à cet emplacement.")
 
+    src_dir_clean = (payload.source_dir or "").strip() or None
+    if src_dir_clean:
+        cfg = load_libraries()
+        active_lib = cfg.get("libraries", {}).get(cfg.get("active_library") or "", {})
+        allowed_roots = {str(Path(p).resolve()) for p in (active_lib.get("source_paths") or []) if p}
+        allowed_roots.add(str(dest_dir.resolve()))
+        resolved_src = str(Path(src_dir_clean).resolve())
+        if resolved_src not in allowed_roots:
+            conn.close()
+            raise HTTPException(400, "Dossier source invalide pour cette bibliothèque.")
+        src_dir_clean = resolved_src
+
     cur.execute(
-        "INSERT INTO albums (name, full_path, parent_id) VALUES (?, ?, ?)",
-        (seg, full_path, payload.parent_id)
+        "INSERT INTO albums (name, full_path, parent_id, source_dir) VALUES (?, ?, ?, ?)",
+        (seg, full_path, payload.parent_id, src_dir_clean)
     )
     new_id = cur.lastrowid
     (dest_dir / "Albums" / full_path).mkdir(parents=True, exist_ok=True)
+    if src_dir_clean:
+        (Path(src_dir_clean) / "Albums" / full_path).mkdir(parents=True, exist_ok=True)
     conn.commit()
     conn.close()
     return {
         "status": "created",
-        "album": {"album_id": new_id, "name": seg, "full_path": full_path, "parent_id": payload.parent_id}
+        "album": {"album_id": new_id, "name": seg, "full_path": full_path, "parent_id": payload.parent_id, "source_dir": src_dir_clean}
     }
 
 
@@ -569,9 +620,10 @@ def api_set_album_cover(payload: SetAlbumCoverPayload):
 @router.get("/api/types/summary")
 def api_types_summary():
     conn = get_db()
+    _ensure_animated_flags(conn)
     cur = conn.cursor()
     cur.execute("""
-        SELECT dest_path, file_size FROM processed_files
+        SELECT dest_path, file_size, COALESCE(is_animated, 0) as is_animated FROM processed_files
         WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
     """)
     cats = {
@@ -593,7 +645,7 @@ def api_types_summary():
         exts[ext]["count"] += 1
         exts[ext]["mb"] = round(exts[ext]["mb"] + sz / (1024 * 1024), 1)
 
-        if ext == ".gif" or "live" in name_low:
+        if r["is_animated"] == 1:
             cats["ANIMATED"]["count"] += 1
             cats["ANIMATED"]["bytes"] += sz
         elif "screenshot" in name_low or "capture" in name_low or "ecran" in name_low:
@@ -691,12 +743,15 @@ def api_categories_create(payload: SmartCategoryCreatePayload):
     if not name:
         raise HTTPException(status_code=400, detail="Nom de catégorie requis.")
     prompt = (payload.prompt or "").strip() or name
+    from prompt_translator import translate_fr_to_en
+    prompt_en = _AI_CATEGORY_EN_PROMPTS.get(name) or translate_fr_to_en(prompt)
+
     conn = get_db()
     try:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO smart_categories (name, prompt, source) VALUES (?, ?, 'MANUAL')",
-            (name, prompt),
+            "INSERT INTO smart_categories (name, prompt, prompt_en, source) VALUES (?, ?, ?, 'MANUAL')",
+            (name, prompt, prompt_en),
         )
         cid = cur.lastrowid
         conn.commit()
@@ -713,7 +768,11 @@ def api_categories_create(payload: SmartCategoryCreatePayload):
             if has_emb:
                 db_p, _ = get_active_db_and_dest()
                 from indexeur_semantique_gps import search_photos_by_natural_text
-                matches = search_photos_by_natural_text(db_p, prompt, top_k=200, min_score=0.22)
+                from settings_manager import load_settings
+                clip_key = str(load_settings().get("clip_model", "vit-b-32")).strip().lower()
+                q_prompt = resolve_clip_category_prompt(name, prompt, clip_key, prompt_en=prompt_en)
+                min_sc = 0.22 if clip_key == "vit-b-32" else 0.19
+                matches = search_photos_by_natural_text(db_p, q_prompt, top_k=200, min_score=min_sc, already_english=(clip_key != "vit-b-32"))
                 for m in matches:
                     conn.execute(
                         "INSERT OR IGNORE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'AI', ?)",
@@ -787,13 +846,19 @@ def api_categories_items(category_id: int):
 
 
 _AI_CATEGORY_CATALOG = [
+    ("Portraits", "portrait visage personne selfie regard"),
+    ("Personnes & Groupes", "groupe personnes amis famille ensemble"),
+    ("Enfants", "enfant bébé jeune garçon fille"),
     ("Captures d'écran", "capture d'écran interface téléphone ordinateur"),
     ("Documents", "document papier facture texte reçu lettre"),
     ("Livres", "livre page bibliothèque lecture"),
+    ("Paysages", "paysage panorama vue nature campagne horizon"),
     ("Arbres & Forêts", "arbre forêt bois nature feuilles"),
     ("Fleurs & Plantes", "fleur plante jardin bouquet"),
     ("Montagnes", "montagne sommet randonnée paysage"),
     ("Plage & Mer", "plage mer océan sable vagues"),
+    ("Eau & Lacs", "lac rivière cascade étang eau reflet"),
+    ("Ciel & Nuages", "ciel bleu nuages soleil horizon"),
     ("Couchers de soleil", "coucher de soleil lever de soleil ciel coloré"),
     ("Neige & Hiver", "neige hiver ski montagne enneigée"),
     ("Chiens", "chien chiot animal"),
@@ -807,6 +872,7 @@ _AI_CATEGORY_CATALOG = [
     ("Trains & Gares", "train gare rail métro"),
     ("Bateaux", "bateau navire port voilier"),
     ("Ponts", "pont rivière viaduc architecture"),
+    ("Rue & Ville", "rue ville bâtiment urbain trottoir place"),
     ("Architecture", "bâtiment monument église château immeuble"),
     ("Intérieurs", "salon chambre cuisine maison intérieur"),
     ("Fêtes & Soirées", "fête anniversaire soirée groupe amis"),
@@ -815,6 +881,56 @@ _AI_CATEGORY_CATALOG = [
     ("Nuit", "nuit étoiles éclairage nocturne ville nuit"),
     ("Art & Musées", "tableau peinture sculpture musée art"),
 ]
+
+_AI_CATEGORY_EN_PROMPTS = {
+    "Portraits": "a photo of a person portrait face closeup",
+    "Personnes & Groupes": "a photo of people group of friends or family together",
+    "Enfants": "a photo of a baby toddler or child",
+    "Captures d'écran": "a screenshot of a phone or computer user interface",
+    "Documents": "a photo or scan of a paper document text receipt letter",
+    "Livres": "a photo of a book page library reading",
+    "Paysages": "a landscape scenery wide view of nature countryside",
+    "Arbres & Forêts": "a photo of trees forest woods leaves nature",
+    "Fleurs & Plantes": "a photo of flowers plants garden bouquet",
+    "Montagnes": "a photo of mountains peaks hiking landscape",
+    "Plage & Mer": "a photo of a beach sea ocean sand waves",
+    "Eau & Lacs": "a photo of a lake river waterfall pond water reflection",
+    "Ciel & Nuages": "a photo of the sky clouds sunlight",
+    "Couchers de soleil": "a photo of a sunset or sunrise colorful sky",
+    "Neige & Hiver": "a photo of snow winter skiing snowy landscape",
+    "Chiens": "a photo of a dog or puppy",
+    "Chats": "a photo of a cat or kitten",
+    "Animaux": "a photo of an animal bird wildlife",
+    "Nourriture": "a photo of food meal dish restaurant cake",
+    "Boissons & Cafés": "a photo of coffee drink glass cocktail wine",
+    "Voitures": "a photo of a car automobile road vehicle",
+    "Vélos & Motos": "a photo of a bicycle or motorcycle",
+    "Avions & Voyages": "a photo of an airplane airport flight travel",
+    "Trains & Gares": "a photo of a train railway station metro",
+    "Bateaux": "a photo of a boat ship harbor sailboat",
+    "Ponts": "a photo of a bridge river viaduct",
+    "Rue & Ville": "a photo of a city street urban buildings sidewalk",
+    "Architecture": "a photo of architecture building monument church castle",
+    "Intérieurs": "a photo of an indoor room living room bedroom kitchen home",
+    "Fêtes & Soirées": "a photo of a party birthday celebration evening with friends",
+    "Concerts & Musique": "a photo of a concert stage live music instrument",
+    "Sport": "a photo of sports running cycling swimming football",
+    "Nuit": "a night photo stars night lights city at night",
+    "Art & Musées": "a photo of a painting sculpture artwork museum",
+}
+
+
+def resolve_clip_category_prompt(name: str, fr_prompt: str, clip_key: str | None = None, prompt_en: str | None = None) -> str:
+    """Retourne le prompt adapté au modèle CLIP actif (FR pour vit-b-32 multilingue, EN sinon)."""
+    key = (clip_key or "vit-b-32").strip().lower()
+    if key == "vit-b-32":
+        return fr_prompt or name
+    if prompt_en and prompt_en.strip():
+        return prompt_en.strip()
+    if name in _AI_CATEGORY_EN_PROMPTS:
+        return _AI_CATEGORY_EN_PROMPTS[name]
+    from prompt_translator import translate_fr_to_en
+    return translate_fr_to_en(fr_prompt or name)
 
 
 @router.post("/api/categories/analyze")
@@ -831,10 +947,15 @@ def api_categories_analyze():
         conn.close()
         return {"status": "no_embeddings", "assigned": 0}
 
-    existing_cats = [dict(r) for r in cur.execute("SELECT category_id, name, prompt, source FROM smart_categories").fetchall()]
+    existing_cats = [dict(r) for r in cur.execute("SELECT category_id, name, prompt, prompt_en, source FROM smart_categories").fetchall()]
     conn.close()
 
     from indexeur_semantique_gps import search_photos_by_natural_text
+    from settings_manager import load_settings
+    clip_key = str(load_settings().get("clip_model", "vit-b-32")).strip().lower()
+    min_existing_score = 0.22 if clip_key == "vit-b-32" else 0.19
+    min_catalog_score = 0.23 if clip_key == "vit-b-32" else 0.20
+
     assigned = 0
     conn = get_db()
     cur = conn.cursor()
@@ -844,7 +965,10 @@ def api_categories_analyze():
     seen_names = set()
     for c in existing_cats:
         seen_names.add(c["name"].lower())
-        matches = search_photos_by_natural_text(db_p, c["prompt"] or c["name"], top_k=200, min_score=0.22)
+        q_prompt = resolve_clip_category_prompt(c["name"], c["prompt"] or c["name"], clip_key, prompt_en=c.get("prompt_en"))
+        if clip_key != "vit-b-32" and not c.get("prompt_en"):
+            cur.execute("UPDATE smart_categories SET prompt_en = ? WHERE category_id = ?", (q_prompt, c["category_id"]))
+        matches = search_photos_by_natural_text(db_p, q_prompt, top_k=200, min_score=min_existing_score, already_english=(clip_key != "vit-b-32"))
         for m in matches:
             cur.execute(
                 "INSERT OR IGNORE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'AI', ?)",
@@ -856,12 +980,14 @@ def api_categories_analyze():
     for c_name, c_prompt in _AI_CATEGORY_CATALOG:
         if c_name.lower() in seen_names:
             continue
-        matches = search_photos_by_natural_text(db_p, c_prompt, top_k=200, min_score=0.23)
+        q_prompt = resolve_clip_category_prompt(c_name, c_prompt, clip_key)
+        matches = search_photos_by_natural_text(db_p, q_prompt, top_k=200, min_score=min_catalog_score, already_english=(clip_key != "vit-b-32"))
         if not matches:
             continue
+        en_val = _AI_CATEGORY_EN_PROMPTS.get(c_name)
         cur.execute(
-            "INSERT OR IGNORE INTO smart_categories (name, prompt, source) VALUES (?, ?, 'AI')",
-            (c_name, c_prompt),
+            "INSERT OR IGNORE INTO smart_categories (name, prompt, prompt_en, source) VALUES (?, ?, ?, 'AI')",
+            (c_name, c_prompt, en_val),
         )
         row = cur.execute("SELECT category_id FROM smart_categories WHERE name = ?", (c_name,)).fetchone()
         if not row:
@@ -895,6 +1021,8 @@ def api_gallery_items(
     page: int = 1, limit: int = 60, skip_to: int = -1
 ):
     conn = get_db()
+    if "ANIMATED" in str(media_type or "").upper():
+        _ensure_animated_flags(conn)
     conn.create_function("BASENAME", 1, lambda p: Path(p).name.lower() if p else "")
     cur = conn.cursor()
     offset = skip_to if skip_to >= 0 else (page - 1) * limit
@@ -921,7 +1049,8 @@ def api_gallery_items(
     cur.execute(f"""
         SELECT pf.source_path, pf.dest_path, pf.timestamp, pf.processed_at,
                COALESCE(pf.modified_at, CAST(strftime('%s', pf.processed_at) AS INTEGER), pf.timestamp, 0) as modified_ts,
-               pf.is_favorite, pf.album_name, pf.file_size, pf.width, pf.height, pf.duration_sec
+               pf.is_favorite, pf.album_name, pf.file_size, pf.width, pf.height, pf.duration_sec,
+               COALESCE(pf.is_animated, 0) as is_animated
         FROM processed_files pf
         WHERE {where_sql}
         ORDER BY {order_sql}
@@ -1035,8 +1164,15 @@ def api_gallery_batch_action(payload: GalleryBatchActionPayload):
                 link_p = active_dest / "Albums" / target_album / dest_p.name
                 if link_p.exists() and link_p != dest_p:
                     link_p.unlink(missing_ok=True)
+                cur.execute(
+                    "UPDATE albums SET cover_path = NULL WHERE full_path = ? AND cover_path = ?",
+                    (target_album, r["dest_path"]),
+                )
             else:
                 albums = []
+        elif payload.action == "ALBUM_SET_PRIMARY" and target_album:
+            if target_album in albums:
+                albums = [target_album] + [a for a in albums if a != target_album]
         cur.execute("UPDATE processed_files SET is_favorite = ?, album_name = ? WHERE source_path = ?", (fav, ", ".join(albums) if albums else None, src))
 
     conn.commit()
@@ -1079,7 +1215,9 @@ def api_get_duplicates():
             cur.execute("SELECT * FROM processed_files WHERE is_duplicate = 1 AND master_path = ?", (ref,))
         d_rows = cur.fetchall()
         if m_row and d_rows:
-            groups.append({"master": dict(m_row), "duplicates": [dict(r) for r in d_rows]})
+            clean_m = {k: v for k, v in dict(m_row).items() if not isinstance(v, (bytes, bytearray, memoryview))}
+            clean_dups = [{k: v for k, v in dict(r).items() if not isinstance(v, (bytes, bytearray, memoryview))} for r in d_rows]
+            groups.append({"master": clean_m, "duplicates": clean_dups})
     conn.close()
     return {"groups": groups}
 

@@ -3,7 +3,7 @@ import re
 import json
 import shutil
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import unquote
 
 import exiftool
@@ -23,11 +23,30 @@ router = APIRouter()
 class BatchMetadataUpdatePayload(BaseModel):
     source_paths: list[str]
     start_datetime_iso: str | None = None
+    utc_offset: str | None = None
     time_sequence_mode: str = "PRESERVE_GAPS"
     step_seconds: int = 15
     latitude: float | None = None
     longitude: float | None = None
     description: str | None = None
+
+
+def _parse_utc_offset_str(raw: str | None) -> timezone | None:
+    if not raw:
+        return None
+    txt = str(raw).strip().upper()
+    if txt in ("Z", "UTC", "GMT", "UTC+0", "UTC-0"):
+        return timezone.utc
+    txt = txt.replace("UTC", "").replace("GMT", "").strip()
+    m = re.match(r'^([+-])(\d{1,2})(?::?(\d{2}))?$', txt)
+    if not m:
+        return None
+    sign = 1 if m.group(1) == "+" else -1
+    hh = int(m.group(2))
+    mm = int(m.group(3) or 0)
+    if hh > 14 or mm >= 60:
+        return None
+    return timezone(timedelta(hours=hh, minutes=mm) * sign)
 
 
 class BatchMetadataStripPayload(BaseModel):
@@ -165,28 +184,80 @@ def api_inspect_metadata(source_path: str):
     conn = get_db()
     cur = conn.cursor()
     src_clean = unquote(source_path)
-    cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (src_clean,))
-    row = cur.fetchone()
+    row = cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (source_path,)).fetchone()
+    if not row:
+        row = cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (src_clean,)).fetchone()
+    if not row:
+        row = cur.execute("SELECT * FROM processed_files WHERE dest_path = ? OR dest_path = ?", (source_path, src_clean)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(404, "Média introuvable")
 
-    d = dict(row)
+    d = {k: v for k, v in dict(row).items() if not isinstance(v, (bytes, bytearray, memoryview))}
+    raw_vis_json = d.pop("visual_suggestions_json", None)
+    try:
+        d["visual_suggestions"] = json.loads(raw_vis_json) if raw_vis_json else []
+    except Exception:
+        d["visual_suggestions"] = []
+    src_clean = d["source_path"]
     tz = get_configured_timezone()
-    d["datetime_local_iso"] = (
-        datetime.fromtimestamp(d["timestamp"], tz=timezone.utc).astimezone(tz).strftime("%Y-%m-%dT%H:%M:%S")
-        if d.get("timestamp") else ""
-    )
-
-    album_count = 0
-    if d.get("album_name"):
-        first_alb = d["album_name"].split(",")[0].strip()
-        cur.execute(
-            "SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND album_name LIKE ?",
-            (f"%{first_alb}%",)
+    try:
+        dt_local = (
+            datetime.fromtimestamp(float(d["timestamp"]), tz=timezone.utc).astimezone(tz)
+            if d.get("timestamp") else datetime.now(tz)
         )
-        album_count = cur.fetchone()[0] or 0
-    d["album_count"] = album_count
+    except (OSError, ValueError, OverflowError, TypeError):
+        dt_local = datetime.now(tz)
+    d["datetime_local_iso"] = dt_local.strftime("%Y-%m-%dT%H:%M:%S") if d.get("timestamp") else ""
+    off = dt_local.utcoffset()
+    total_mins = int(off.total_seconds() // 60) if off else 0
+    sign = "+" if total_mins >= 0 else "-"
+    hh, mm = divmod(abs(total_mins), 60)
+    d["utc_offset_label"] = f"UTC{sign}{hh}" if mm == 0 else f"UTC{sign}{hh}:{mm:02d}"
+    d["timezone"] = getattr(tz, "key", str(tz))
+
+    alb_tokens = [a.strip() for a in (d.get("album_name") or "").split(",") if a.strip()]
+    albums_info = []
+    if alb_tokens:
+        albums_table: dict[str, dict] = {}
+        try:
+            for r in cur.execute("SELECT album_id, name, full_path, cover_path FROM albums").fetchall():
+                albums_table[r["full_path"]] = dict(r)
+        except Exception:
+            albums_table = {}
+
+        alb_stats = {a: {"count": 0, "cover_path": None, "max_ts": -1} for a in alb_tokens}
+        cur.execute("""
+            SELECT album_name, dest_path, timestamp
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND album_name IS NOT NULL AND album_name != ''
+        """)
+        for r in cur.fetchall():
+            row_tokens = [t.strip() for t in (r["album_name"] or "").split(",") if t.strip()]
+            ts = r["timestamp"] or 0
+            for alb_fp in alb_tokens:
+                prefix = alb_fp + "/"
+                if any(t == alb_fp or t.startswith(prefix) for t in row_tokens):
+                    st = alb_stats[alb_fp]
+                    st["count"] += 1
+                    if ts >= st["max_ts"] or not st["cover_path"]:
+                        st["max_ts"] = ts
+                        st["cover_path"] = r["dest_path"]
+
+        for alb_fp in alb_tokens:
+            ar = albums_table.get(alb_fp)
+            st = alb_stats.get(alb_fp, {"count": 0, "cover_path": None})
+            cov = (ar.get("cover_path") if ar else None) or st["cover_path"] or d.get("dest_path") or ""
+            albums_info.append({
+                "name": alb_fp,
+                "display_name": (ar["name"] if ar and ar.get("name") else alb_fp.split("/")[-1]),
+                "album_id": ar["album_id"] if ar else None,
+                "cover_path": cov,
+                "count": st["count"] or 1,
+            })
+
+    d["albums"] = albums_info
+    d["album_count"] = albums_info[0]["count"] if albums_info else 0
 
     cur.execute("""
         SELECT f.face_id, f.thumb_path, f.person_id, COALESCE(p.name, 'Inconnu') as name
@@ -195,11 +266,24 @@ def api_inspect_metadata(source_path: str):
         WHERE f.source_path = ? OR f.dest_path = ?
     """, (src_clean, d.get("dest_path") or ""))
     d["faces"] = [dict(r) for r in cur.fetchall()]
+    try:
+        d["smart_categories"] = [
+            dict(r) for r in cur.execute("""
+                SELECT sc.category_id, sc.name, mc.assigned_by, mc.score
+                FROM media_categories mc
+                JOIN smart_categories sc ON sc.category_id = mc.category_id
+                WHERE mc.source_path = ?
+                ORDER BY mc.score DESC, sc.name ASC
+            """, (src_clean,)).fetchall()
+        ]
+    except Exception:
+        d["smart_categories"] = []
     conn.close()
 
     camera_model = ""
     lens_specs = ""
     description = ""
+    file_tz = None
     actual_p = resolve_actual_path(d.get("dest_path") or "")
     if actual_p and actual_p.exists():
         try:
@@ -207,6 +291,19 @@ def api_inspect_metadata(source_path: str):
                 meta_list = et.get_metadata([str(actual_p)])
                 if meta_list:
                     m = meta_list[0]
+                    raw_off = (
+                        m.get("EXIF:OffsetTimeOriginal")
+                        or m.get("EXIF:OffsetTime")
+                        or m.get("EXIF:OffsetTimeDigitized")
+                    )
+                    if not raw_off:
+                        for dt_key in ("Keys:CreationDate", "QuickTime:CreationDate", "EXIF:DateTimeOriginal"):
+                            val = str(m.get(dt_key) or "").strip()
+                            off_m = re.search(r'(Z|[+-]\d{2}:?\d{2})$', val)
+                            if off_m:
+                                raw_off = off_m.group(1)
+                                break
+                    file_tz = _parse_utc_offset_str(raw_off)
                     make = str(m.get("EXIF:Make") or m.get("QuickTime:Make") or "").strip()
                     model = str(m.get("EXIF:Model") or m.get("QuickTime:Model") or "").strip()
                     if model and make and not model.lower().startswith(make.lower()):
@@ -230,9 +327,59 @@ def api_inspect_metadata(source_path: str):
                         parts.append(f"{iso} ISO")
                     lens_specs = " ".join(parts)
                     description = str(m.get("EXIF:ImageDescription") or m.get("XMP:Description") or "").strip()
+
+                    if not d.get("width") or not d.get("height"):
+                        w_val = m.get("File:ImageWidth") or m.get("EXIF:ExifImageWidth") or m.get("EXIF:ImageWidth") or m.get("QuickTime:ImageWidth") or m.get("PNG:ImageWidth") or 0
+                        h_val = m.get("File:ImageHeight") or m.get("EXIF:ExifImageHeight") or m.get("EXIF:ImageHeight") or m.get("QuickTime:ImageHeight") or m.get("PNG:ImageHeight") or 0
+                        if w_val and h_val:
+                            d["width"] = int(w_val)
+                            d["height"] = int(h_val)
         except Exception:
             pass
 
+        if (not d.get("width") or not d.get("height")):
+            try:
+                from PIL import Image
+                with Image.open(actual_p) as im:
+                    d["width"], d["height"] = im.size
+            except Exception:
+                pass
+        if not d.get("file_size"):
+            try:
+                d["file_size"] = actual_p.stat().st_size
+            except Exception:
+                pass
+
+    eff_tz = file_tz or tz
+    try:
+        dt_eff = (
+            datetime.fromtimestamp(float(d["timestamp"]), tz=timezone.utc).astimezone(eff_tz)
+            if d.get("timestamp") else datetime.now(eff_tz)
+        )
+    except (OSError, ValueError, OverflowError, TypeError):
+        dt_eff = datetime.now(eff_tz)
+    d["datetime_local_iso"] = dt_eff.strftime("%Y-%m-%dT%H:%M:%S") if d.get("timestamp") else ""
+    off = dt_eff.utcoffset()
+    total_mins = int(off.total_seconds() // 60) if off else 0
+    sign = "+" if total_mins >= 0 else "-"
+    hh, mm = divmod(abs(total_mins), 60)
+    d["utc_offset_label"] = f"UTC{sign}{hh}" if mm == 0 else f"UTC{sign}{hh}:{mm:02d}"
+    d["file_utc_offset"] = f"{sign}{hh:02d}:{mm:02d}"
+    default_tz_time_label = ""
+    if d.get("timestamp"):
+        try:
+            dt_def = datetime.fromtimestamp(float(d["timestamp"]), tz=timezone.utc).astimezone(tz)
+            def_off = dt_def.utcoffset()
+            if def_off != off:
+                d_mins = int(def_off.total_seconds() // 60) if def_off else 0
+                d_sgn = "+" if d_mins >= 0 else "-"
+                dh, dm = divmod(abs(d_mins), 60)
+                def_utc = f"UTC{d_sgn}{dh}" if dm == 0 else f"UTC{d_sgn}{dh}:{dm:02d}"
+                time_part = dt_def.strftime("%Hh%M") if dt_def.date() == dt_eff.date() else dt_def.strftime("%d/%m %Hh%M")
+                default_tz_time_label = f"({time_part} {def_utc})"
+        except (OSError, ValueError, OverflowError, TypeError):
+            pass
+    d["default_tz_time_label"] = default_tz_time_label
     d["camera_model"] = camera_model or "Appareil standard"
     d["lens_specs"] = lens_specs
     d["description"] = description
@@ -244,12 +391,14 @@ def api_batch_update_metadata(payload: BatchMetadataUpdatePayload):
     conn = get_db()
     cur = conn.cursor()
     tz = get_configured_timezone()
+    custom_tz = _parse_utc_offset_str(payload.utc_offset)
+    target_tz = custom_tz or tz
     ph = ",".join("?" for _ in payload.source_paths)
     cur.execute(f"SELECT source_path, dest_path, timestamp, latitude, longitude FROM processed_files WHERE source_path IN ({ph})", payload.source_paths)
     rows_map = {r["source_path"]: dict(r) for r in cur.fetchall()}
     ordered = [rows_map[s] for s in payload.source_paths if s in rows_map]
 
-    base_new_ts = int(datetime.fromisoformat(payload.start_datetime_iso).replace(tzinfo=tz).timestamp()) if payload.start_datetime_iso else None
+    base_new_ts = int(datetime.fromisoformat(payload.start_datetime_iso).replace(tzinfo=target_tz).timestamp()) if payload.start_datetime_iso else None
     first_orig_ts = ordered[0]["timestamp"] if ordered else 0
 
     with exiftool.ExifToolHelper() as et:
@@ -270,7 +419,21 @@ def api_batch_update_metadata(payload: BatchMetadataUpdatePayload):
             tags = {}
             is_vid = curr_p.suffix.lower() in VIDEO_EXTS
             if new_ts:
-                t_info = fusion.resolve_datetime_with_dst(new_ts, payload.latitude, payload.longitude)
+                if custom_tz is not None:
+                    dt_c = datetime.fromtimestamp(new_ts, tz=timezone.utc).astimezone(custom_tz)
+                    off = dt_c.utcoffset()
+                    t_mins = int(off.total_seconds() // 60) if off else 0
+                    sgn = "+" if t_mins >= 0 else "-"
+                    oh, om = divmod(abs(t_mins), 60)
+                    off_str = f"{sgn}{oh:02d}:{om:02d}"
+                    t_info = {
+                        "exif_local_str": dt_c.strftime("%Y:%m:%d %H:%M:%S"),
+                        "offset_str": off_str,
+                        "exif_utc_str": datetime.fromtimestamp(new_ts, tz=timezone.utc).strftime("%Y:%m:%d %H:%M:%S"),
+                        "iso_local_with_tz": dt_c.strftime("%Y-%m-%dT%H:%M:%S") + off_str,
+                    }
+                else:
+                    t_info = fusion.resolve_datetime_with_dst(new_ts, payload.latitude, payload.longitude)
                 if not is_vid:
                     tags["DateTimeOriginal"] = t_info["exif_local_str"]
                     tags["CreateDate"] = t_info["exif_local_str"]
@@ -362,3 +525,358 @@ def api_apply_studio_edits(payload: MediaStudioEditPayload):
     conn.commit()
     conn.close()
     return {"status": "ok", "output_files": [str(p) for p in out_files]}
+
+
+class RenameMediaPayload(BaseModel):
+    source_path: str
+    new_name: str
+
+
+@router.post("/api/media/rename")
+def api_rename_media(payload: RenameMediaPayload):
+    import re
+    clean_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", (payload.new_name or "").strip())
+    if not clean_name:
+        raise HTTPException(400, "Nom de fichier invalide")
+
+    conn = get_db()
+    cur = conn.cursor()
+    src_clean = unquote(payload.source_path)
+    cur.execute("SELECT source_path, dest_path FROM processed_files WHERE source_path = ?", (src_clean,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Média introuvable")
+
+    old_dest = row["dest_path"] or ""
+    actual_p = resolve_actual_path(old_dest)
+    if not actual_p or not actual_p.exists():
+        conn.close()
+        raise HTTPException(404, "Fichier introuvable sur le disque")
+
+    orig_ext = actual_p.suffix
+    if orig_ext and not clean_name.lower().endswith(orig_ext.lower()):
+        clean_name = f"{clean_name}{orig_ext}"
+
+    new_p = actual_p.parent / clean_name
+    if new_p == actual_p:
+        conn.close()
+        return {"status": "ok", "dest_path": str(actual_p), "filename": actual_p.name}
+    if new_p.exists():
+        conn.close()
+        raise HTTPException(409, "Un fichier portant ce nom existe déjà")
+
+    actual_p.rename(new_p)
+    new_dest_str = str(new_p)
+    cur.execute("UPDATE processed_files SET dest_path = ? WHERE source_path = ?", (new_dest_str, src_clean))
+    cur.execute("UPDATE faces SET dest_path = ? WHERE dest_path = ?", (new_dest_str, old_dest))
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "dest_path": new_dest_str, "filename": new_p.name}
+
+
+class RevealMediaPayload(BaseModel):
+    source_path: str
+
+
+@router.post("/api/media/reveal")
+def api_reveal_media(payload: RevealMediaPayload):
+    import subprocess
+    import sys
+
+    conn = get_db()
+    cur = conn.cursor()
+    src_clean = unquote(payload.source_path)
+    cur.execute("SELECT dest_path FROM processed_files WHERE source_path = ?", (src_clean,))
+    row = cur.fetchone()
+    conn.close()
+
+    target = resolve_actual_path(row["dest_path"] if row else src_clean)
+    if not target or not target.exists():
+        raise HTTPException(404, "Fichier introuvable sur le disque")
+
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", f"/select,{target}"])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", str(target)])
+    else:
+        subprocess.Popen(["xdg-open", str(target.parent)])
+
+    return {"status": "ok"}
+
+
+class AnalyzeSingleMediaPayload(BaseModel):
+    source_path: str
+    run_faces: bool = True
+    run_visual: bool = True
+    force_faces: bool = False
+
+
+class ApplyMediaCategoriesPayload(BaseModel):
+    source_path: str
+    categories: list[dict] = []
+
+
+@router.post("/api/media/analyze_single")
+def api_analyze_single_media(payload: AnalyzeSingleMediaPayload):
+    import numpy as np
+    from settings_manager import load_settings, get_hardware_runtime_config
+    from media_frames import extract_analysis_frames
+
+    conn = get_db()
+    cur = conn.cursor()
+    row = cur.execute(
+        "SELECT source_path, dest_path, timestamp, faces_scanned, faces_model, clip_scanned, clip_model, clip_embedding FROM processed_files WHERE source_path = ?",
+        (payload.source_path,),
+    ).fetchone()
+    if not row:
+        src_clean = unquote(payload.source_path)
+        row = cur.execute(
+            "SELECT source_path, dest_path, timestamp, faces_scanned, faces_model, clip_scanned, clip_model, clip_embedding FROM processed_files WHERE source_path = ?",
+            (src_clean,),
+        ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Média introuvable")
+    src_clean = row["source_path"]
+
+    dest_path = row["dest_path"] or ""
+    actual_p = resolve_actual_path(dest_path)
+    if not actual_p or not actual_p.exists():
+        conn.close()
+        raise HTTPException(404, "Fichier introuvable sur le disque")
+
+    result = {"status": "ok", "faces": [], "visual_candidates": [], "faces_error": None, "visual_error": None}
+    db_p, dest_dir = get_active_db_and_dest()
+
+    if payload.run_faces:
+        try:
+            import indexeur_visages as faces_ai
+            from pipeline_runner import _assign_unclustered_faces_incremental
+
+            faces_ai.DB_PATH = db_p
+            faces_ai.DEST_DIR = dest_dir
+            faces_ai.THUMBS_DIR = dest_dir / "Miniatures_Visages"
+            faces_ai.init_face_tables(conn)
+
+            if payload.force_faces:
+                faces_ai.snapshot_named_face_hints(conn)
+                cur.execute(
+                    "DELETE FROM faces WHERE (source_path = ? OR dest_path = ?) AND embedding IS NOT NULL",
+                    (src_clean, dest_path),
+                )
+                conn.commit()
+
+            existing = cur.execute("""
+                SELECT f.face_id, f.thumb_path, f.person_id, f.bbox, COALESCE(p.name, 'Inconnu') as name
+                FROM faces f LEFT JOIN persons p ON f.person_id = p.person_id
+                WHERE f.source_path = ? OR f.dest_path = ?
+            """, (src_clean, dest_path)).fetchall()
+
+            if not existing or payload.force_faces:
+                manual_boxes = [
+                    faces_ai._parse_bbox_coords(r["bbox"])
+                    for r in existing if r["bbox"]
+                ]
+                hw = get_hardware_runtime_config()
+                faces_model = str(load_settings().get("faces_model", "buffalo_l")).strip()
+                if faces_model not in ("buffalo_s", "buffalo_l", "antelopev2"):
+                    faces_model = "buffalo_l"
+                frames = extract_analysis_frames(str(actual_p))
+                if not frames:
+                    raise ValueError(f"Impossible de décoder les images du fichier ({actual_p.name})")
+
+                app = faces_ai.create_face_analysis(
+                    faces_model=faces_model,
+                    providers=hw["onnx_providers"],
+                    ctx_id=hw["onnx_ctx_id"],
+                    det_size=faces_ai.DET_SIZE,
+                    det_thresh=0.45,
+                )
+
+                def _collect_face_candidates(min_score: float, min_pixels: int) -> list[dict]:
+                    cands = []
+                    for f_idx_frame, img in enumerate(frames):
+                        for f_idx, face in enumerate(app.get(img)):
+                            bbox = face.bbox.astype(int).tolist()
+                            if float(face.det_score) < min_score or (bbox[2] - bbox[0]) < min_pixels or (bbox[3] - bbox[1]) < min_pixels:
+                                continue
+                            b_tup = (bbox[0], bbox[1], bbox[2], bbox[3])
+                            if any(mb and faces_ai._bbox_match_score(b_tup, mb) >= 0.40 for mb in manual_boxes):
+                                continue
+                            cands.append({
+                                "img": img, "bbox": bbox, "det_score": float(face.det_score),
+                                "emb": face.normed_embedding.astype(np.float32),
+                                "uid": f"{abs(hash(src_clean))}_f{f_idx_frame}_{f_idx}",
+                            })
+                    return cands
+
+                raw_cands = _collect_face_candidates(min_score=0.45, min_pixels=24)
+                if not raw_cands:
+                    try:
+                        app.prepare(ctx_id=hw["onnx_ctx_id"], det_thresh=0.30, det_size=(1024, 1024))
+                    except Exception:
+                        app.prepare(ctx_id=-1, det_thresh=0.30, det_size=(1024, 1024))
+                    raw_cands = _collect_face_candidates(min_score=0.35, min_pixels=20)
+
+                for mf in faces_ai.deduplicate_video_faces(raw_cands):
+                    thumb = faces_ai.save_face_thumbnail(mf["img"], mf["bbox"], mf["uid"])
+                    b = mf["bbox"]
+                    cur.execute(
+                        "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, embedding, thumb_path) VALUES (?,?,?,?,?,?,?)",
+                        (src_clean, dest_path, row["timestamp"] or 0, f"{b[0]},{b[1]},{b[2]},{b[3]}", mf["det_score"], mf["emb"].tobytes(), thumb),
+                    )
+                cur.execute("UPDATE processed_files SET faces_scanned = 1, faces_model = ? WHERE source_path = ?", (faces_model, src_clean))
+                conn.commit()
+                faces_ai.apply_face_name_hints(conn)
+                _assign_unclustered_faces_incremental(conn)
+
+            result["faces"] = [
+                dict(r) for r in cur.execute("""
+                    SELECT f.face_id, f.thumb_path, f.person_id, COALESCE(p.name, 'Inconnu') as name
+                    FROM faces f LEFT JOIN persons p ON f.person_id = p.person_id
+                    WHERE f.source_path = ? OR f.dest_path = ?
+                """, (src_clean, dest_path)).fetchall()
+            ]
+        except Exception as e:
+            result["faces_error"] = str(e).strip() or type(e).__name__
+
+    if payload.run_visual:
+        try:
+            import cv2
+            from PIL import Image
+            import indexeur_semantique_gps as clip_gps_ai
+            from gallery_router import (
+                _AI_CATEGORY_CATALOG,
+                resolve_clip_category_prompt,
+            )
+
+            clip_gps_ai.upgrade_db_for_clip_and_gps(conn)
+            vision_model, text_model = clip_gps_ai.get_clip_models()
+            clip_key = str(load_settings().get("clip_model", "vit-b-32")).strip().lower()
+
+            assigned_names = {
+                r[0].lower() for r in cur.execute(
+                    "SELECT sc.name FROM media_categories mc JOIN smart_categories sc ON sc.category_id = mc.category_id WHERE mc.source_path = ?",
+                    (src_clean,),
+                ).fetchall()
+            }
+            existing_cats = [dict(r) for r in cur.execute("SELECT category_id, name, prompt, prompt_en FROM smart_categories").fetchall()]
+            candidates = []
+            prompts = []
+            seen = set()
+            updated_en = False
+            for c in existing_cats:
+                seen.add(c["name"].lower())
+                fr_p = c["prompt"] or c["name"]
+                en_p = resolve_clip_category_prompt(c["name"], fr_p, clip_key, prompt_en=c.get("prompt_en"))
+                if clip_key != "vit-b-32" and not c.get("prompt_en"):
+                    cur.execute("UPDATE smart_categories SET prompt_en = ? WHERE category_id = ?", (en_p, c["category_id"]))
+                    updated_en = True
+                candidates.append((c["name"], fr_p))
+                prompts.append(en_p)
+            if updated_en:
+                conn.commit()
+            for c_name, c_prompt in _AI_CATEGORY_CATALOG:
+                if c_name.lower() not in seen:
+                    seen.add(c_name.lower())
+                    candidates.append((c_name, c_prompt))
+                    prompts.append(resolve_clip_category_prompt(c_name, c_prompt, clip_key))
+
+            text_embs = np.asarray(text_model.encode(prompts, normalize_embeddings=True, show_progress_bar=False), dtype=np.float32)
+            expected_dim = int(text_embs.shape[1]) if text_embs.ndim == 2 else 0
+
+            m_emb = None
+            row_clip_model = (row["clip_model"] or "").strip().lower()
+            if row["clip_embedding"] and (not row_clip_model or row_clip_model == clip_key):
+                cached_emb = np.frombuffer(row["clip_embedding"], dtype=np.float16).astype(np.float32)
+                if expected_dim == 0 or cached_emb.shape[0] == expected_dim:
+                    m_emb = cached_emb
+
+            if m_emb is None:
+                frames = extract_analysis_frames(str(actual_p), max_dim=512)
+                pil_frames = [Image.fromarray(cv2.cvtColor(f_bgr, cv2.COLOR_BGR2RGB)) for f_bgr in frames]
+                if pil_frames:
+                    embs = vision_model.encode(pil_frames, batch_size=8, normalize_embeddings=True, show_progress_bar=False)
+                    m_emb = np.mean(embs, axis=0).astype(np.float32)
+                    norm = np.linalg.norm(m_emb)
+                    if norm > 0:
+                        m_emb = m_emb / norm
+                    cur.execute(
+                        "UPDATE processed_files SET clip_embedding = ?, clip_scanned = 1, clip_model = ? WHERE source_path = ?",
+                        (m_emb.astype(np.float16).tobytes(), clip_key, src_clean),
+                    )
+                    conn.commit()
+
+            if m_emb is not None:
+                norm = np.linalg.norm(m_emb)
+                if norm > 0:
+                    m_emb = m_emb / norm
+
+                min_thresh = 0.18 if clip_key == "vit-b-32" else 0.16
+                sims = np.dot(text_embs, m_emb)
+                all_ranked = []
+                scored = []
+                for (c_name, c_prompt), sc in zip(candidates, sims):
+                    score_val = float(sc)
+                    is_assigned = c_name.lower() in assigned_names
+                    item_dict = {
+                        "name": c_name,
+                        "prompt": c_prompt,
+                        "score": round(score_val, 3),
+                        "percent": max(1, min(99, int(round(score_val * 100)))),
+                        "already_assigned": is_assigned,
+                        "confident": score_val >= min_thresh or is_assigned,
+                    }
+                    all_ranked.append(item_dict)
+                    if item_dict["confident"]:
+                        scored.append(item_dict)
+
+                if not scored:
+                    all_ranked.sort(key=lambda x: x["score"], reverse=True)
+                    scored = all_ranked[:5]
+                else:
+                    scored.sort(key=lambda x: (x["already_assigned"], x["score"]), reverse=True)
+                result["visual_candidates"] = scored[:12]
+                cur.execute(
+                    "UPDATE processed_files SET visual_suggestions_json = ? WHERE source_path = ?",
+                    (json.dumps(result["visual_candidates"], ensure_ascii=False), src_clean),
+                )
+                conn.commit()
+        except Exception as e:
+            result["visual_error"] = str(e)
+
+    conn.close()
+    return result
+
+
+@router.post("/api/media/apply_categories")
+def api_apply_media_categories(payload: ApplyMediaCategoriesPayload):
+    from gallery_router import _AI_CATEGORY_EN_PROMPTS
+    from prompt_translator import translate_fr_to_en
+
+    conn = get_db()
+    cur = conn.cursor()
+    row = cur.execute("SELECT source_path FROM processed_files WHERE source_path = ?", (payload.source_path,)).fetchone()
+    src_clean = row["source_path"] if row else unquote(payload.source_path)
+    cur.execute("DELETE FROM media_categories WHERE source_path = ?", (src_clean,))
+    for cat in payload.categories:
+        c_name = str(cat.get("name") or "").strip()
+        if not c_name:
+            continue
+        c_prompt = str(cat.get("prompt") or c_name).strip()
+        c_prompt_en = _AI_CATEGORY_EN_PROMPTS.get(c_name) or translate_fr_to_en(c_prompt)
+        c_score = float(cat.get("score") or 1.0)
+        cur.execute(
+            "INSERT OR IGNORE INTO smart_categories (name, prompt, prompt_en, source) VALUES (?, ?, ?, 'AI')",
+            (c_name, c_prompt, c_prompt_en),
+        )
+        row = cur.execute("SELECT category_id FROM smart_categories WHERE name = ?", (c_name,)).fetchone()
+        if row:
+            cur.execute(
+                "INSERT OR REPLACE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'USER', ?)",
+                (src_clean, row["category_id"], c_score),
+            )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}

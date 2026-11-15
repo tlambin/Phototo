@@ -1,5 +1,5 @@
 {
-    "active_library": "Test",
+    "active_library": "Phototo",
     "libraries": {
         "Test": {
             "name": "Test",
@@ -42,6 +42,27 @@
             "created_at": "2026-11-13T23:19:10.178287",
             "options": {
                 "fix_takeout_json_metadata": true,
+                "delete_zips_progressively": false,
+                "organize_by_year_month": true,
+                "run_deduplication": true,
+                "run_faces_ai": true,
+                "run_ocr": true,
+                "run_similarity": true,
+                "run_semantic_clip": true
+            }
+        },
+        "New": {
+            "name": "New",
+            "source_type": "STANDARD_FOLDER",
+            "is_takeout": false,
+            "source_paths": [
+                "C:\\Users\\Thomas\\Pictures\\new"
+            ],
+            "dest_dir": "C:\\Users\\Thomas\\Pictures\\new",
+            "db_path": "C:\\Users\\Thomas\\Pictures\\new\\library_new.db",
+            "created_at": "2026-11-15T02:21:27.131983",
+            "options": {
+                "fix_takeout_json_metadata": false,
                 "delete_zips_progressively": false,
                 "organize_by_year_month": true,
                 "run_deduplication": true,

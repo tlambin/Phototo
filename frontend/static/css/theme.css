@@ -72,18 +72,13 @@ aside.sidebar-mini .nav-btn {
 ::-webkit-scrollbar-thumb { background: rgba(120,110,125,0.35); border-radius: 9999px; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-.masonry-grid { column-count: 2; column-gap: 1rem; }
-@media (min-width: 768px) { .masonry-grid { column-count: 4; } }
-@media (min-width: 1280px) { .masonry-grid { column-count: 5; } }
-.masonry-grid.masonry-sm { column-count: 3; column-gap: 0.625rem; }
-@media (min-width: 768px) { .masonry-grid.masonry-sm { column-count: 6; } }
-@media (min-width: 1280px) { .masonry-grid.masonry-sm { column-count: 8; } }
-.masonry-grid.masonry-lg { column-count: 1; column-gap: 1.25rem; }
-@media (min-width: 768px) { .masonry-grid.masonry-lg { column-count: 2; } }
-@media (min-width: 1280px) { .masonry-grid.masonry-lg { column-count: 3; } }
-.masonry-item { break-inside: avoid; margin-bottom: 1rem; }
-.masonry-sm .masonry-item { margin-bottom: 0.625rem; }
-.masonry-lg .masonry-item { margin-bottom: 1.25rem; }
+.masonry-grid { display: flex; align-items: flex-start; gap: 0.25rem; }
+.masonry-grid.masonry-sm { gap: 0.15rem; }
+.masonry-grid.masonry-lg { gap: 0.375rem; }
+.masonry-col { flex: 1 1 0%; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.masonry-sm .masonry-col { gap: 0.15rem; }
+.masonry-lg .masonry-col { gap: 0.375rem; }
+.masonry-item { width: 100%; }
 
 /* Optimisation GPU & DOM pour le défilement infini */
 .media-tile {

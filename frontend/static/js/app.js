@@ -740,6 +740,16 @@ function renderAiModulesList(modules, task) {
                </div>`
             : '';
 
+        const staleBanner = (m.stale_media_count && m.stale_media_count > 0)
+            ? `<div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-[11px] text-amber-200">
+                   <span>⚠ ${m.stale_media_count} média(s) avaient été analysé(s) avec un autre modèle.</span>
+                   <button type="button" onclick="reindexStaleAiModel('${m.id}', false)"
+                           class="px-2.5 py-1 rounded-full bg-amber-400 text-[#1E1E1E] font-bold hover:bg-amber-300 transition">
+                       Ré-analyser maintenant
+                   </button>
+               </div>`
+            : '';
+
         return `
         <div class="ui-pill rounded-2xl p-5 space-y-3">
             <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -776,6 +786,7 @@ function renderAiModulesList(modules, task) {
             </div>
             <div class="pl-6 space-y-2.5 pt-1 border-t border-white/10">
                 ${modelSelector}
+                ${staleBanner}
                 <div class="flex flex-wrap items-center gap-1.5">
                     <span class="text-[10px] font-bold uppercase tracking-wider opacity-45 mr-1">Packages</span>
                     ${pkgPills}
@@ -851,12 +862,50 @@ async function runAiModuleAction(moduleId, action) {
     startAiTaskPolling();
 }
 
+async function reindexStaleAiModel(moduleId, includeUnknown = true) {
+    const res = await fetch('/api/ai/reindex_model', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ module_id: moduleId, include_unknown: includeUnknown })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Impossible de relancer l'analyse.");
+        return;
+    }
+    await loadAiModulesStatus();
+}
+
 async function selectAiModuleModel(moduleId, modelId) {
+    const prevModel = moduleId === 'ocr' ? currentOcrEngine : (moduleId === 'faces' ? currentFacesModel : currentClipModel);
     if (moduleId === 'ocr') currentOcrEngine = modelId;
     else if (moduleId === 'faces') currentFacesModel = modelId;
     else if (moduleId === 'clip') currentClipModel = modelId;
     await saveAppSettingsQuiet();
     await loadAiModulesStatus();
+
+    if ((moduleId === 'faces' || moduleId === 'clip') && prevModel && prevModel !== modelId) {
+        try {
+            const res = await fetch(`/api/ai/model_mismatch?module_id=${encodeURIComponent(moduleId)}&target_model=${encodeURIComponent(modelId)}&prev_model=${encodeURIComponent(prevModel)}`);
+            if (res.ok) {
+                const info = await res.json();
+                if (info.stale_count > 0) {
+                    const label = moduleId === 'faces' ? 'Visages' : 'CLIP';
+                    const preserveNote = moduleId === 'faces'
+                        ? '\nVos noms de personnes déjà attribués seront conservés et ré-associés automatiquement.'
+                        : '';
+                    const ok = confirm(
+                        `Modèle ${label} changé vers « ${modelId} ».\n` +
+                        `${info.stale_count} média(s) déjà analysé(s) utilisaient un autre modèle.${preserveNote}\n\n` +
+                        `Voulez-vous relancer automatiquement leur ré-analyse avec « ${modelId} » maintenant ?`
+                    );
+                    if (ok) {
+                        await reindexStaleAiModel(moduleId, true);
+                    }
+                }
+            }
+        } catch (e) {}
+    }
 }
 
 async function saveAppSettingsQuiet() {

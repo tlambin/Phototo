@@ -8,6 +8,8 @@ let lastClickedGalleryIdx = null;
 let lastRenderedGroupTitle = {};
 
 let singleAlbumIsLoading = false;
+let singleAlbumTotalItems = 0;
+let lightboxIsCustomItem = false;
 let infiniteScrollObserver = null;
 
 let currentSkipOffset = 0;
@@ -203,7 +205,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         const aspectStyle = (it.width && it.height) ? `aspect-ratio: ${it.width} / ${it.height};` : '';
         return `
         <div id="media-tile-${idx}" data-tile-idx="${idx}" data-ts="${it.timestamp || 0}" data-source="${srcEnc}" onclick="openLightbox(${idx})" style="${aspectStyle}"
-             class="media-tile masonry-item ui-card group relative w-full rounded-[24px] overflow-hidden cursor-pointer shadow-sm transition-all duration-150 ${borderClass}">
+             class="media-tile masonry-item ui-card group relative w-full rounded-lg overflow-hidden cursor-pointer shadow-sm transition-all duration-150 ${borderClass}">
             <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-auto block group-hover:scale-[1.02] transition duration-300 select-none pointer-events-none"/>
             ${selectBtn}
             ${favBtn}
@@ -221,6 +223,48 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
     </div>`;
 }
 
+function getMasonryColumnCount() {
+    const w = window.innerWidth || 1280;
+    if (gallerySize === 'SM') return w >= 1280 ? 8 : (w >= 768 ? 6 : 3);
+    if (gallerySize === 'LG') return w >= 1280 ? 3 : (w >= 768 ? 2 : 1);
+    return w >= 1280 ? 5 : (w >= 768 ? 4 : 2);
+}
+
+function _ensureMasonryColumns(gridEl) {
+    const colCount = getMasonryColumnCount();
+    if (!gridEl._masonryCols || gridEl._masonryCols.length !== colCount) {
+        gridEl.innerHTML = '';
+        gridEl._masonryCols = [];
+        gridEl._colHeights = new Array(colCount).fill(0);
+        for (let c = 0; c < colCount; c++) {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'masonry-col';
+            gridEl.appendChild(colDiv);
+            gridEl._masonryCols.push(colDiv);
+        }
+    }
+    return gridEl._masonryCols;
+}
+
+function _appendMasonryTilesBatch(gridEl, itemsWithIdx) {
+    const cols = _ensureMasonryColumns(gridEl);
+    const heights = gridEl._colHeights;
+    const buffers = cols.map(() => []);
+    for (let i = 0; i < itemsWithIdx.length; i++) {
+        const { item, idx } = itemsWithIdx[i];
+        let bestCol = 0;
+        for (let c = 1; c < heights.length; c++) {
+            if (heights[c] < heights[bestCol] - 1e-6) bestCol = c;
+        }
+        const ratio = (item.width && item.height && item.width > 0) ? (item.height / item.width) : 1.0;
+        heights[bestCol] += ratio;
+        buffers[bestCol].push(renderSingleMediaTile(item, idx, 'MASONRY'));
+    }
+    for (let c = 0; c < cols.length; c++) {
+        if (buffers[c].length) cols[c].insertAdjacentHTML('beforeend', buffers[c].join(''));
+    }
+}
+
 function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = false) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -236,6 +280,7 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
     }
 
     const gridClass = getGalleryGridClass();
+    const isMasonry = galleryLayout === 'MASONRY';
 
     if (galleryGroupBy === 'NONE') {
         let grid = container.querySelector('.group-grid');
@@ -243,8 +288,12 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
             container.innerHTML = `<div class="${gridClass}"></div>`;
             grid = container.querySelector('.group-grid');
         }
-        const html = newItems.map((it, i) => renderSingleMediaTile(it, startIndex + i, galleryLayout)).join('');
-        grid.insertAdjacentHTML('beforeend', html);
+        if (isMasonry) {
+            _appendMasonryTilesBatch(grid, newItems.map((it, i) => ({ item: it, idx: startIndex + i })));
+        } else {
+            const html = newItems.map((it, i) => renderSingleMediaTile(it, startIndex + i, galleryLayout)).join('');
+            grid.insertAdjacentHTML('beforeend', html);
+        }
         return;
     }
 
@@ -257,16 +306,21 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
             const sectionHtml = `
                 <div class="space-y-3 group-section">
                     <h3 class="text-sm font-extrabold opacity-80">${title}</h3>
-                    <div class="${gridClass}">
-                        ${renderSingleMediaTile(it, globalIdx, galleryLayout)}
-                    </div>
+                    <div class="${gridClass}"></div>
                 </div>`;
             container.insertAdjacentHTML('beforeend', sectionHtml);
+            const grids = container.querySelectorAll('.group-grid');
+            const lastGrid = grids[grids.length - 1];
+            if (lastGrid) {
+                if (isMasonry) _appendMasonryTilesBatch(lastGrid, [{ item: it, idx: globalIdx }]);
+                else lastGrid.insertAdjacentHTML('beforeend', renderSingleMediaTile(it, globalIdx, galleryLayout));
+            }
         } else {
             const grids = container.querySelectorAll('.group-grid');
             const lastGrid = grids[grids.length - 1];
             if (lastGrid) {
-                lastGrid.insertAdjacentHTML('beforeend', renderSingleMediaTile(it, globalIdx, galleryLayout));
+                if (isMasonry) _appendMasonryTilesBatch(lastGrid, [{ item: it, idx: globalIdx }]);
+                else lastGrid.insertAdjacentHTML('beforeend', renderSingleMediaTile(it, globalIdx, galleryLayout));
             }
         }
     });
@@ -541,6 +595,7 @@ async function loadGalleryItems(append = false, customSkip = -1) {
         const newItems = d.items || [];
         galleryTotalPages = d.total_pages || 1;
         galleryTotalItems = d.total || 0;
+        lightboxIsCustomItem = false;
         if (append) galleryPage = targetPage;
         const totalLbl = document.getElementById('gal-total-label');
         if (totalLbl) totalLbl.textContent = `${galleryTotalItems} éléments`;
@@ -552,6 +607,11 @@ async function loadGalleryItems(append = false, customSkip = -1) {
             const startIdx = currentGalleryItems.length;
             currentGalleryItems.push(...newItems);
             appendMediaBatchToContainer('gallery-content-area', newItems, startIdx, false);
+            if (!document.getElementById('lightbox-modal')?.classList.contains('hidden')) {
+                renderLightboxFilmstrip(currentLightboxIndex);
+                const nextBtn = document.getElementById('lb-next-btn');
+                if (nextBtn) nextBtn.classList.toggle('opacity-30', currentLightboxIndex >= currentGalleryItems.length - 1);
+            }
         }
         updateGalleryBatchBar();
         updateGalleryPrevBar();
@@ -973,23 +1033,21 @@ function getAlbumGridClass() {
     return 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5';
 }
 
+function _compareAlbumItems(a, b, sortBy = 'date', sortOrder = 'desc') {
+    const dir = sortOrder === 'asc' ? 1 : -1;
+    if (sortBy === 'name') {
+        return dir * (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
+    }
+    const field = sortBy === 'modified' ? 'modified_ts' : 'max_ts';
+    const diff = (a[field] || 0) - (b[field] || 0);
+    if (diff !== 0) return dir * diff;
+    return dir * (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
+}
+
 function sortAlbumItems(albums) {
     const sortBy = document.getElementById('alb-sort-by')?.value || 'date';
     const sortOrder = document.getElementById('alb-sort-order')?.value || 'desc';
-    const dir = sortOrder === 'asc' ? 1 : -1;
-    return [...albums].sort((a, b) => {
-        if (sortBy === 'name') {
-            return dir * (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
-        }
-        if (sortBy === 'modified') {
-            const diff = (a.modified_ts || 0) - (b.modified_ts || 0);
-            if (diff !== 0) return dir * diff;
-            return dir * (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
-        }
-        const diff = (a.max_ts || 0) - (b.max_ts || 0);
-        if (diff !== 0) return dir * diff;
-        return dir * (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
-    });
+    return [...albums].sort((a, b) => _compareAlbumItems(a, b, sortBy, sortOrder));
 }
 
 function renderAlbumCardHTML(a) {
@@ -1470,6 +1528,7 @@ async function openSingleAlbumView(albumName) {
     openedAlbumName = albumName;
     singleAlbumPage = 1;
     singleAlbumTotalPages = 1;
+    singleAlbumTotalItems = 0;
     currentGalleryItems = [];
     selectedGalleryPaths.clear();
 
@@ -1554,6 +1613,8 @@ async function loadSingleAlbumItems(append = false) {
         const newItems = d.items || [];
         singleAlbumPage = d.page || targetPage;
         singleAlbumTotalPages = d.total_pages || 1;
+        singleAlbumTotalItems = d.total || 0;
+        lightboxIsCustomItem = false;
         document.getElementById('single-album-count').textContent = `${d.total} éléments`;
 
         if (!append) {
@@ -1638,71 +1699,88 @@ function toggleFormatsPanel(forceState) {
     if (btn) btn.classList.toggle('nav-item-active', willShow);
 }
 
-async function loadTypesSummary() {
-    closeSingleCategoryView();
-    const [resTypes, resCats] = await Promise.all([
-        fetch('/api/types/summary'),
-        fetch('/api/categories/list')
-    ]);
-    const d = await resTypes.json();
-    const catsData = await resCats.json();
-    const c = d.categories || {};
-
+function _renderTypesPills(c = {}, extCount = 0) {
     const pills = [
         {
             id: 'PHOTOS',
             title: 'Photos',
-            count: (c.PHOTOS?.count || 0),
+            count: (c.PHOTOS?.count ?? '...'),
             onclick: "filterGalleryByType('PHOTOS')",
             icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`
         },
         {
             id: 'VIDEOS',
             title: 'Vidéos',
-            count: (c.VIDEOS?.count || 0),
+            count: (c.VIDEOS?.count ?? '...'),
             onclick: "filterGalleryByType('VIDEOS')",
             icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 12h20"/></svg>`
         },
         {
             id: 'ANIMATED',
             title: 'Images animées',
-            count: (c.ANIMATED?.count || 0),
+            count: (c.ANIMATED?.count ?? '...'),
             onclick: "filterGalleryByType('ANIMATED')",
             icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>`
         },
         {
             id: 'FORMATS',
             title: 'Formats',
-            count: (d.extensions || []).length,
+            count: extCount,
             onclick: "toggleFormatsPanel()",
             icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`
         }
     ];
-
-    document.getElementById('types-cards-grid').innerHTML = pills.map(k => `
-        <button id="type-pill-${k.id}" type="button" onclick="${k.onclick}"
-                class="ui-card rounded-2xl px-5 py-3 cursor-pointer hover:scale-[1.02] transition shadow-sm flex items-center gap-2.5 text-xs font-extrabold">
-            ${k.icon}
-            <span>${k.title}</span>
-            <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-75">${k.count}</span>
-        </button>
-    `).join('');
-
-    document.getElementById('types-ext-grid').innerHTML = (d.extensions || []).map(e => `
-        <div onclick="filterGalleryByExt('${e.ext}')" class="ui-pill rounded-2xl p-3 cursor-pointer flex justify-between items-center font-bold text-xs hover:opacity-85 transition">
-            <span class="font-mono">${e.ext}</span>
-            <span class="opacity-70">${e.count}</span>
-        </div>
-    `).join('');
-
-    renderSmartCategoriesGrid(catsData.categories || []);
+    const grid = document.getElementById('types-cards-grid');
+    if (grid) {
+        grid.innerHTML = pills.map(k => `
+            <button id="type-pill-${k.id}" type="button" onclick="${k.onclick}"
+                    class="ui-card rounded-2xl px-5 py-3 cursor-pointer hover:scale-[1.02] transition shadow-sm flex items-center gap-2.5 text-xs font-extrabold">
+                ${k.icon}
+                <span>${k.title}</span>
+                <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-75">${k.count}</span>
+            </button>
+        `).join('');
+    }
 }
 
-function renderSmartCategoriesGrid(categories) {
+async function loadTypesSummary() {
+    closeSingleCategoryView();
+    _renderTypesPills({}, '...');
+    let d = { categories: {}, extensions: [] };
+    let catsData = { categories: [], ai_indexed: 0 };
+    try {
+        const [resTypes, resCats] = await Promise.all([
+            fetch('/api/types/summary'),
+            fetch('/api/categories/list')
+        ]);
+        if (resTypes.ok) d = await resTypes.json();
+        if (resCats.ok) catsData = await resCats.json();
+    } catch (e) {
+        console.error('loadTypesSummary error:', e);
+    }
+    _renderTypesPills(d.categories || {}, (d.extensions || []).length);
+
+    const extGrid = document.getElementById('types-ext-grid');
+    if (extGrid) {
+        extGrid.innerHTML = (d.extensions || []).map(e => `
+            <div onclick="filterGalleryByExt('${e.ext}')" class="ui-pill rounded-2xl p-3 cursor-pointer flex justify-between items-center font-bold text-xs hover:opacity-85 transition">
+                <span class="font-mono">${e.ext}</span>
+                <span class="opacity-70">${e.count}</span>
+            </div>
+        `).join('');
+    }
+
+    renderSmartCategoriesGrid(catsData.categories || [], catsData.ai_indexed || 0);
+}
+
+function renderSmartCategoriesGrid(categories, aiIndexed = 0) {
     const grid = document.getElementById('smart-categories-grid');
     if (!grid) return;
     if (!categories.length) {
-        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucune catégorie. Cliquez sur "+ Ajouter" pour en créer une.</div>`;
+        const hint = aiIndexed > 0
+            ? 'Aucune catégorie générée pour l\'instant. Cliquez sur « Analyser » pour classer automatiquement vos photos.'
+            : 'Aucune catégorie pour le moment. Cliquez sur « Analyser » pour lancer l\'IA CLIP ou sur « + Ajouter » pour créer une catégorie manuelle.';
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">${hint}</div>`;
         return;
     }
     grid.innerHTML = categories.map(cat => {
@@ -1827,11 +1905,10 @@ async function openSingleCategoryView(categoryId) {
         grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun média dans cette catégorie pour le moment.</div>`;
         return;
     }
-    grid.innerHTML = items.map(it => {
-        const sEnc = encodeURIComponent(it.source_path || it.dest_path);
-        const dEnc = encodeURIComponent(it.dest_path);
+    currentCategoryItems = items;
+    grid.innerHTML = items.map((it, idx) => {
         return `
-            <div onclick="openLightboxForCustomItem('${sEnc}', '${dEnc}', ${it.timestamp || 0})"
+            <div onclick="openCategoryLightbox(${idx})"
                  class="ui-card rounded-2xl overflow-hidden cursor-pointer group shadow-sm relative">
                 <div class="aspect-square overflow-hidden bg-black/5">
                     ${renderMediaPreview(it.dest_path, 'w-full h-full object-cover group-hover:scale-105 transition')}
@@ -1839,6 +1916,13 @@ async function openSingleCategoryView(categoryId) {
             </div>
         `;
     }).join('');
+}
+
+let currentCategoryItems = [];
+function openCategoryLightbox(idx) {
+    if (!currentCategoryItems.length) return;
+    currentGalleryItems = currentCategoryItems;
+    openLightbox(idx);
 }
 
 function closeSingleCategoryView() {
@@ -1891,6 +1975,128 @@ function openEditorFromTools(kind) {
 
 let lbMiniMap = null;
 let lbMiniMarker = null;
+let lbZoomScale = 1;
+let lbPanX = 0;
+let lbPanY = 0;
+let lbIsDragging = false;
+let lbDragStartX = 0;
+let lbDragStartY = 0;
+let lbSlideshowTimer = null;
+
+function _applyLightboxZoomTransform() {
+    const imgEl = document.getElementById('lb-img');
+    const lbl = document.getElementById('lb-zoom-label');
+    if (imgEl) {
+        imgEl.style.transform = `translate(${lbPanX}px, ${lbPanY}px) scale(${lbZoomScale})`;
+        imgEl.style.cursor = lbZoomScale > 1 ? (lbIsDragging ? 'grabbing' : 'grab') : 'zoom-in';
+    }
+    if (lbl) lbl.textContent = `${Math.round(lbZoomScale * 100)}%`;
+}
+
+function resetLightboxZoom() {
+    lbZoomScale = 1;
+    lbPanX = 0;
+    lbPanY = 0;
+    _applyLightboxZoomTransform();
+}
+
+function adjustLightboxZoom(delta) {
+    const imgEl = document.getElementById('lb-img');
+    if (!imgEl || imgEl.classList.contains('hidden')) return;
+    lbZoomScale = Math.min(4, Math.max(1, Number((lbZoomScale + delta).toFixed(2))));
+    if (lbZoomScale <= 1) {
+        lbPanX = 0;
+        lbPanY = 0;
+    }
+    _applyLightboxZoomTransform();
+}
+
+function toggleLightboxDoubleClickZoom(e) {
+    if (e) e.stopPropagation();
+    if (lbZoomScale > 1.05) {
+        resetLightboxZoom();
+    } else {
+        lbZoomScale = 2.25;
+        lbPanX = 0;
+        lbPanY = 0;
+        _applyLightboxZoomTransform();
+    }
+}
+
+function toggleLightboxSlideshow(forceStop = false) {
+    const iconEl = document.getElementById('lb-slideshow-icon');
+    const btnEl = document.getElementById('lb-btn-slideshow');
+    if (lbSlideshowTimer || forceStop) {
+        clearInterval(lbSlideshowTimer);
+        lbSlideshowTimer = null;
+        if (iconEl) iconEl.textContent = '▶';
+        if (btnEl) btnEl.classList.remove('bg-white/25');
+        return;
+    }
+    if (iconEl) iconEl.textContent = '⏸';
+    if (btnEl) btnEl.classList.add('bg-white/25');
+    lbSlideshowTimer = setInterval(() => {
+        if (currentLightboxIndex < currentGalleryItems.length - 1) {
+            navigateLightbox(1);
+        } else {
+            openLightbox(0);
+        }
+    }, 3000);
+}
+
+function toggleLightboxFullscreen() {
+    const modal = document.getElementById('lightbox-modal');
+    if (!modal) return;
+    if (!document.fullscreenElement) {
+        modal.requestFullscreen?.().catch(() => {});
+    } else {
+        document.exitFullscreen?.().catch(() => {});
+    }
+}
+
+function _preloadLightboxNeighbors(idx) {
+    [idx + 1, idx - 1].forEach(nIdx => {
+        if (nIdx < 0 || nIdx >= currentGalleryItems.length) return;
+        const neighbor = currentGalleryItems[nIdx];
+        if (!neighbor || isVideoFile(neighbor.dest_path)) return;
+        const pre = new Image();
+        pre.src = `/media?path=${encodeURIComponent(neighbor.dest_path)}`;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const stage = document.getElementById('lb-media-stage');
+    const imgEl = document.getElementById('lb-img');
+    if (stage) {
+        stage.addEventListener('wheel', (e) => {
+            if (document.getElementById('lightbox-modal')?.classList.contains('hidden')) return;
+            if (!imgEl || imgEl.classList.contains('hidden')) return;
+            e.preventDefault();
+            adjustLightboxZoom(e.deltaY < 0 ? 0.25 : -0.25);
+        }, { passive: false });
+    }
+    if (imgEl) {
+        imgEl.addEventListener('mousedown', (e) => {
+            if (lbZoomScale <= 1) return;
+            e.preventDefault();
+            lbIsDragging = true;
+            lbDragStartX = e.clientX - lbPanX;
+            lbDragStartY = e.clientY - lbPanY;
+            _applyLightboxZoomTransform();
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!lbIsDragging) return;
+            lbPanX = e.clientX - lbDragStartX;
+            lbPanY = e.clientY - lbDragStartY;
+            _applyLightboxZoomTransform();
+        });
+        window.addEventListener('mouseup', () => {
+            if (!lbIsDragging) return;
+            lbIsDragging = false;
+            _applyLightboxZoomTransform();
+        });
+    }
+});
 
 async function openLightbox(idx) {
     if (idx < 0 || idx >= currentGalleryItems.length) return;
@@ -1898,6 +2104,8 @@ async function openLightbox(idx) {
     const item = currentGalleryItems[idx];
     const url = `/media?path=${encodeURIComponent(item.dest_path)}`;
     const isVid = isVideoFile(item.dest_path);
+
+    resetLightboxZoom();
 
     const imgEl = document.getElementById('lb-img');
     const vidEl = document.getElementById('lb-video');
@@ -1912,20 +2120,51 @@ async function openLightbox(idx) {
         imgEl.src = url;
     }
 
+    const animBadge = document.getElementById('lb-animated-badge');
+    if (animBadge) {
+        const isAnim = item.is_animated === 1 || /\.(gif|apng)$/i.test(item.dest_path || '');
+        animBadge.classList.toggle('hidden', !isAnim);
+    }
+
+    const counterEl = document.getElementById('lb-counter');
+    if (counterEl) {
+        let displayPos = idx + 1;
+        let displayTotal = currentGalleryItems.length;
+        if (!lightboxIsCustomItem) {
+            if (currentTab === 'albums' && openedAlbumName) {
+                displayTotal = Math.max(singleAlbumTotalItems, currentGalleryItems.length);
+            } else {
+                displayPos = currentSkipOffset + idx + 1;
+                displayTotal = Math.max(galleryTotalItems, currentSkipOffset + currentGalleryItems.length);
+            }
+        }
+        counterEl.textContent = `${displayPos} / ${displayTotal}`;
+    }
+
     updateLightboxFavButton(item.is_favorite);
+    const prevBtn = document.getElementById('lb-prev-btn');
+    const nextBtn = document.getElementById('lb-next-btn');
+    if (prevBtn) prevBtn.classList.toggle('opacity-30', idx <= 0);
+    if (nextBtn) nextBtn.classList.toggle('opacity-30', idx >= currentGalleryItems.length - 1);
+    renderLightboxFilmstrip(idx);
     document.getElementById('lightbox-modal').classList.remove('hidden');
+    _preloadLightboxNeighbors(idx);
 
     if (idx >= currentGalleryItems.length - 5) {
         if (currentTab === 'albums' && openedAlbumName) loadSingleAlbumItems(true);
         else loadGalleryItems(true);
     }
 
+    if (localStorage.getItem('phototo_lb_info_open') === '1') {
+        document.getElementById('lb-info-drawer')?.classList.remove('hidden');
+    }
     if (!document.getElementById('lb-info-drawer').classList.contains('hidden')) {
         await loadLightboxMetadataInfo();
     }
 }
 
 function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
+    lightboxIsCustomItem = true;
     currentGalleryItems = [{
         source_path: decodeURIComponent(encSrc),
         dest_path: decodeURIComponent(encDest),
@@ -1937,9 +2176,39 @@ function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
 }
 
 function closeLightbox() {
+    cancelLightboxDelete();
+    closeLightboxAnalyzeModal();
+    toggleLightboxSlideshow(true);
+    resetLightboxZoom();
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     const vidEl = document.getElementById('lb-video');
     if (vidEl) vidEl.pause();
     document.getElementById('lightbox-modal').classList.add('hidden');
+}
+
+function renderLightboxFilmstrip(activeIdx) {
+    const strip = document.getElementById('lb-filmstrip');
+    if (!strip) return;
+    if (!currentGalleryItems || currentGalleryItems.length <= 1) {
+        strip.classList.add('hidden');
+        strip.innerHTML = '';
+        return;
+    }
+    strip.classList.remove('hidden');
+    const start = Math.max(0, activeIdx - 8);
+    const end = Math.min(currentGalleryItems.length - 1, activeIdx + 8);
+    let html = '';
+    for (let i = start; i <= end; i++) {
+        const it = currentGalleryItems[i];
+        const isActive = i === activeIdx;
+        const ringCls = isActive ? 'ring-2 ring-white scale-105 opacity-100' : 'opacity-55 hover:opacity-100';
+        html += `
+            <button type="button" onclick="event.stopPropagation(); openLightbox(${i})"
+                    class="shrink-0 w-8 h-8 rounded-lg overflow-hidden transition ${ringCls}">
+                <img src="/thumb?path=${encodeURIComponent(it.dest_path)}" loading="lazy" class="w-full h-full object-cover"/>
+            </button>`;
+    }
+    strip.innerHTML = html;
 }
 
 function navigateLightbox(delta) {
@@ -1950,9 +2219,39 @@ function navigateLightbox(delta) {
 window.addEventListener('keydown', e => {
     const lbOpen = !document.getElementById('lightbox-modal').classList.contains('hidden');
     if (!lbOpen) return;
-    if (e.key === 'Escape') closeLightbox();
-    if (e.key === 'ArrowLeft') navigateLightbox(-1);
-    if (e.key === 'ArrowRight') navigateLightbox(1);
+    if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (e.key === 'Escape') {
+        const albumsEditModal = document.getElementById('lb-albums-edit-modal');
+        if (albumsEditModal && !albumsEditModal.classList.contains('hidden')) {
+            closeLightboxAlbumsEditor();
+            return;
+        }
+        const facesEditModal = document.getElementById('lb-faces-edit-modal');
+        if (facesEditModal && !facesEditModal.classList.contains('hidden')) {
+            closeLightboxFacesEditor();
+            return;
+        }
+        const analyzeModal = document.getElementById('lb-analyze-modal');
+        if (analyzeModal && !analyzeModal.classList.contains('hidden')) {
+            closeLightboxAnalyzeModal();
+            return;
+        }
+        const delConfirm = document.getElementById('lb-delete-confirm');
+        if (delConfirm && !delConfirm.classList.contains('hidden')) {
+            cancelLightboxDelete();
+            return;
+        }
+        closeLightbox();
+    }
+    else if (e.key === 'ArrowLeft') navigateLightbox(-1);
+    else if (e.key === 'ArrowRight') navigateLightbox(1);
+    else if (e.key === 'f' || e.key === 'F') lightboxToggleFavorite();
+    else if (e.key === 'i' || e.key === 'I') toggleLightboxInfoDrawer();
+    else if (e.key === 'Delete') lightboxDeleteMedia();
+    else if (e.key === ' ') { e.preventDefault(); toggleLightboxSlideshow(); }
+    else if (e.key === '+' || e.key === '=') adjustLightboxZoom(0.25);
+    else if (e.key === '-') adjustLightboxZoom(-0.25);
+    else if (e.key === '0') resetLightboxZoom();
 });
 
 function updateLightboxFavButton(isFav) {
@@ -2110,8 +2409,26 @@ function lightboxDownloadMedia() {
     a.remove();
 }
 
-async function lightboxDeleteMedia() {
+function lightboxDeleteMedia() {
     const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const modal = document.getElementById('lb-delete-confirm');
+    const nameEl = document.getElementById('lb-delete-filename');
+    if (nameEl) {
+        const rawPath = item.dest_path || item.source_path || '';
+        nameEl.textContent = rawPath.split(/[\\/]/).pop() || '';
+    }
+    if (modal) modal.classList.remove('hidden');
+}
+
+function cancelLightboxDelete() {
+    const modal = document.getElementById('lb-delete-confirm');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function confirmLightboxDelete() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    cancelLightboxDelete();
     if (!item) return;
     await fetch('/api/trash/action', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -2138,32 +2455,335 @@ function lightboxOpenMetadataEditor() {
 async function toggleLightboxInfoDrawer() {
     const dr = document.getElementById('lb-info-drawer');
     dr.classList.toggle('hidden');
-    if (!dr.classList.contains('hidden')) {
+    const isOpen = !dr.classList.contains('hidden');
+    localStorage.setItem('phototo_lb_info_open', isOpen ? '1' : '0');
+    if (isOpen) {
         await loadLightboxMetadataInfo();
     }
 }
 
+function toggleLightboxExifDetails() {
+    const extra = document.getElementById('lb-info-exif-extra');
+    const btn = document.getElementById('lb-info-more-btn');
+    if (!extra || !btn) return;
+    extra.classList.toggle('hidden');
+    btn.textContent = extra.classList.contains('hidden') ? '+ plus de détails' : '− moins de détails';
+}
+
+function copyLightboxFilePath() {
+    const pathPill = document.getElementById('lb-info-path-pill');
+    const fullPath = pathPill?.title || '';
+    if (!fullPath) return;
+    navigator.clipboard?.writeText(fullPath).then(() => {
+        pathPill.textContent = '✓ Chemin copié';
+        setTimeout(() => { pathPill.textContent = fullPath; }, 1400);
+    }).catch(() => {});
+}
+
+async function revealLightboxMediaInFolder() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const res = await fetch('/api/media/reveal', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ source_path: item.source_path })
+    });
+    if (!res.ok) {
+        alert('Impossible d’ouvrir le dossier du média.');
+    }
+}
+
+function toggleLightboxTitleEdit() {
+    const editor = document.getElementById('lb-info-title-editor');
+    const inp = document.getElementById('lb-info-title-input');
+    const lbl = document.getElementById('lb-info-filename');
+    if (!editor || !inp || !lbl) return;
+    if (!editor.classList.contains('hidden')) {
+        cancelLightboxTitleEdit();
+        return;
+    }
+    inp.value = lbl.textContent || '';
+    editor.classList.remove('hidden');
+    inp.focus();
+    const dotIdx = inp.value.lastIndexOf('.');
+    inp.setSelectionRange(0, dotIdx > 0 ? dotIdx : inp.value.length);
+}
+
+function cancelLightboxTitleEdit() {
+    document.getElementById('lb-info-title-editor')?.classList.add('hidden');
+}
+
+async function saveLightboxTitleEdit() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    const inp = document.getElementById('lb-info-title-input');
+    const newName = (inp?.value || '').trim();
+    if (!item || !newName) { cancelLightboxTitleEdit(); return; }
+    const res = await fetch('/api/media/rename', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ source_path: item.source_path, new_name: newName })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'Impossible de renommer ce fichier.');
+        return;
+    }
+    const data = await res.json();
+    item.dest_path = data.dest_path;
+    cancelLightboxTitleEdit();
+    await loadLightboxMetadataInfo();
+    refreshActiveMediaView();
+}
+
+let lbCalViewYear = 2026;
+let lbCalViewMonth = 0;
+let lbCalSelectedDate = '';
+
+function renderLightboxCalendar() {
+    const labelEl = document.getElementById('lb-cal-month-label');
+    const gridEl = document.getElementById('lb-cal-days-grid');
+    if (!labelEl || !gridEl) return;
+    const monthDate = new Date(lbCalViewYear, lbCalViewMonth, 1);
+    labelEl.textContent = monthDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+    const startOffset = (monthDate.getDay() + 6) % 7; // Lundi = 0
+    const daysInMonth = new Date(lbCalViewYear, lbCalViewMonth + 1, 0).getDate();
+    let html = '';
+    for (let i = 0; i < startOffset; i++) {
+        html += '<span></span>';
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${lbCalViewYear}-${String(lbCalViewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isSel = iso === lbCalSelectedDate;
+        const cls = isSel
+            ? 'bg-white text-[#1E1E1E] font-bold'
+            : 'text-white/80 hover:bg-white/20';
+        html += `<button type="button" onclick="selectLightboxCalDay('${iso}')" class="w-6 h-6 mx-auto rounded-full flex items-center justify-center transition ${cls}">${day}</button>`;
+    }
+    gridEl.innerHTML = html;
+}
+
+function changeLightboxCalMonth(delta) {
+    lbCalViewMonth += delta;
+    if (lbCalViewMonth < 0) { lbCalViewMonth = 11; lbCalViewYear -= 1; }
+    else if (lbCalViewMonth > 11) { lbCalViewMonth = 0; lbCalViewYear += 1; }
+    renderLightboxCalendar();
+}
+
+function selectLightboxCalDay(isoDate) {
+    lbCalSelectedDate = isoDate;
+    const inp = document.getElementById('lb-info-date-input');
+    if (inp) {
+        const timePart = (inp.value && inp.value.includes('T')) ? inp.value.split('T')[1] : '12:00:00';
+        inp.value = `${isoDate}T${timePart}`;
+    }
+    renderLightboxCalendar();
+}
+
+function toggleLightboxCalendarPopup() {
+    const pop = document.getElementById('lb-cal-popover');
+    const inp = document.getElementById('lb-info-date-input');
+    if (!pop) return;
+    if (!pop.classList.contains('hidden')) {
+        pop.classList.add('hidden');
+        return;
+    }
+    const raw = (inp?.value || window._lbCurrentInspectData?.datetime_local_iso || '').trim();
+    const baseDate = raw ? new Date(raw) : new Date();
+    const validDate = isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    lbCalViewYear = validDate.getFullYear();
+    lbCalViewMonth = validDate.getMonth();
+    lbCalSelectedDate = `${lbCalViewYear}-${String(lbCalViewMonth + 1).padStart(2, '0')}-${String(validDate.getDate()).padStart(2, '0')}`;
+    renderLightboxCalendar();
+    pop.classList.remove('hidden');
+}
+
+function _setLightboxUtcSelectValue(offsetStr, labelStr) {
+    const tzSel = document.getElementById('lb-info-tz-select');
+    if (!tzSel || !offsetStr) return;
+    if (!Array.from(tzSel.options).some(o => o.value === offsetStr)) {
+        const opt = document.createElement('option');
+        opt.value = offsetStr;
+        opt.textContent = labelStr || `UTC${offsetStr}`;
+        tzSel.appendChild(opt);
+    }
+    tzSel.value = offsetStr;
+}
+
+function toggleLightboxDateEdit() {
+    const editor = document.getElementById('lb-info-date-editor');
+    const dateInp = document.getElementById('lb-info-date-only-input');
+    const timeInp = document.getElementById('lb-info-time-only-input');
+    if (!editor || !dateInp || !timeInp) return;
+    if (!editor.classList.contains('hidden')) {
+        cancelLightboxDateEdit();
+        return;
+    }
+    const iso = (window._lbCurrentInspectData?.datetime_local_iso || '').trim();
+    const [dPart, tPart] = iso.includes('T') ? iso.split('T') : ['', ''];
+    dateInp.value = dPart || '';
+    timeInp.value = tPart ? tPart.slice(0, 8) : '12:00:00';
+    _setLightboxUtcSelectValue(
+        window._lbCurrentInspectData?.file_utc_offset || '+01:00',
+        window._lbCurrentInspectData?.utc_offset_label
+    );
+    editor.classList.remove('hidden');
+    dateInp.focus();
+}
+
+function cancelLightboxDateEdit() {
+    document.getElementById('lb-info-date-editor')?.classList.add('hidden');
+}
+
+async function saveLightboxDateEdit() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    const dateInp = document.getElementById('lb-info-date-only-input');
+    const timeInp = document.getElementById('lb-info-time-only-input');
+    const tzSel = document.getElementById('lb-info-tz-select');
+    const dVal = (dateInp?.value || '').trim();
+    const tRaw = (timeInp?.value || '12:00:00').trim();
+    const tVal = tRaw.length === 5 ? `${tRaw}:00` : tRaw;
+    const dtVal = dVal ? `${dVal}T${tVal}` : '';
+    if (!item || !dtVal) { cancelLightboxDateEdit(); return; }
+    const res = await fetch('/api/metadata/batch_update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_paths: [item.source_path],
+            start_datetime_iso: dtVal,
+            utc_offset: tzSel?.value || null
+        })
+    });
+    if (!res.ok) {
+        alert('Impossible de mettre à jour la date.');
+        return;
+    }
+    cancelLightboxDateEdit();
+    await loadLightboxMetadataInfo();
+    refreshActiveMediaView();
+}
+
+function toggleLightboxNoteEdit() {
+    const editor = document.getElementById('lb-info-note-editor');
+    const inp = document.getElementById('lb-info-note-input');
+    if (!editor || !inp) return;
+    if (!editor.classList.contains('hidden')) {
+        cancelLightboxNoteEdit();
+        return;
+    }
+    inp.value = window._lbCurrentInspectData?.description || '';
+    editor.classList.remove('hidden');
+    inp.focus();
+}
+
+function cancelLightboxNoteEdit() {
+    document.getElementById('lb-info-note-editor')?.classList.add('hidden');
+}
+
+async function saveLightboxNoteEdit() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    const inp = document.getElementById('lb-info-note-input');
+    if (!item || !inp) { cancelLightboxNoteEdit(); return; }
+    const res = await fetch('/api/metadata/batch_update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ source_paths: [item.source_path], description: inp.value.trim() })
+    });
+    if (!res.ok) {
+        alert("Impossible d'enregistrer la note.");
+        return;
+    }
+    cancelLightboxNoteEdit();
+    await loadLightboxMetadataInfo();
+}
+
+let _lbInfoReqSeq = 0;
+let _lbInfoAbortCtrl = null;
+
 async function loadLightboxMetadataInfo() {
     const item = currentGalleryItems[currentLightboxIndex];
     if (!item) return;
-    const res = await fetch(`/api/metadata/inspect?source_path=${encodeURIComponent(item.source_path)}`);
-    if (!res.ok) return;
+    const reqSeq = ++_lbInfoReqSeq;
+    if (_lbInfoAbortCtrl) _lbInfoAbortCtrl.abort();
+    _lbInfoAbortCtrl = new AbortController();
+
+    cancelLightboxTitleEdit();
+    cancelLightboxDateEdit();
+    cancelLightboxNoteEdit();
+
+    const rawDest = (item.dest_path || item.source_path || '').replace(/\\/g, '/');
+    document.getElementById('lb-info-filename').textContent = rawDest.split('/').pop() || 'Média';
+    document.getElementById('lb-info-dims').textContent = 'Chargement...';
+    document.getElementById('lb-info-size').textContent = '';
+    document.getElementById('lb-info-date').textContent = '...';
+    document.getElementById('lb-info-weekday').textContent = '';
+    document.getElementById('lb-info-time').textContent = '';
+    document.getElementById('lb-info-camera').textContent = '';
+    document.getElementById('lb-info-lens').textContent = '';
+    document.getElementById('lb-info-faces-card')?.classList.add('hidden');
+    document.getElementById('lb-info-cats-card')?.classList.add('hidden');
+    document.getElementById('lb-info-map-card')?.classList.add('hidden');
+    const pathPillPre = document.getElementById('lb-info-path-pill');
+    if (pathPillPre) {
+        pathPillPre.textContent = rawDest;
+        pathPillPre.title = rawDest;
+    }
+
+    let res;
+    try {
+        res = await fetch(`/api/metadata/inspect?source_path=${encodeURIComponent(item.source_path)}`, {
+            signal: _lbInfoAbortCtrl.signal
+        });
+    } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        return;
+    }
+    if (reqSeq !== _lbInfoReqSeq) return;
+    if (!res.ok) {
+        document.getElementById('lb-info-dims').textContent = 'Métadonnées indisponibles';
+        document.getElementById('lb-info-date').textContent = 'Date inconnue';
+        return;
+    }
     const d = await res.json();
+    if (reqSeq !== _lbInfoReqSeq || currentGalleryItems[currentLightboxIndex]?.source_path !== item.source_path) return;
+    window._lbCurrentInspectData = d;
 
     const fname = (d.dest_path || '').split(/[\\/]/).pop() || 'Média';
     document.getElementById('lb-info-filename').textContent = fname;
 
-    // Dimensions & Mégapixels
-    if (d.width && d.height) {
-        const mpx = Math.max(1, Math.round((d.width * d.height) / 1000000));
-        document.getElementById('lb-info-dims').textContent = `${mpx} Mpx ${d.width} x ${d.height}`;
+    // Dimensions & Mégapixels (avec repli sur l'élément média chargé)
+    let w = Number(d.width || 0);
+    let h = Number(d.height || 0);
+    if (!w || !h) {
+        const imgEl = document.getElementById('lb-img');
+        const vidEl = document.getElementById('lb-video');
+        if (imgEl && !imgEl.classList.contains('hidden') && imgEl.naturalWidth && imgEl.naturalHeight) {
+            w = imgEl.naturalWidth;
+            h = imgEl.naturalHeight;
+        } else if (vidEl && !vidEl.classList.contains('hidden') && vidEl.videoWidth && vidEl.videoHeight) {
+            w = vidEl.videoWidth;
+            h = vidEl.videoHeight;
+        }
+    }
+    if (w > 0 && h > 0) {
+        const rawMpx = (w * h) / 1000000;
+        const mpxLabel = rawMpx >= 1 ? `${Math.round(rawMpx)} Mpx` : `${rawMpx.toFixed(1).replace('.', ',')} Mpx`;
+        document.getElementById('lb-info-dims').textContent = `${mpxLabel} • ${w} × ${h}`;
     } else {
-        document.getElementById('lb-info-dims').textContent = 'Dimensions standard';
+        document.getElementById('lb-info-dims').textContent = 'Dimensions inconnues';
     }
 
-    // Jour, Heure et Date complète
+    // Jour, Heure, UTC et Date complète (UTC original du fichier, ou fuseau configuré si absent)
+    const utcEl = document.getElementById('lb-info-utc');
+    if (utcEl) utcEl.textContent = d.utc_offset_label || 'UTC';
+    const defTimeEl = document.getElementById('lb-info-default-time');
+    if (defTimeEl) {
+        defTimeEl.textContent = d.default_tz_time_label || '';
+        defTimeEl.classList.toggle('hidden', !d.default_tz_time_label);
+    }
+    if (d.file_utc_offset) _setLightboxUtcSelectValue(d.file_utc_offset, d.utc_offset_label);
     if (d.timestamp && d.timestamp > 0) {
-        const dt = new Date(d.timestamp * 1000);
+        const dt = d.datetime_local_iso ? new Date(d.datetime_local_iso) : new Date(d.timestamp * 1000);
         const wd = dt.toLocaleDateString('fr-FR', { weekday: 'long' });
         document.getElementById('lb-info-weekday').textContent = wd.charAt(0).toUpperCase() + wd.slice(1);
         document.getElementById('lb-info-time').textContent = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
@@ -2178,45 +2798,117 @@ async function loadLightboxMetadataInfo() {
     document.getElementById('lb-info-camera').textContent = d.camera_model || 'Appareil standard';
     document.getElementById('lb-info-lens').textContent = d.lens_specs || '';
 
-    // Taille en Mo avec virgule française
+    // Taille en Mo avec virgule française + détails EXIF supplémentaires
     const mb = d.file_size ? (d.file_size / (1024 * 1024)).toFixed(2).replace('.', ',') + ' Mo' : '0,00 Mo';
     document.getElementById('lb-info-size').textContent = mb;
+    const extMatch = (d.dest_path || '').match(/\.([a-zA-Z0-9]+)$/);
+    const fmtEl = document.getElementById('lb-info-format');
+    if (fmtEl) fmtEl.textContent = extMatch ? `Format : ${extMatch[1].toUpperCase()}` : '';
+    const isoEl = document.getElementById('lb-info-iso-date');
+    if (isoEl) isoEl.textContent = d.datetime_local_iso ? `Horodatage : ${d.datetime_local_iso.replace('T', ' ')}` : '';
 
-    // Carte Album
-    if (d.album_name) {
-        document.getElementById('lb-info-album-name').textContent = d.album_name;
-        document.getElementById('lb-info-album-count').textContent = `${d.album_count || 1} éléments`;
-    } else {
-        document.getElementById('lb-info-album-name').textContent = 'Aucun album';
-        document.getElementById('lb-info-album-count').textContent = 'Cliquer pour ajouter';
+    // Carte Album : 1er album affiché + flèche si multi-albums + album principal / sous-album cliquables
+    if (currentGalleryItems[currentLightboxIndex]) {
+        currentGalleryItems[currentLightboxIndex].album_name = d.album_name || '';
+    }
+    const albumsListEl = document.getElementById('lb-info-albums-list');
+    if (albumsListEl) {
+        const albumsList = (Array.isArray(d.albums) && d.albums.length > 0)
+            ? d.albums
+            : (d.album_name
+                ? d.album_name.split(',').map(s => s.trim()).filter(Boolean).map(name => ({
+                    name,
+                    display_name: name.split('/').pop() || name,
+                    cover_path: d.dest_path || '',
+                    count: d.album_count || 1
+                }))
+                : []);
+        if (albumsList.length > 0) {
+            const extraAlbums = albumsList.slice(1);
+            const expandBtnHtml = extraAlbums.length > 0
+                ? `<button type="button" id="lb-albums-expand-btn" onclick="toggleLightboxExtraAlbums()"
+                           aria-expanded="false"
+                           title="Afficher ${extraAlbums.length} autre${extraAlbums.length > 1 ? 's' : ''} album${extraAlbums.length > 1 ? 's' : ''}"
+                           class="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-white/75 hover:text-white flex items-center justify-center transition cursor-pointer">
+                       <svg id="lb-albums-expand-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                           <polyline points="6 9 12 15 18 9"/>
+                       </svg>
+                   </button>`
+                : '';
+            const firstHtml = _renderLightboxAlbumRowHtml(albumsList[0], expandBtnHtml);
+            const extraHtml = extraAlbums.length > 0
+                ? `<div id="lb-info-albums-extra" class="hidden space-y-1.5 pt-1 border-t border-white/10">
+                       ${extraAlbums.map(a => _renderLightboxAlbumRowHtml(a)).join('')}
+                   </div>`
+                : '';
+            albumsListEl.innerHTML = firstHtml + extraHtml;
+        } else {
+            albumsListEl.innerHTML = `
+                <button type="button" onclick="openLightboxAlbumsEditor()"
+                        class="w-full text-left text-[11px] font-medium text-white/60 hover:text-white transition cursor-pointer">
+                    Aucun album • Ajouter...
+                </button>
+            `;
+        }
     }
 
-    // Carte Personnes (Visages détectés + bouton œil "À identifier")
-    const facesHtml = (d.faces || []).map(f => `
-        <div onclick="if(${f.person_id || 0}) { closeLightbox(); switchTab('faces'); openTimeline(${f.person_id}); }"
-             class="flex flex-col items-center cursor-pointer group">
-            <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
-                 class="w-11 h-11 rounded-full object-cover bg-black/20 shadow-sm group-hover:scale-105 transition"/>
-            <span class="text-[9px] font-extrabold mt-1 max-w-[52px] truncate">${f.name}</span>
-        </div>
-    `).join('');
+    // Carte Personnes + Carte Catégories + Bouton "Analyser le média"
+    const facesCard = document.getElementById('lb-info-faces-card');
+    const catsCard = document.getElementById('lb-info-cats-card');
+    const analyzeBtn = document.getElementById('lb-info-analyze-btn');
+    const facesList = d.faces || [];
+    const catsList = d.smart_categories || [];
 
-    const addFaceBtn = `
-        <div onclick="lightboxOpenFaceTagger()" class="flex flex-col items-center cursor-pointer group">
-            <div class="w-11 h-11 rounded-full border border-black/25 flex items-center justify-center text-black/50 group-hover:text-black group-hover:border-black transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                </svg>
+    if (facesList.length > 0) {
+        if (facesCard) facesCard.classList.remove('hidden');
+        const facesHtml = facesList.map(f => `
+            <div onclick="if(${f.person_id || 0}) { closeLightbox(); switchTab('faces'); openTimeline(${f.person_id}); }"
+                 class="flex flex-col items-center cursor-pointer group">
+                <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
+                     class="w-11 h-11 rounded-full object-cover bg-black/20 shadow-sm group-hover:scale-105 transition"/>
+                <span class="text-[9px] font-extrabold mt-1 max-w-[52px] truncate">${f.name}</span>
             </div>
-            <span class="text-[9px] font-extrabold mt-1 opacity-75">A Identifié</span>
-        </div>
-    `;
-    document.getElementById('lb-info-faces-list').innerHTML = facesHtml + addFaceBtn;
+        `).join('');
+        document.getElementById('lb-info-faces-list').innerHTML = facesHtml;
+    } else {
+        if (facesCard) facesCard.classList.add('hidden');
+        document.getElementById('lb-info-faces-list').innerHTML = '';
+    }
 
-    // Carte Lieu & Mini-Carte Leaflet
+    if (catsList.length > 0) {
+        if (catsCard) catsCard.classList.remove('hidden');
+        const catsHtml = catsList.map(c => `
+            <button type="button" onclick="openLightboxSmartCategory(${c.category_id})"
+                    class="px-2.5 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-semibold text-white/90 hover:text-white transition cursor-pointer"
+                    title="Ouvrir la catégorie ${String(c.name || '').replace(/"/g, '&quot;')}">${c.name}</button>
+        `).join('');
+        const catsEl = document.getElementById('lb-info-cats-list');
+        if (catsEl) catsEl.innerHTML = catsHtml;
+    } else {
+        if (catsCard) catsCard.classList.add('hidden');
+        const catsEl = document.getElementById('lb-info-cats-list');
+        if (catsEl) catsEl.innerHTML = '';
+    }
+
+    if (analyzeBtn) {
+        analyzeBtn.classList.toggle('hidden', facesList.length > 0 && catsList.length > 0);
+    }
+
+    // Carte Lieu & Mini-Carte Leaflet (masquée si aucune coordonnée -> bouton "Ajouter un lieu")
+    const mapCard = document.getElementById('lb-info-map-card');
+    const mapEmpty = document.getElementById('lb-info-map-empty');
     const mapBox = document.getElementById('lb-mini-map');
+    const mapsBtn = document.getElementById('lb-open-maps-btn');
     if (d.latitude && d.longitude && (d.latitude !== 0 || d.longitude !== 0)) {
-        document.getElementById('lb-info-place-title').textContent = `${Number(d.latitude).toFixed(3)}, ${Number(d.longitude).toFixed(3)}`;
+        if (mapCard) mapCard.classList.remove('hidden');
+        if (mapEmpty) mapEmpty.classList.add('hidden');
+        const lat = Number(d.latitude);
+        const lon = Number(d.longitude);
+        document.getElementById('lb-info-place-title').textContent = `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+        if (mapsBtn) {
+            mapsBtn.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
+            mapsBtn.classList.remove('hidden');
+        }
         mapBox.innerHTML = `<div id="lb-leaflet-inner" class="w-full h-full"></div>`;
         setTimeout(() => {
             const inner = document.getElementById('lb-leaflet-inner');
@@ -2230,20 +2922,955 @@ async function loadLightboxMetadataInfo() {
             L.marker([d.latitude, d.longitude]).addTo(lbMiniMap);
         }, 80);
     } else {
-        document.getElementById('lb-info-place-title').textContent = 'Lieu non défini';
+        if (mapCard) mapCard.classList.add('hidden');
+        if (mapEmpty) mapEmpty.classList.remove('hidden');
+        if (mapsBtn) mapsBtn.classList.add('hidden');
         if (lbMiniMap) {
             lbMiniMap.remove();
             lbMiniMap = null;
         }
-        mapBox.innerHTML = `<span onclick="lightboxOpenMetadataEditor()" class="cursor-pointer hover:underline">+ Ajouter un lieu</span>`;
+        mapBox.innerHTML = '';
     }
 
     // Carte Note
-    document.getElementById('lb-info-note').textContent = d.description || 'Ajouter une note...';
+    cancelLightboxNoteEdit();
+    const hasNote = !!(d.description && d.description.trim());
+    document.getElementById('lb-info-note').textContent = hasNote ? d.description : 'Ajouter une note...';
+    document.getElementById('lb-info-note-edit-btn')?.classList.toggle('hidden', !hasNote);
 
     // Pilule du chemin complet en bas
     const cleanPath = (d.dest_path || '').replace(/\\/g, '/');
     const pathPill = document.getElementById('lb-info-path-pill');
     pathPill.textContent = cleanPath;
     pathPill.title = cleanPath;
+}
+
+let lbAnalyzeVisualCandidates = [];
+let lbAnalyzeSelectedSet = new Set();
+
+function openLightboxAnalyzeModal() {
+    const modal = document.getElementById('lb-analyze-modal');
+    if (!modal) return;
+    document.getElementById('lb-analyze-choice')?.classList.remove('hidden');
+    document.getElementById('lb-analyze-loading')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.add('hidden');
+    modal.classList.remove('hidden');
+}
+
+function closeLightboxAnalyzeModal() {
+    document.getElementById('lb-analyze-modal')?.classList.add('hidden');
+}
+
+function _renderAnalyzeVisualChips() {
+    const body = document.getElementById('lb-analyze-visual-body');
+    if (!body) return;
+    if (!lbAnalyzeVisualCandidates.length) {
+        body.innerHTML = `<div class="text-[11px] text-white/55">Aucun élément visuel détecté automatiquement.</div>`;
+        return;
+    }
+    body.innerHTML = lbAnalyzeVisualCandidates.map((c, idx) => {
+        const active = lbAnalyzeSelectedSet.has(idx);
+        const cls = active
+            ? 'bg-white text-[#1E1E1E] border-white font-bold'
+            : 'bg-white/10 text-white/80 border-white/15 hover:bg-white/20';
+        const pct = c.percent ? ` <span class="opacity-60">${c.percent}%</span>` : '';
+        return `<button type="button" onclick="toggleAnalyzeCatChip(${idx})"
+                        class="px-2.5 py-1 rounded-full border text-[11px] transition ${cls}">${c.name}${pct}</button>`;
+    }).join('');
+}
+
+function toggleAnalyzeCatChip(idx) {
+    if (lbAnalyzeSelectedSet.has(idx)) lbAnalyzeSelectedSet.delete(idx);
+    else lbAnalyzeSelectedSet.add(idx);
+    _renderAnalyzeVisualChips();
+}
+
+function addCustomAnalyzeCategory() {
+    const inp = document.getElementById('lb-analyze-custom-cat');
+    const val = (inp?.value || '').trim();
+    if (!val) return;
+    const existingIdx = lbAnalyzeVisualCandidates.findIndex(c => c.name.toLowerCase() === val.toLowerCase());
+    if (existingIdx >= 0) {
+        lbAnalyzeSelectedSet.add(existingIdx);
+    } else {
+        lbAnalyzeVisualCandidates.unshift({ name: val, prompt: val, score: 1.0, percent: 100, already_assigned: true });
+        const nextSet = new Set([0]);
+        lbAnalyzeSelectedSet.forEach(i => nextSet.add(i + 1));
+        lbAnalyzeSelectedSet = nextSet;
+    }
+    if (inp) inp.value = '';
+    _renderAnalyzeVisualChips();
+}
+
+async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+
+    document.getElementById('lb-analyze-modal')?.classList.remove('hidden');
+    document.getElementById('lb-analyze-choice')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.add('hidden');
+    document.getElementById('lb-analyze-loading')?.classList.remove('hidden');
+
+    const res = await fetch('/api/media/analyze_single', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_path: item.source_path,
+            run_faces: runFaces,
+            run_visual: runVisual,
+            force_faces: !!forceFaces
+        })
+    });
+
+    document.getElementById('lb-analyze-loading')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.remove('hidden');
+
+    if (!res.ok) {
+        alert("Erreur lors de l'analyse du média.");
+        closeLightboxAnalyzeModal();
+        return;
+    }
+    const d = await res.json();
+
+    const facesSec = document.getElementById('lb-analyze-faces-section');
+    const facesBody = document.getElementById('lb-analyze-faces-body');
+    if (runFaces && facesSec && facesBody) {
+        facesSec.classList.remove('hidden');
+        const fList = d.faces || [];
+        if (d.faces_error) {
+            facesBody.innerHTML = `<div class="text-[11px] text-red-300">Erreur détection : ${d.faces_error}</div>`;
+        } else if (fList.length > 0) {
+            facesBody.innerHTML = fList.map(f => `
+                <div onclick="closeLightboxAnalyzeModal(); lightboxOpenFaceTagger();" class="flex flex-col items-center cursor-pointer group">
+                    <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}" class="w-11 h-11 rounded-full object-cover bg-black/30 group-hover:scale-105 transition"/>
+                    <span class="text-[10px] font-semibold mt-1 max-w-[60px] truncate">${f.name}</span>
+                </div>
+            `).join('');
+        } else {
+            facesBody.innerHTML = `
+                <div class="w-full flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                    <span class="text-[11px] text-white/65">Aucun visage détecté</span>
+                    <button type="button" onclick="closeLightboxAnalyzeModal(); lightboxOpenFaceTagger();"
+                            class="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-bold transition">
+                        Sélectionner manuellement
+                    </button>
+                </div>`;
+        }
+    } else if (facesSec) {
+        facesSec.classList.add('hidden');
+    }
+
+    const visSec = document.getElementById('lb-analyze-visual-section');
+    if (runVisual && visSec) {
+        visSec.classList.remove('hidden');
+        lbAnalyzeVisualCandidates = d.visual_candidates || [];
+        lbAnalyzeSelectedSet = new Set();
+        lbAnalyzeVisualCandidates.forEach((c, idx) => {
+            if (c.already_assigned || (c.confident !== false && idx < 3)) lbAnalyzeSelectedSet.add(idx);
+        });
+        if (d.visual_error) {
+            document.getElementById('lb-analyze-visual-body').innerHTML = `<div class="text-[11px] text-red-300">Erreur analyse visuelle : ${d.visual_error}</div>`;
+        } else {
+            _renderAnalyzeVisualChips();
+        }
+    } else if (visSec) {
+        visSec.classList.add('hidden');
+        lbAnalyzeVisualCandidates = [];
+        lbAnalyzeSelectedSet = new Set();
+    }
+
+    await loadLightboxMetadataInfo();
+}
+
+async function confirmLightboxAnalyzeResults() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) { closeLightboxAnalyzeModal(); return; }
+    const visSec = document.getElementById('lb-analyze-visual-section');
+    if (visSec && !visSec.classList.contains('hidden')) {
+        const chosen = Array.from(lbAnalyzeSelectedSet)
+            .map(idx => lbAnalyzeVisualCandidates[idx])
+            .filter(Boolean);
+        await fetch('/api/media/apply_categories', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ source_path: item.source_path, categories: chosen })
+        });
+    }
+    closeLightboxAnalyzeModal();
+    await loadLightboxMetadataInfo();
+}
+
+function openLightboxSmartCategory(categoryId) {
+    if (!categoryId) return;
+    closeLightbox();
+    switchTab('types');
+    openSingleCategoryView(categoryId);
+}
+
+function openLightboxCategoriesEditor() {
+    const modal = document.getElementById('lb-analyze-modal');
+    if (!modal) return;
+    const d = window._lbCurrentInspectData || {};
+    const suggestions = Array.isArray(d.visual_suggestions) ? d.visual_suggestions : [];
+    const assigned = Array.isArray(d.smart_categories) ? d.smart_categories : [];
+    const assignedMap = new Map();
+    assigned.forEach(c => {
+        const key = String(c.name || '').trim().toLowerCase();
+        if (key && !assignedMap.has(key)) assignedMap.set(key, c);
+    });
+
+    const candidates = [];
+    const seen = new Set();
+    suggestions.forEach(s => {
+        const key = String(s.name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        candidates.push({
+            ...s,
+            already_assigned: assignedMap.has(key)
+        });
+    });
+
+    const extraAssigned = [];
+    assigned.forEach(c => {
+        const key = String(c.name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        const rawScore = Number(c.score);
+        const score = Number.isFinite(rawScore) ? rawScore : 1.0;
+        extraAssigned.push({
+            name: c.name,
+            prompt: c.name,
+            score,
+            percent: Math.round(score * 100),
+            already_assigned: true,
+            confident: true
+        });
+    });
+
+    lbAnalyzeVisualCandidates = [...extraAssigned, ...candidates];
+    lbAnalyzeSelectedSet = new Set();
+    const hasAssigned = assignedMap.size > 0;
+    lbAnalyzeVisualCandidates.forEach((c, idx) => {
+        if (hasAssigned) {
+            if (c.already_assigned) lbAnalyzeSelectedSet.add(idx);
+        } else if (c.already_assigned || (c.confident !== false && idx < 3)) {
+            lbAnalyzeSelectedSet.add(idx);
+        }
+    });
+
+    document.getElementById('lb-analyze-choice')?.classList.add('hidden');
+    document.getElementById('lb-analyze-loading')?.classList.add('hidden');
+    document.getElementById('lb-analyze-faces-section')?.classList.add('hidden');
+    document.getElementById('lb-analyze-visual-section')?.classList.remove('hidden');
+    document.getElementById('lb-analyze-results')?.classList.remove('hidden');
+    const customInp = document.getElementById('lb-analyze-custom-cat');
+    if (customInp) customInp.value = '';
+    _renderAnalyzeVisualChips();
+    modal.classList.remove('hidden');
+}
+
+let lbFacesEditorPersons = [];
+
+async function openLightboxFacesEditor() {
+    const modal = document.getElementById('lb-faces-edit-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const listEl = document.getElementById('lb-faces-edit-list');
+    if (listEl) {
+        listEl.innerHTML = `<div class="text-xs text-white/60 py-4 text-center">Chargement des personnes...</div>`;
+    }
+    try {
+        const res = await fetch('/api/persons');
+        if (res.ok) {
+            const pData = await res.json();
+            lbFacesEditorPersons = pData.persons || [];
+        }
+    } catch (e) {
+        lbFacesEditorPersons = [];
+    }
+    renderLightboxFacesEditor();
+}
+
+function closeLightboxFacesEditor() {
+    document.getElementById('lb-faces-edit-modal')?.classList.add('hidden');
+}
+
+function renderLightboxFacesEditor() {
+    const listEl = document.getElementById('lb-faces-edit-list');
+    if (!listEl) return;
+    const d = window._lbCurrentInspectData || {};
+    const faces = Array.isArray(d.faces) ? d.faces : [];
+    if (!faces.length) {
+        listEl.innerHTML = `<div class="text-xs text-white/60 py-4 text-center">Aucun visage enregistré sur ce média.</div>`;
+        return;
+    }
+
+    const escHtml = s => String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    listEl.innerHTML = faces.map(f => {
+        const knownOptions = lbFacesEditorPersons.map(p => {
+            const sel = Number(p.person_id) === Number(f.person_id) ? 'selected' : '';
+            const label = p.name && p.name !== 'Inconnu' ? p.name : `Inconnu (#${p.person_id})`;
+            return `<option value="${p.person_id}" ${sel}>${escHtml(label)}</option>`;
+        }).join('');
+        return `
+            <div class="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl px-2.5 py-2">
+                <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
+                     class="w-10 h-10 rounded-full object-cover bg-black/30 shrink-0"/>
+                <div class="flex-1 min-w-0">
+                    <select onchange="changeLightboxFacePerson(${f.face_id}, this)"
+                            class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-white/40">
+                        ${knownOptions}
+                        <option value="__NEW__">+ Nouveau nom...</option>
+                    </select>
+                </div>
+                <button type="button" onclick="removeLightboxFace(${f.face_id})" title="Retirer ce visage"
+                        class="w-7 h-7 rounded-full bg-red-500/15 hover:bg-red-500/35 text-red-300 flex items-center justify-center shrink-0 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function changeLightboxFacePerson(faceId, selectEl) {
+    const val = selectEl?.value;
+    if (!val) return;
+
+    let payload;
+    if (val === '__NEW__') {
+        const name = (window.prompt('Nom de la personne :') || '').trim();
+        if (!name) {
+            renderLightboxFacesEditor();
+            return;
+        }
+        payload = { face_ids: [faceId], action: 'NEW_GROUP', new_group_name: name };
+    } else {
+        payload = { face_ids: [faceId], action: 'EXISTING_PERSON', target_person_id: Number(val) };
+    }
+
+    const res = await fetch('/api/faces/reassign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+        alert('Impossible de modifier cette personne.');
+        renderLightboxFacesEditor();
+        return;
+    }
+    try {
+        const pRes = await fetch('/api/persons');
+        if (pRes.ok) lbFacesEditorPersons = (await pRes.json()).persons || [];
+    } catch (e) {}
+    await loadLightboxMetadataInfo();
+    renderLightboxFacesEditor();
+}
+
+async function removeLightboxFace(faceId) {
+    const res = await fetch('/api/faces/reassign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ face_ids: [faceId], action: 'IGNORE' })
+    });
+    if (!res.ok) {
+        alert('Impossible de supprimer ce visage.');
+        return;
+    }
+    await loadLightboxMetadataInfo();
+    const faces = (window._lbCurrentInspectData && window._lbCurrentInspectData.faces) || [];
+    if (!faces.length) {
+        closeLightboxFacesEditor();
+    } else {
+        renderLightboxFacesEditor();
+    }
+}
+
+async function rerunLightboxFacesAnalysis() {
+    closeLightboxFacesEditor();
+    await runSingleMediaAnalysis(true, false, true);
+}
+
+function _renderLightboxAlbumRowHtml(a, rightControlHtml = '') {
+    const escHtml = s => String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const fullName = String(a.name || '');
+    const parts = fullName.split('/').map(s => s.trim()).filter(Boolean);
+    const isSubalbum = parts.length > 1;
+    const primaryTitle = isSubalbum ? parts[parts.length - 1] : fullName;
+    const parentPath = isSubalbum ? parts.slice(0, -1).join('/') : fullName;
+    const parentLabel = isSubalbum ? parts.slice(0, -1).join(' / ') : '';
+    const cnt = Number(a.count || 1);
+    const coverThumb = a.cover_path
+        ? `<img src="/thumb?path=${encodeURIComponent(a.cover_path)}" class="w-10 h-10 rounded-xl object-cover bg-black/30 shrink-0 group-hover:scale-105 transition"/>`
+        : `<div class="w-10 h-10 rounded-xl bg-black/30 flex items-center justify-center shrink-0 text-white/50">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+           </div>`;
+
+    const countLabel = `${cnt} élément${cnt > 1 ? 's' : ''}`;
+    const parentBadgeHtml = isSubalbum
+        ? `<button type="button" data-album="${escHtml(parentPath)}" onclick="openLightboxAlbum(this.dataset.album)"
+                   title="Ouvrir l'album principal ${escHtml(parentPath)}"
+                   class="shrink min-w-0 max-w-[45%] px-1.5 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-[9px] font-semibold text-white/80 hover:text-white truncate transition cursor-pointer">
+               ${escHtml(parentLabel)}
+           </button>`
+        : '';
+
+    return `
+        <div class="flex items-center gap-2.5 p-1.5 -mx-1.5 rounded-xl hover:bg-white/10 transition group">
+            <button type="button" data-album="${escHtml(fullName)}" onclick="openLightboxAlbum(this.dataset.album)"
+                    title="Ouvrir l'album ${escHtml(fullName)}"
+                    class="shrink-0 cursor-pointer">
+                ${coverThumb}
+            </button>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <button type="button" data-album="${escHtml(fullName)}" onclick="openLightboxAlbum(this.dataset.album)"
+                            title="Ouvrir l'album ${escHtml(fullName)}"
+                            class="min-w-0 truncate text-left text-xs font-bold group-hover:text-white hover:underline cursor-pointer">
+                        ${escHtml(primaryTitle)}
+                    </button>
+                    ${parentBadgeHtml}
+                </div>
+                <button type="button" data-album="${escHtml(fullName)}" onclick="openLightboxAlbum(this.dataset.album)"
+                        class="block w-full text-left text-[10px] font-medium text-white/60 truncate cursor-pointer">
+                    ${countLabel}
+                </button>
+            </div>
+            ${rightControlHtml}
+        </div>
+    `;
+}
+
+function toggleLightboxExtraAlbums() {
+    const extraEl = document.getElementById('lb-info-albums-extra');
+    const chevronEl = document.getElementById('lb-albums-expand-chevron');
+    const btnEl = document.getElementById('lb-albums-expand-btn');
+    if (!extraEl) return;
+    const nowHidden = extraEl.classList.toggle('hidden');
+    if (chevronEl) chevronEl.classList.toggle('rotate-180', !nowHidden);
+    if (btnEl) btnEl.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+}
+
+function openLightboxAlbum(albumName) {
+    if (!albumName) return;
+    closeLightbox();
+    switchTab('albums');
+    openSingleAlbumView(albumName);
+}
+
+let lbAlbumsEditorAll = [];
+let lbAlbumsEditorExpanded = new Set();
+let lbAlbumsEditorSortBy = 'date';
+let lbAlbumsEditorSortDir = 'desc';
+
+function _syncLightboxAlbumEditorSortUI() {
+    const sel = document.getElementById('lb-albums-edit-sort-by');
+    if (sel) sel.value = lbAlbumsEditorSortBy;
+    const arrow = document.getElementById('lb-albums-edit-sort-arrow');
+    const btn = document.getElementById('lb-albums-edit-sort-dir-btn');
+    const isAsc = lbAlbumsEditorSortDir === 'asc';
+    if (arrow) arrow.classList.toggle('rotate-180', isAsc);
+    if (btn) btn.title = isAsc ? 'Ordre croissant (cliquer pour inverser)' : 'Ordre décroissant (cliquer pour inverser)';
+}
+
+function onChangeLightboxAlbumEditorSortBy() {
+    const sel = document.getElementById('lb-albums-edit-sort-by');
+    lbAlbumsEditorSortBy = sel ? sel.value : 'date';
+    lbAlbumsEditorSortDir = lbAlbumsEditorSortBy === 'name' ? 'asc' : 'desc';
+    _syncLightboxAlbumEditorSortUI();
+    renderLightboxAlbumsEditor();
+}
+
+function toggleLightboxAlbumEditorSortDir() {
+    lbAlbumsEditorSortDir = lbAlbumsEditorSortDir === 'asc' ? 'desc' : 'asc';
+    _syncLightboxAlbumEditorSortUI();
+    renderLightboxAlbumsEditor();
+}
+
+let lbAlbumsEditorSources = [];
+
+function toggleLightboxAlbumCreateBox(forceShow = null) {
+    const box = document.getElementById('lb-albums-edit-create-box');
+    const errEl = document.getElementById('lb-albums-edit-create-error');
+    if (!box) return;
+    const shouldShow = forceShow === null ? box.classList.contains('hidden') : !!forceShow;
+    box.classList.toggle('hidden', !shouldShow);
+    if (errEl) {
+        errEl.textContent = '';
+        errEl.classList.add('hidden');
+    }
+    if (shouldShow) {
+        _populateLightboxAlbumCreateSourceSelect();
+        const nameInp = document.getElementById('lb-albums-edit-new-name');
+        if (nameInp) {
+            nameInp.value = '';
+            setTimeout(() => nameInp.focus(), 30);
+        }
+    }
+}
+
+function _populateLightboxAlbumCreateSourceSelect() {
+    const wrap = document.getElementById('lb-albums-edit-new-source-wrap');
+    const sel = document.getElementById('lb-albums-edit-new-source');
+    if (!wrap || !sel) return;
+    if (lbAlbumsEditorSources.length <= 1) {
+        wrap.classList.add('hidden');
+        sel.innerHTML = '';
+        return;
+    }
+    const prev = sel.value;
+    const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    sel.innerHTML = lbAlbumsEditorSources.map(src => `<option value="${esc(src)}">${esc(src)}</option>`).join('');
+    if (prev && lbAlbumsEditorSources.includes(prev)) sel.value = prev;
+    wrap.classList.remove('hidden');
+}
+
+async function submitLightboxCreateAlbum() {
+    const nameInp = document.getElementById('lb-albums-edit-new-name');
+    const sourceSel = document.getElementById('lb-albums-edit-new-source');
+    const errEl = document.getElementById('lb-albums-edit-create-error');
+    const name = (nameInp?.value || '').trim();
+    const sourceDir = (lbAlbumsEditorSources.length > 1 && sourceSel?.value) ? sourceSel.value : null;
+    if (!name) {
+        if (errEl) {
+            errEl.textContent = "Veuillez saisir un nom d'album.";
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+
+    const res = await fetch('/api/albums/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, parent_id: null, source_dir: sourceDir })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (errEl) {
+            errEl.textContent = err.detail || "Impossible de créer l'album.";
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+    const created = await res.json();
+    toggleLightboxAlbumCreateBox(false);
+    const createdPath = created?.album?.full_path || name;
+    await addLightboxMediaToAlbum(createdPath);
+}
+
+let lbAlbumsEditorCreatingParentId = null;
+let lbAlbumsEditorQuery = '';
+
+function onInputLightboxAlbumSearch(val) {
+    lbAlbumsEditorQuery = String(val || '');
+    renderLightboxAlbumsEditor();
+}
+
+async function openLightboxAlbumsEditor() {
+    const modal = document.getElementById('lb-albums-edit-modal');
+    if (!modal) return;
+    lbAlbumsEditorExpanded = new Set();
+    lbAlbumsEditorCreatingParentId = null;
+    lbAlbumsEditorQuery = '';
+    _syncLightboxAlbumEditorSortUI();
+    toggleLightboxAlbumCreateBox(false);
+    const inp = document.getElementById('lb-albums-edit-input');
+    if (inp) inp.value = '';
+    modal.classList.remove('hidden');
+
+    const curEl = document.getElementById('lb-albums-edit-current');
+    if (curEl) curEl.innerHTML = `<div class="text-xs text-white/60 py-2 text-center">Chargement...</div>`;
+    try {
+        const [albRes, libRes] = await Promise.all([
+            fetch('/api/albums/list?flat=true'),
+            fetch('/api/libraries').catch(() => null)
+        ]);
+        if (albRes.ok) {
+            const data = await albRes.json();
+            lbAlbumsEditorAll = data.all_albums || data.albums || [];
+        }
+        if (libRes && libRes.ok) {
+            const libData = await libRes.json();
+            const activeLib = (libData.libraries || {})[libData.active_library || ''] || {};
+            const rawSources = Array.isArray(activeLib.source_paths) ? activeLib.source_paths : [];
+            lbAlbumsEditorSources = [...new Set(rawSources.map(s => String(s || '').trim()).filter(Boolean))];
+        } else {
+            lbAlbumsEditorSources = [];
+        }
+    } catch (e) {
+        lbAlbumsEditorAll = [];
+        lbAlbumsEditorSources = [];
+    }
+    renderLightboxAlbumsEditor();
+    setTimeout(() => inp && inp.focus(), 50);
+}
+
+function closeLightboxAlbumsEditor() {
+    document.getElementById('lb-albums-edit-modal')?.classList.add('hidden');
+}
+
+function renderLightboxAlbumsEditor() {
+    const curEl = document.getElementById('lb-albums-edit-current');
+    const availEl = document.getElementById('lb-albums-edit-available');
+    if (!curEl || !availEl) return;
+
+    const d = window._lbCurrentInspectData || {};
+    const assigned = (Array.isArray(d.albums) && d.albums.length > 0)
+        ? d.albums
+        : (d.album_name
+            ? d.album_name.split(',').map(s => s.trim()).filter(Boolean).map(name => ({
+                name,
+                cover_path: d.dest_path || '',
+                count: d.album_count || 1
+            }))
+            : []);
+    const assignedNames = new Set(assigned.map(a => a.name));
+
+    const escHtml = s => String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    if (assigned.length === 0) {
+        curEl.innerHTML = `<div class="text-[11px] text-white/55 py-1">Ce média n'est dans aucun album.</div>`;
+    } else {
+        curEl.innerHTML = assigned.map((a, idx) => {
+            const match = lbAlbumsEditorAll.find(x => x.full_path === a.name);
+            const covPath = (match && match.cover_path) || a.cover_path || '';
+            const isPrimary = idx === 0;
+            const coverThumb = covPath
+                ? `<img src="/thumb?path=${encodeURIComponent(covPath)}" class="w-9 h-9 rounded-lg object-cover bg-black/30 shrink-0"/>`
+                : `<div class="w-9 h-9 rounded-lg bg-black/30 flex items-center justify-center shrink-0 text-white/45 text-xs">📁</div>`;
+            const starBtn = `<button type="button" data-album="${escHtml(a.name)}"
+                       onclick="${isPrimary ? '' : 'setLightboxPrimaryAlbum(this.dataset.album)'}"
+                       title="${isPrimary ? 'Album affiché en priorité sur ce média' : 'Afficher cet album en priorité sur ce média'}"
+                       class="w-7 h-7 rounded-full ${isPrimary ? 'bg-amber-400/25 text-amber-300 cursor-default' : 'bg-white/10 hover:bg-white/20 text-white/60 hover:text-amber-300 cursor-pointer'} flex items-center justify-center text-xs shrink-0 transition">★</button>`;
+            return `
+                <div class="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5">
+                    ${coverThumb}
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs font-bold truncate">${escHtml(a.name)}</div>
+                        <div class="text-[10px] text-white/55">${Number(a.count || 1)} élément${Number(a.count || 1) > 1 ? 's' : ''}</div>
+                    </div>
+                    ${starBtn}
+                    <button type="button" data-album="${escHtml(a.name)}" onclick="removeLightboxMediaFromAlbum(this.dataset.album)"
+                            title="Retirer de cet album"
+                            class="w-7 h-7 rounded-full bg-red-500/15 hover:bg-red-500/35 text-red-300 flex items-center justify-center shrink-0 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    if (lbAlbumsEditorAll.length === 0) {
+        availEl.innerHTML = `<div class="text-[11px] text-white/45 py-1">Aucun album existant.</div>`;
+    } else {
+        const allIds = new Set(lbAlbumsEditorAll.map(a => a.album_id));
+        const byId = new Map(lbAlbumsEditorAll.map(a => [a.album_id, a]));
+        const q = lbAlbumsEditorQuery.trim().toLowerCase();
+        let sourceList = lbAlbumsEditorAll;
+        const forceExpandIds = new Set();
+
+        if (q) {
+            const rawChildrenByParent = new Map();
+            lbAlbumsEditorAll.forEach(a => {
+                const pid = (a.parent_id != null && allIds.has(a.parent_id)) ? a.parent_id : null;
+                if (!rawChildrenByParent.has(pid)) rawChildrenByParent.set(pid, []);
+                rawChildrenByParent.get(pid).push(a);
+            });
+            const visibleIds = new Set();
+            const addDescendants = (aid) => {
+                (rawChildrenByParent.get(aid) || []).forEach(ch => {
+                    visibleIds.add(ch.album_id);
+                    addDescendants(ch.album_id);
+                });
+            };
+            lbAlbumsEditorAll.forEach(a => {
+                const hay = `${a.name || ''} ${a.full_path || ''}`.toLowerCase();
+                if (hay.includes(q)) {
+                    visibleIds.add(a.album_id);
+                    addDescendants(a.album_id);
+                    let pid = a.parent_id;
+                    while (pid != null && byId.has(pid)) {
+                        visibleIds.add(pid);
+                        forceExpandIds.add(pid);
+                        pid = byId.get(pid).parent_id;
+                    }
+                }
+            });
+            sourceList = lbAlbumsEditorAll.filter(a => visibleIds.has(a.album_id));
+        }
+
+        if (sourceList.length === 0) {
+            availEl.innerHTML = `<div class="text-[11px] text-white/45 py-1">Aucun album ne correspond à « ${escHtml(lbAlbumsEditorQuery.trim())} ».</div>`;
+        } else {
+            const visibleSet = new Set(sourceList.map(a => a.album_id));
+            const childrenByParent = new Map();
+            sourceList.forEach(a => {
+                const pid = (a.parent_id != null && visibleSet.has(a.parent_id)) ? a.parent_id : null;
+                if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+                childrenByParent.get(pid).push(a);
+            });
+            childrenByParent.forEach((arr, pid) => {
+                childrenByParent.set(pid, arr.sort((a, b) => _compareAlbumItems(a, b, lbAlbumsEditorSortBy, lbAlbumsEditorSortDir)));
+            });
+            const expandedSet = new Set([...lbAlbumsEditorExpanded, ...forceExpandIds]);
+            availEl.innerHTML = _renderAlbumEditorTreeNodes(null, assignedNames, childrenByParent, escHtml, expandedSet);
+        }
+    }
+    _populateLightboxAlbumCreateSourceSelect();
+}
+
+function _renderLightboxSubalbumCreateBoxHtml(parentId) {
+    return `
+        <div class="p-2 rounded-xl bg-black/35 border border-white/15 space-y-1.5">
+            <div class="flex items-center gap-1.5">
+                <input id="lb-albums-sub-create-input-${parentId}" type="text" placeholder="Nom du sous-album..."
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();submitLightboxSubalbumCreate(${parentId});}else if(event.key==='Escape'){event.stopPropagation();cancelLightboxSubalbumCreate();}"
+                       class="flex-1 min-w-0 bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
+                <button type="button" onclick="submitLightboxSubalbumCreate(${parentId})" title="Créer le sous-album"
+                        class="w-6 h-6 rounded-lg bg-white text-[#1E1E1E] hover:bg-white/90 text-[11px] font-bold flex items-center justify-center shrink-0 transition cursor-pointer">✓</button>
+                <button type="button" onclick="cancelLightboxSubalbumCreate()" title="Annuler"
+                        class="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/75 text-[10px] font-bold flex items-center justify-center shrink-0 transition cursor-pointer">✕</button>
+            </div>
+            <p id="lb-albums-sub-create-err-${parentId}" class="hidden text-[10px] text-red-300"></p>
+        </div>
+    `;
+}
+
+function _renderAlbumEditorTreeNodes(parentId, assignedNames, childrenByParent, escHtml, expandedSet = lbAlbumsEditorExpanded) {
+    const list = childrenByParent.get(parentId) || [];
+    if (list.length === 0) return '';
+    return list.map(a => {
+        const children = childrenByParent.get(a.album_id) || [];
+        const hasChildren = children.length > 0;
+        const isExpanded = expandedSet.has(a.album_id);
+        const isCreatingHere = lbAlbumsEditorCreatingParentId === a.album_id;
+        const isAssigned = assignedNames.has(a.full_path);
+        const coverThumb = a.cover_path
+            ? `<img src="/thumb?path=${encodeURIComponent(a.cover_path)}" class="w-7 h-7 rounded-lg object-cover bg-black/30 shrink-0"/>`
+            : `<div class="w-7 h-7 rounded-lg bg-black/30 flex items-center justify-center shrink-0 text-white/45 text-[10px]">📁</div>`;
+        const sideActionBtn = hasChildren
+            ? `<button type="button" onclick="toggleLightboxEditorSubalbums(${a.album_id})"
+                       title="${isExpanded ? 'Masquer les sous-albums' : 'Afficher les sous-albums'}"
+                       class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-white/75 hover:text-white flex items-center justify-center shrink-0 transition cursor-pointer">
+                   <svg class="w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                       <polyline points="9 18 15 12 9 6"/>
+                   </svg>
+               </button>`
+            : `<button type="button" onclick="openLightboxSubalbumCreate(${a.album_id})"
+                       title="Créer un sous-album"
+                       class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-white/75 hover:text-white flex items-center justify-center shrink-0 text-sm font-bold transition cursor-pointer">+</button>`;
+        const rightMeta = isAssigned
+            ? `<span class="text-[10px] font-bold text-emerald-300 shrink-0">✓</span>`
+            : `<span class="text-[10px] text-white/55 shrink-0">${Number(a.count || 0)}</span>`;
+        const actionBtn = isAssigned
+            ? `<div class="flex-1 min-w-0 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-left opacity-65">
+                   <div class="flex items-center gap-2 min-w-0">
+                       ${coverThumb}
+                       <span class="text-xs font-medium truncate">${escHtml(a.name || a.full_path)}</span>
+                   </div>
+                   ${rightMeta}
+               </div>`
+            : `<button type="button" data-album="${escHtml(a.full_path)}" onclick="addLightboxMediaToAlbum(this.dataset.album)"
+                       class="flex-1 min-w-0 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-left transition cursor-pointer">
+                   <div class="flex items-center gap-2 min-w-0">
+                       ${coverThumb}
+                       <span class="text-xs font-medium truncate">${escHtml(a.name || a.full_path)}</span>
+                   </div>
+                   ${rightMeta}
+               </button>`;
+
+        let subBlockHtml = '';
+        if (hasChildren && isExpanded) {
+            const subCreateFooter = isCreatingHere
+                ? _renderLightboxSubalbumCreateBoxHtml(a.album_id)
+                : `<button type="button" onclick="openLightboxSubalbumCreate(${a.album_id})"
+                           class="w-full py-1 px-2.5 rounded-xl bg-white/5 hover:bg-white/15 border border-dashed border-white/15 text-[10px] font-semibold text-white/75 hover:text-white text-left transition cursor-pointer">
+                       + Créer un sous-album
+                   </button>`;
+            subBlockHtml = `<div class="ml-3.5 pl-2 border-l border-white/10 space-y-1 mt-1">
+                ${_renderAlbumEditorTreeNodes(a.album_id, assignedNames, childrenByParent, escHtml, expandedSet)}
+                ${subCreateFooter}
+            </div>`;
+        } else if (!hasChildren && isCreatingHere) {
+            subBlockHtml = `<div class="ml-3.5 pl-2 border-l border-white/10 space-y-1 mt-1">
+                ${_renderLightboxSubalbumCreateBoxHtml(a.album_id)}
+            </div>`;
+        }
+
+        return `
+            <div>
+                <div class="flex items-center gap-1.5">
+                    ${actionBtn}
+                    ${sideActionBtn}
+                </div>
+                ${subBlockHtml}
+            </div>
+        `;
+    }).join('');
+}
+
+function openLightboxSubalbumCreate(parentId) {
+    lbAlbumsEditorCreatingParentId = parentId;
+    lbAlbumsEditorExpanded.add(parentId);
+    renderLightboxAlbumsEditor();
+    setTimeout(() => document.getElementById(`lb-albums-sub-create-input-${parentId}`)?.focus(), 30);
+}
+
+function cancelLightboxSubalbumCreate() {
+    lbAlbumsEditorCreatingParentId = null;
+    renderLightboxAlbumsEditor();
+}
+
+async function submitLightboxSubalbumCreate(parentId) {
+    const inp = document.getElementById(`lb-albums-sub-create-input-${parentId}`);
+    const errEl = document.getElementById(`lb-albums-sub-create-err-${parentId}`);
+    const name = (inp?.value || '').trim();
+    if (!name) {
+        if (errEl) {
+            errEl.textContent = 'Veuillez saisir un nom de sous-album.';
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+
+    const parentObj = lbAlbumsEditorAll.find(a => Number(a.album_id) === Number(parentId));
+    const sourceDir = (parentObj && parentObj.source_dir) ? parentObj.source_dir : null;
+    const res = await fetch('/api/albums/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, parent_id: parentId, source_dir: sourceDir })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (errEl) {
+            errEl.textContent = err.detail || 'Impossible de créer le sous-album.';
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+    const created = await res.json();
+    lbAlbumsEditorCreatingParentId = null;
+    lbAlbumsEditorExpanded.add(parentId);
+    const createdPath = created?.album?.full_path;
+    if (createdPath) {
+        await addLightboxMediaToAlbum(createdPath);
+    } else {
+        await _refreshAfterLightboxAlbumChange();
+    }
+}
+
+function toggleLightboxEditorSubalbums(albumId) {
+    if (lbAlbumsEditorExpanded.has(albumId)) {
+        lbAlbumsEditorExpanded.delete(albumId);
+        if (lbAlbumsEditorCreatingParentId === albumId) lbAlbumsEditorCreatingParentId = null;
+    } else {
+        lbAlbumsEditorExpanded.add(albumId);
+    }
+    renderLightboxAlbumsEditor();
+}
+
+async function _refreshAfterLightboxAlbumChange() {
+    try {
+        const res = await fetch('/api/albums/list?flat=true');
+        if (res.ok) {
+            const data = await res.json();
+            lbAlbumsEditorAll = data.all_albums || data.albums || [];
+        }
+    } catch (e) {}
+    await loadLightboxMetadataInfo();
+    await loadGalleryFilters();
+    if (currentTab === 'albums') {
+        if (openedAlbumName) loadSingleAlbumItems(true);
+        else loadAlbumsView();
+    }
+    renderLightboxAlbumsEditor();
+}
+
+async function addLightboxMediaToAlbum(albumName) {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item || !albumName) return;
+    const res = await fetch('/api/gallery/batch_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_paths: [item.source_path],
+            action: 'ALBUM_ADD',
+            album_name: albumName
+        })
+    });
+    if (!res.ok) {
+        alert("Impossible d'ajouter à cet album.");
+        return;
+    }
+    await _refreshAfterLightboxAlbumChange();
+}
+
+async function removeLightboxMediaFromAlbum(albumName) {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item || !albumName) return;
+    const res = await fetch('/api/gallery/batch_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_paths: [item.source_path],
+            action: 'ALBUM_REMOVE',
+            album_name: albumName
+        })
+    });
+    if (!res.ok) {
+        alert("Impossible de retirer de cet album.");
+        return;
+    }
+    await _refreshAfterLightboxAlbumChange();
+}
+
+async function setLightboxPrimaryAlbum(albumName) {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item || !albumName) return;
+    const res = await fetch('/api/gallery/batch_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            source_paths: [item.source_path],
+            action: 'ALBUM_SET_PRIMARY',
+            album_name: albumName
+        })
+    });
+    if (!res.ok) {
+        alert("Impossible de définir cet album comme principal.");
+        return;
+    }
+    await _refreshAfterLightboxAlbumChange();
+}
+
+async function setLightboxMediaAsAlbumCover(albumId) {
+    const d = window._lbCurrentInspectData || {};
+    if (!albumId || !d.dest_path) return;
+    const res = await fetch('/api/albums/set_cover', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ album_id: albumId, cover_path: d.dest_path })
+    });
+    if (!res.ok) {
+        alert("Impossible de modifier la couverture.");
+        return;
+    }
+    await _refreshAfterLightboxAlbumChange();
 }
