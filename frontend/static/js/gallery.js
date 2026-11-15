@@ -298,22 +298,124 @@ async function loadGalleryFilters() {
     if (typeof updateGalleryMonthDropdown === 'function') updateGalleryMonthDropdown();
 }
 
+let selectedFilterYears = [];
+let selectedFilterMonths = [];
+let selectedFilterTypes = [];
+let selectedFilterExts = [];
+let selectedFilterPeriods = [];
+
+function _getActivePeriodsList() {
+    const list = selectedFilterPeriods.slice();
+    const df = document.getElementById('gal-date-from')?.value || '';
+    const dt = document.getElementById('gal-date-to')?.value || '';
+    if (df || dt) {
+        const exists = list.some(p => p.from === df && p.to === dt);
+        if (!exists) list.push({ from: df, to: dt });
+    }
+    return list;
+}
+
+function _getActivePeriodsParam() {
+    return _getActivePeriodsList().map(p => `${p.from || ''}:${p.to || ''}`).join(',');
+}
+
+function toggleMultiFilterValue(kind, selectEl) {
+    if (!selectEl || !selectEl.value) return;
+    const val = selectEl.value;
+    selectEl.value = '';
+    const map = {
+        year: selectedFilterYears,
+        month: selectedFilterMonths,
+        type: selectedFilterTypes,
+        ext: selectedFilterExts
+    };
+    const arr = map[kind];
+    if (!arr) return;
+    const idx = arr.indexOf(val);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(val);
+    renderFilterChips();
+    updateActiveFilterBadge();
+    renderTimelineScrubberDOM();
+    resetAndLoadGallery();
+}
+
+function addGalleryPeriodFromInputs() {
+    const dfEl = document.getElementById('gal-date-from');
+    const dtEl = document.getElementById('gal-date-to');
+    const df = dfEl?.value || '';
+    const dt = dtEl?.value || '';
+    if (!df && !dt) return;
+    const exists = selectedFilterPeriods.some(p => p.from === df && p.to === dt);
+    if (!exists) selectedFilterPeriods.push({ from: df, to: dt });
+    if (dfEl) dfEl.value = '';
+    if (dtEl) dtEl.value = '';
+    renderFilterChips();
+    updateActiveFilterBadge();
+    resetAndLoadGallery();
+}
+
+function removeMultiFilterChip(kind, idx) {
+    if (kind === 'year') selectedFilterYears.splice(idx, 1);
+    else if (kind === 'month') selectedFilterMonths.splice(idx, 1);
+    else if (kind === 'type') selectedFilterTypes.splice(idx, 1);
+    else if (kind === 'ext') selectedFilterExts.splice(idx, 1);
+    else if (kind === 'period') selectedFilterPeriods.splice(idx, 1);
+    renderFilterChips();
+    updateActiveFilterBadge();
+    renderTimelineScrubberDOM();
+    resetAndLoadGallery();
+}
+
+function renderFilterChips() {
+    const container = document.getElementById('gal-active-filter-chips');
+    if (!container) return;
+    const chips = [];
+    selectedFilterYears.forEach((y, i) => chips.push({ kind: 'year', idx: i, label: y }));
+    selectedFilterMonths.forEach((m, i) => chips.push({ kind: 'month', idx: i, label: SHORT_MONTHS_FR[parseInt(m, 10)] || m }));
+    selectedFilterPeriods.forEach((p, i) => chips.push({ kind: 'period', idx: i, label: `${p.from || '…'} → ${p.to || '…'}` }));
+    selectedFilterTypes.forEach((t, i) => chips.push({ kind: 'type', idx: i, label: t }));
+    selectedFilterExts.forEach((e, i) => chips.push({ kind: 'ext', idx: i, label: e }));
+
+    if (!chips.length) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+    container.innerHTML = chips.map(c =>
+        `<span class="plum-btn px-2 py-0.5 rounded-full text-[10px] font-extrabold inline-flex items-center gap-1">
+            <span>${c.label}</span>
+            <button type="button" onclick="event.stopPropagation(); removeMultiFilterChip('${c.kind}', ${c.idx})" class="hover:text-rose-200 font-bold">✕</button>
+        </span>`
+    ).join('');
+}
+
 function updateActiveFilterBadge() {
-    const y = document.getElementById('gal-year')?.value || '';
-    const m = document.getElementById('gal-month')?.value || '';
-    const t = document.getElementById('gal-type-filter')?.value || '';
     const badge = document.getElementById('gallery-active-filter-badge');
     const txt = document.getElementById('gallery-active-filter-text');
     if (!badge || !txt) return;
 
     const parts = [];
-    if (m) parts.push(SHORT_MONTHS_FR[parseInt(m, 10)] || m);
-    if (y) parts.push(y);
-    if (t) parts.push(t);
-    if (currentExtFilter) parts.push(currentExtFilter);
+    selectedFilterMonths.forEach(m => parts.push(SHORT_MONTHS_FR[parseInt(m, 10)] || m));
+    selectedFilterYears.forEach(y => parts.push(y));
+    _getActivePeriodsList().forEach(p => parts.push(`${p.from || '…'} → ${p.to || '…'}`));
+    selectedFilterTypes.forEach(t => parts.push(t));
+    selectedFilterExts.forEach(e => parts.push(e));
+    if (currentExtFilter && !selectedFilterExts.includes(currentExtFilter)) parts.push(currentExtFilter);
+
+    const countBadge = document.getElementById('gal-filter-count');
+    if (countBadge) {
+        if (parts.length > 0) {
+            countBadge.textContent = String(parts.length);
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
 
     if (parts.length > 0) {
-        txt.textContent = parts.join(' ');
+        txt.textContent = parts.join(' · ');
         badge.classList.remove('hidden');
         badge.classList.add('inline-flex');
     } else {
@@ -322,24 +424,70 @@ function updateActiveFilterBadge() {
     }
 }
 
+function toggleGalleryFilterMenu(forceState) {
+    const pop = document.getElementById('gal-filter-popover');
+    if (!pop) return;
+    const willOpen = typeof forceState === 'boolean' ? forceState : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !willOpen);
+}
+
+document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('gal-filter-wrapper');
+    const pop = document.getElementById('gal-filter-popover');
+    if (wrapper && pop && !pop.classList.contains('hidden') && !wrapper.contains(e.target)) {
+        pop.classList.add('hidden');
+    }
+    const albWrapper = document.getElementById('alb-filter-wrapper');
+    const albPop = document.getElementById('alb-filter-popover');
+    if (albWrapper && albPop && !albPop.classList.contains('hidden') && !albWrapper.contains(e.target)) {
+        albPop.classList.add('hidden');
+    }
+});
+
 function onGalleryYearOrMonthSelectChange() {
+    const y = document.getElementById('gal-year')?.value || '';
+    const m = document.getElementById('gal-month')?.value || '';
+    if (y || m) {
+        const dfEl = document.getElementById('gal-date-from');
+        const dtEl = document.getElementById('gal-date-to');
+        if (dfEl) dfEl.value = '';
+        if (dtEl) dtEl.value = '';
+    }
+    updateActiveFilterBadge();
+    renderTimelineScrubberDOM();
+    loadGalleryItems(false);
+}
+
+function onGalleryPeriodChange() {
+    const sc = document.getElementById('main-scroll-container');
+    if (sc) sc.scrollTop = 0;
     updateActiveFilterBadge();
     renderTimelineScrubberDOM();
     loadGalleryItems(false);
 }
 
 function resetAllGalleryFilters() {
+    selectedFilterYears = [];
+    selectedFilterMonths = [];
+    selectedFilterTypes = [];
+    selectedFilterExts = [];
+    selectedFilterPeriods = [];
     const yEl = document.getElementById('gal-year');
     const mEl = document.getElementById('gal-month');
     const tEl = document.getElementById('gal-type-filter');
     const eEl = document.getElementById('gal-ext-select');
     const aEl = document.getElementById('gal-album');
+    const dfEl = document.getElementById('gal-date-from');
+    const dtEl = document.getElementById('gal-date-to');
     if (yEl) yEl.value = '';
     if (mEl) mEl.value = '';
     if (tEl) tEl.value = '';
     if (eEl) eEl.value = '';
     if (aEl) aEl.value = '';
+    if (dfEl) dfEl.value = '';
+    if (dtEl) dtEl.value = '';
     currentExtFilter = '';
+    renderFilterChips();
     updateActiveFilterBadge();
     resetAndLoadGallery();
 }
@@ -374,11 +522,12 @@ async function loadGalleryItems(append = false, customSkip = -1) {
 
     try {
         const p = new URLSearchParams({
-            year: document.getElementById('gal-year')?.value || '',
-            month: document.getElementById('gal-month')?.value || '',
+            year: selectedFilterYears.join(','),
+            month: selectedFilterMonths.join(','),
+            periods: _getActivePeriodsParam(),
             album: document.getElementById('gal-album')?.value || '',
-            media_type: document.getElementById('gal-type-filter')?.value || '',
-            ext_filter: currentExtFilter || '',
+            media_type: selectedFilterTypes.join(','),
+            ext_filter: selectedFilterExts.length ? selectedFilterExts.join(',') : (currentExtFilter || ''),
             favorites_only: document.getElementById('gal-fav')?.checked || false,
             no_faces_only: document.getElementById('gal-nofaces')?.checked || false,
             sort_by: document.getElementById('gal-sort-by')?.value || 'date',
@@ -438,11 +587,12 @@ async function loadPreviousGalleryItems() {
 
     try {
         const p = new URLSearchParams({
-            year: document.getElementById('gal-year')?.value || '',
-            month: document.getElementById('gal-month')?.value || '',
+            year: selectedFilterYears.join(','),
+            month: selectedFilterMonths.join(','),
+            periods: _getActivePeriodsParam(),
             album: document.getElementById('gal-album')?.value || '',
-            media_type: document.getElementById('gal-type-filter')?.value || '',
-            ext_filter: currentExtFilter || '',
+            media_type: selectedFilterTypes.join(','),
+            ext_filter: selectedFilterExts.length ? selectedFilterExts.join(',') : (currentExtFilter || ''),
             favorites_only: document.getElementById('gal-fav')?.checked || false,
             no_faces_only: document.getElementById('gal-nofaces')?.checked || false,
             sort_by: document.getElementById('gal-sort-by')?.value || 'date',
@@ -602,8 +752,8 @@ async function loadGalleryTimeline() {
 
     const p = new URLSearchParams({
         album: document.getElementById('gal-album')?.value || '',
-        media_type: document.getElementById('gal-type-filter')?.value || '',
-        ext_filter: currentExtFilter || '',
+        media_type: selectedFilterTypes.join(','),
+        ext_filter: selectedFilterExts.length ? selectedFilterExts.join(',') : (currentExtFilter || ''),
         favorites_only: document.getElementById('gal-fav')?.checked || false,
         no_faces_only: document.getElementById('gal-nofaces')?.checked || false,
         sort_order: document.getElementById('gal-sort-order')?.value || 'desc'
@@ -906,15 +1056,237 @@ function renderAlbumCardHTML(a) {
     `;
 }
 
+let selectedAlbumYears = [];
+let selectedAlbumMonths = [];
+let selectedAlbumContents = [];
+let selectedAlbumPeriods = [];
+
+function toggleAlbumFilterMenu(forceState) {
+    const pop = document.getElementById('alb-filter-popover');
+    if (!pop) return;
+    const willOpen = typeof forceState === 'boolean' ? forceState : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !willOpen);
+}
+
+function _getActiveAlbumPeriodsList() {
+    const list = selectedAlbumPeriods.slice();
+    const df = document.getElementById('alb-date-from')?.value || '';
+    const dt = document.getElementById('alb-date-to')?.value || '';
+    if (df || dt) {
+        if (!list.some(p => p.from === df && p.to === dt)) list.push({ from: df, to: dt });
+    }
+    return list;
+}
+
+function populateAlbumYearFilterOptions() {
+    const ySel = document.getElementById('alb-year');
+    if (!ySel) return;
+    const yearsSet = new Set();
+    (rootAlbumsCache || []).forEach(a => {
+        const ts = a.max_ts || a.modified_ts || 0;
+        if (ts > 0) yearsSet.add(String(new Date(ts * 1000).getFullYear()));
+    });
+    const years = Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+    ySel.innerHTML = `<option value="">Années</option>` + years.map(y => `<option value="${y}">${y}</option>`).join('');
+}
+
+function toggleAlbumMultiFilterValue(kind, selectEl) {
+    if (!selectEl || !selectEl.value) return;
+    const val = selectEl.value;
+    selectEl.value = '';
+    const map = { year: selectedAlbumYears, month: selectedAlbumMonths, content: selectedAlbumContents };
+    const arr = map[kind];
+    if (!arr) return;
+    const idx = arr.indexOf(val);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(val);
+    renderAlbumsOverviewFromCache();
+}
+
+function addAlbumPeriodFromInputs() {
+    const dfEl = document.getElementById('alb-date-from');
+    const dtEl = document.getElementById('alb-date-to');
+    const df = dfEl?.value || '';
+    const dt = dtEl?.value || '';
+    if (!df && !dt) return;
+    if (!selectedAlbumPeriods.some(p => p.from === df && p.to === dt)) {
+        selectedAlbumPeriods.push({ from: df, to: dt });
+    }
+    if (dfEl) dfEl.value = '';
+    if (dtEl) dtEl.value = '';
+    renderAlbumsOverviewFromCache();
+}
+
+function removeAlbumFilterChip(kind, idx) {
+    if (kind === 'year') selectedAlbumYears.splice(idx, 1);
+    else if (kind === 'month') selectedAlbumMonths.splice(idx, 1);
+    else if (kind === 'content') selectedAlbumContents.splice(idx, 1);
+    else if (kind === 'period') selectedAlbumPeriods.splice(idx, 1);
+    renderAlbumsOverviewFromCache();
+}
+
+function resetAllAlbumFilters() {
+    selectedAlbumYears = [];
+    selectedAlbumMonths = [];
+    selectedAlbumContents = [];
+    selectedAlbumPeriods = [];
+    const dfEl = document.getElementById('alb-date-from');
+    const dtEl = document.getElementById('alb-date-to');
+    if (dfEl) dfEl.value = '';
+    if (dtEl) dtEl.value = '';
+    renderAlbumsOverviewFromCache();
+}
+
+function _renderAlbumFilterChipsAndBadge() {
+    const contentLabels = { WITH_SUBS: 'Avec sous-albums', NON_EMPTY: 'Non vides', EMPTY: 'Vides' };
+    const chips = [];
+    selectedAlbumYears.forEach((y, i) => chips.push({ kind: 'year', idx: i, label: y }));
+    selectedAlbumMonths.forEach((m, i) => chips.push({ kind: 'month', idx: i, label: SHORT_MONTHS_FR[parseInt(m, 10)] || m }));
+    selectedAlbumPeriods.forEach((p, i) => chips.push({ kind: 'period', idx: i, label: `${p.from || '…'} → ${p.to || '…'}` }));
+    selectedAlbumContents.forEach((c, i) => chips.push({ kind: 'content', idx: i, label: contentLabels[c] || c }));
+
+    const container = document.getElementById('alb-active-filter-chips');
+    if (container) {
+        if (!chips.length) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+        } else {
+            container.classList.remove('hidden');
+            container.innerHTML = chips.map(c =>
+                `<span class="plum-btn px-2 py-0.5 rounded-full text-[10px] font-extrabold inline-flex items-center gap-1">
+                    <span>${c.label}</span>
+                    <button type="button" onclick="event.stopPropagation(); removeAlbumFilterChip('${c.kind}', ${c.idx})" class="hover:text-rose-200 font-bold">✕</button>
+                </span>`
+            ).join('');
+        }
+    }
+
+    const totalCount = chips.length + ((document.getElementById('alb-date-from')?.value || document.getElementById('alb-date-to')?.value) ? 1 : 0);
+    const countBadge = document.getElementById('alb-filter-count');
+    if (countBadge) {
+        if (totalCount > 0) {
+            countBadge.textContent = String(totalCount);
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
+}
+
+function _filterAlbumsList(albums) {
+    const periods = _getActiveAlbumPeriodsList();
+    return (albums || []).filter(a => {
+        const ts = a.max_ts || a.modified_ts || 0;
+        const dt = ts > 0 ? new Date(ts * 1000) : null;
+        const yr = dt ? String(dt.getFullYear()) : '';
+        const mo = dt ? String(dt.getMonth() + 1).padStart(2, '0') : '';
+
+        const hasYM = selectedAlbumYears.length > 0 || selectedAlbumMonths.length > 0;
+        const hasPer = periods.length > 0;
+        if (hasYM || hasPer) {
+            let matchYM = false;
+            if (hasYM && dt) {
+                const okY = !selectedAlbumYears.length || selectedAlbumYears.includes(yr);
+                const okM = !selectedAlbumMonths.length || selectedAlbumMonths.includes(mo);
+                matchYM = okY && okM;
+            }
+            let matchPer = false;
+            if (hasPer && ts > 0) {
+                matchPer = periods.some(p => {
+                    let ok = true;
+                    if (p.from) ok = ok && ts >= Math.floor(new Date(p.from + 'T00:00:00').getTime() / 1000);
+                    if (p.to) ok = ok && ts <= Math.floor(new Date(p.to + 'T23:59:59').getTime() / 1000);
+                    return ok;
+                });
+            }
+            if (!(matchYM || matchPer)) return false;
+        }
+
+        if (selectedAlbumContents.length > 0) {
+            const matchesContent = selectedAlbumContents.some(c => {
+                if (c === 'WITH_SUBS') return (a.subalbums_count || 0) > 0;
+                if (c === 'NON_EMPTY') return (a.count || 0) > 0;
+                if (c === 'EMPTY') return (a.count || 0) === 0;
+                return true;
+            });
+            if (!matchesContent) return false;
+        }
+        return true;
+    });
+}
+
+function _albumGroupKeyAndLabel(album, groupBy, sortBy) {
+    const ts = sortBy === 'modified' ? (album.modified_ts || album.max_ts || 0) : (album.max_ts || album.modified_ts || 0);
+    if (!ts) return { key: '0000', label: 'Sans date' };
+    const d = new Date(ts * 1000);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    if (groupBy === 'YEAR') return { key: `${y}`, label: `${y}` };
+    if (groupBy === 'MONTH') return { key: `${y}-${m}`, label: `${FULL_MONTHS_FR[d.getMonth() + 1]} ${y}` };
+    if (groupBy === 'WEEK') {
+        const tmp = new Date(d.getTime());
+        tmp.setHours(0, 0, 0, 0);
+        tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
+        const w1 = new Date(tmp.getFullYear(), 0, 4);
+        const wk = 1 + Math.round(((tmp.getTime() - w1.getTime()) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7);
+        return { key: `${tmp.getFullYear()}-W${String(wk).padStart(2, '0')}`, label: `Semaine ${wk} • ${tmp.getFullYear()}` };
+    }
+    return { key: `${y}-${m}-${day}`, label: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) };
+}
+
 function renderAlbumsOverviewFromCache() {
     const grid = document.getElementById('albums-grid');
     if (!grid) return;
-    grid.className = getAlbumGridClass();
+    _renderAlbumFilterChipsAndBadge();
+
     if (!rootAlbumsCache || rootAlbumsCache.length === 0) {
+        grid.className = getAlbumGridClass();
         grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun album pour le moment. Cliquez sur "+ Nouveau" pour en créer un.</div>`;
         return;
     }
-    grid.innerHTML = sortAlbumItems(rootAlbumsCache).map(renderAlbumCardHTML).join('');
+
+    const filtered = _filterAlbumsList(rootAlbumsCache);
+    const sorted = sortAlbumItems(filtered);
+    if (sorted.length === 0) {
+        grid.className = getAlbumGridClass();
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun album ne correspond aux filtres sélectionnés.</div>`;
+        return;
+    }
+
+    const groupBy = document.getElementById('alb-group-by')?.value || 'NONE';
+    const sortBy = document.getElementById('alb-sort-by')?.value || 'date';
+    if (groupBy === 'NONE') {
+        grid.className = getAlbumGridClass();
+        grid.innerHTML = sorted.map(renderAlbumCardHTML).join('');
+        return;
+    }
+
+    const groups = [];
+    const groupMap = new Map();
+    sorted.forEach(a => {
+        const { key, label } = _albumGroupKeyAndLabel(a, groupBy, sortBy);
+        if (!groupMap.has(key)) {
+            const g = { key, label, items: [] };
+            groupMap.set(key, g);
+            groups.push(g);
+        }
+        groupMap.get(key).items.push(a);
+    });
+
+    const innerGridCls = getAlbumGridClass();
+    grid.className = 'space-y-6';
+    grid.innerHTML = groups.map(g => `
+        <section class="space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-extrabold tracking-tight">${g.label}</h3>
+                <span class="text-[11px] font-bold opacity-55">${g.items.length} album${g.items.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="${innerGridCls}">
+                ${g.items.map(renderAlbumCardHTML).join('')}
+            </div>
+        </section>
+    `).join('');
 }
 
 async function loadAlbumsView() {
@@ -922,6 +1294,7 @@ async function loadAlbumsView() {
     const d = await res.json();
     rootAlbumsCache = d.albums || [];
     allAlbumsCache = d.all_albums || [];
+    populateAlbumYearFilterOptions();
     renderAlbumsOverviewFromCache();
 }
 
@@ -1282,14 +1655,19 @@ async function loadTypesSummary() {
 }
 
 function filterGalleryByType(typeCode) {
-    document.getElementById('gal-type-filter').value = typeCode;
+    selectedFilterTypes = typeCode ? [typeCode] : [];
     currentExtFilter = '';
+    renderFilterChips();
+    updateActiveFilterBadge();
     switchTab('gallery');
 }
 
 function filterGalleryByExt(ext) {
-    document.getElementById('gal-type-filter').value = '';
+    selectedFilterTypes = [];
+    selectedFilterExts = ext ? [ext] : [];
     currentExtFilter = ext;
+    renderFilterChips();
+    updateActiveFilterBadge();
     switchTab('gallery');
 }
 

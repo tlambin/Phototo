@@ -96,6 +96,45 @@ class TestApiRoutes(unittest.TestCase):
         self.assertEqual(fav_res["is_favorite"], 1)
         self.assertEqual(system_router.api_stats()["favorites"], 1)
 
+    def test_gallery_period_filter(self):
+        from datetime import datetime
+        p_before = self.dest_dir / "before.jpg"
+        p_in = self.dest_dir / "in_period.jpg"
+        v_in = self.dest_dir / "in_period.mp4"
+        p_after = self.dest_dir / "after.jpg"
+        for f in (p_before, p_in, v_in, p_after):
+            f.write_bytes(b"data")
+
+        ts_before = int(datetime(2025, 8, 31, 23, 59, 0).timestamp())
+        ts_in_1 = int(datetime(2025, 9, 1, 0, 0, 0).timestamp())
+        ts_in_2 = int(datetime(2025, 9, 15, 23, 59, 59).timestamp())
+        ts_after = int(datetime(2025, 9, 16, 0, 0, 0).timestamp())
+
+        conn = database.get_db()
+        for src, dst, ts in [
+            ("src_before", p_before, ts_before),
+            ("src_in_photo", p_in, ts_in_1),
+            ("src_in_video", v_in, ts_in_2),
+            ("src_after", p_after, ts_after),
+        ]:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', ?, 0, 0)",
+                (src, str(dst), str(dst), ts),
+            )
+        conn.commit()
+        conn.close()
+
+        gal = gallery_router.api_gallery_items(date_from="2025-09-01", date_to="2025-09-15")
+        self.assertEqual(gal["total"], 2)
+        returned = {it["source_path"] for it in gal["items"]}
+        self.assertEqual(returned, {"src_in_photo", "src_in_video"})
+
+        gal_multi_periods = gallery_router.api_gallery_items(periods="2025-08-31:2025-08-31,2025-09-16:2025-09-16")
+        self.assertEqual({it["source_path"] for it in gal_multi_periods["items"]}, {"src_before", "src_after"})
+
+        gal_multi_ext = gallery_router.api_gallery_items(ext_filter=".mp4", periods="2025-09-01:2025-09-15")
+        self.assertEqual({it["source_path"] for it in gal_multi_ext["items"]}, {"src_in_video"})
+
     def test_duplicates_display_and_dedup_reset(self):
         win_f = self.dest_dir / "win.jpg"
         dup_f = self.dest_dir / "dup.jpg"

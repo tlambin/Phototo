@@ -2,6 +2,7 @@ import os
 import time
 import shutil
 import sqlite3
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import cv2
@@ -127,22 +128,93 @@ def _probe_video_duration_and_save(video_path: Path, conn: sqlite3.Connection | 
     return None
 
 
+def _media_type_sql(media_type: str) -> str:
+    if media_type == "VIDEOS":
+        return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in VIDEO_EXTS]) + ")"
+    if media_type == "RAW":
+        return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in RAW_EXTS]) + ")"
+    if media_type == "SCREENSHOTS":
+        return "(LOWER(pf.dest_path) LIKE '%screenshot%' OR LOWER(pf.dest_path) LIKE '%capture%' OR LOWER(pf.dest_path) LIKE '%ecran%')"
+    if media_type == "PHOTOS":
+        std_imgs = IMAGE_EXTS - RAW_EXTS
+        return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in std_imgs]) + ")"
+    return ""
+
+
 def _build_gallery_where(
     year: str = "", month: str = "", album: str = "",
     favorites_only: bool = False, no_faces_only: bool = False,
-    media_type: str = "", ext_filter: str = "", require_timestamp: bool = False
+    media_type: str = "", ext_filter: str = "", require_timestamp: bool = False,
+    date_from: str = "", date_to: str = "", periods: str = ""
 ) -> tuple[str, list]:
     where_clauses = ["pf.is_duplicate = 0", "pf.is_trashed = 0", "pf.dest_path IS NOT NULL"]
     params = []
 
     if require_timestamp:
         where_clauses.append("pf.timestamp > 0")
-    if year:
-        where_clauses.append("strftime('%Y', datetime(pf.timestamp, 'unixepoch', 'localtime')) = ?")
-        params.append(year)
-    if month:
-        where_clauses.append("strftime('%m', datetime(pf.timestamp, 'unixepoch', 'localtime')) = ?")
-        params.append(f"{int(month):02d}")
+
+    ym_clauses = []
+    ym_params = []
+    years_list = [y.strip() for y in str(year or "").split(",") if y.strip()]
+    if years_list:
+        ph = ",".join(["?"] * len(years_list))
+        ym_clauses.append(f"strftime('%Y', datetime(pf.timestamp, 'unixepoch', 'localtime')) IN ({ph})")
+        ym_params.extend(years_list)
+
+    months_list = []
+    for m in str(month or "").split(","):
+        m = m.strip()
+        if m.isdigit():
+            months_list.append(f"{int(m):02d}")
+    if months_list:
+        ph = ",".join(["?"] * len(months_list))
+        ym_clauses.append(f"strftime('%m', datetime(pf.timestamp, 'unixepoch', 'localtime')) IN ({ph})")
+        ym_params.extend(months_list)
+
+    period_pairs = []
+    for raw_p in str(periods or "").split(","):
+        raw_p = raw_p.strip()
+        if not raw_p or ":" not in raw_p:
+            continue
+        df, dt = raw_p.split(":", 1)
+        if df.strip() or dt.strip():
+            period_pairs.append((df.strip(), dt.strip()))
+    if date_from.strip() or date_to.strip():
+        period_pairs.append((date_from.strip(), date_to.strip()))
+
+    period_clauses = []
+    period_params = []
+    for df, dt in period_pairs:
+        sub_c = ["pf.timestamp > 0"]
+        sub_p = []
+        if df:
+            try:
+                sub_c.append("pf.timestamp >= ?")
+                sub_p.append(int(datetime.strptime(df, "%Y-%m-%d").timestamp()))
+            except ValueError:
+                pass
+        if dt:
+            try:
+                end_ts = int((datetime.strptime(dt, "%Y-%m-%d") + timedelta(days=1)).timestamp()) - 1
+                sub_c.append("pf.timestamp <= ?")
+                sub_p.append(end_ts)
+            except ValueError:
+                pass
+        if len(sub_c) > 1:
+            period_clauses.append("(" + " AND ".join(sub_c) + ")")
+            period_params.extend(sub_p)
+
+    if ym_clauses and period_clauses:
+        where_clauses.append("((" + " AND ".join(ym_clauses) + ") OR (" + " OR ".join(period_clauses) + "))")
+        params.extend(ym_params)
+        params.extend(period_params)
+    elif ym_clauses:
+        where_clauses.extend(ym_clauses)
+        params.extend(ym_params)
+    elif period_clauses:
+        where_clauses.append("(" + " OR ".join(period_clauses) + ")")
+        params.extend(period_params)
+
     if album:
         where_clauses.append("(',' || REPLACE(COALESCE(pf.album_name, ''), ', ', ',') || ',') LIKE ?")
         params.append(f"%,{album.strip()},%")
@@ -150,21 +222,28 @@ def _build_gallery_where(
         where_clauses.append("pf.is_favorite = 1")
     if no_faces_only:
         where_clauses.append("NOT EXISTS (SELECT 1 FROM faces f WHERE f.dest_path = pf.dest_path)")
-    if ext_filter:
-        where_clauses.append("LOWER(pf.dest_path) LIKE ?")
-        params.append(f"%{ext_filter.lower()}")
-    elif media_type == "VIDEOS":
-        vid_ors = " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in VIDEO_EXTS])
-        where_clauses.append(f"({vid_ors})")
-    elif media_type == "RAW":
-        raw_ors = " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in RAW_EXTS])
-        where_clauses.append(f"({raw_ors})")
-    elif media_type == "SCREENSHOTS":
-        where_clauses.append("(LOWER(pf.dest_path) LIKE '%screenshot%' OR LOWER(pf.dest_path) LIKE '%capture%' OR LOWER(pf.dest_path) LIKE '%ecran%')")
-    elif media_type == "PHOTOS":
-        std_imgs = IMAGE_EXTS - RAW_EXTS
-        img_ors = " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in std_imgs])
-        where_clauses.append(f"({img_ors})")
+
+    type_clauses = []
+    for t in str(media_type or "").split(","):
+        sql = _media_type_sql(t.strip().upper())
+        if sql:
+            type_clauses.append(sql)
+
+    exts_list = [e.strip().lower() for e in str(ext_filter or "").split(",") if e.strip()]
+    ext_clauses = []
+    ext_params = []
+    for ext in exts_list:
+        ext_clauses.append("LOWER(pf.dest_path) LIKE ?")
+        ext_params.append(f"%{ext}")
+
+    if type_clauses and ext_clauses:
+        where_clauses.append("((" + " OR ".join(type_clauses) + ") OR (" + " OR ".join(ext_clauses) + "))")
+        params.extend(ext_params)
+    elif type_clauses:
+        where_clauses.append("(" + " OR ".join(type_clauses) + ")")
+    elif ext_clauses:
+        where_clauses.append("(" + " OR ".join(ext_clauses) + ")")
+        params.extend(ext_params)
 
     return " AND ".join(where_clauses), params
 
@@ -535,6 +614,7 @@ def api_gallery_items(
     year: str = "", month: str = "", album: str = "",
     favorites_only: bool = False, no_faces_only: bool = False,
     media_type: str = "", ext_filter: str = "",
+    date_from: str = "", date_to: str = "", periods: str = "",
     sort_by: str = "date", sort_order: str = "desc",
     page: int = 1, limit: int = 60, skip_to: int = -1
 ):
@@ -545,7 +625,8 @@ def api_gallery_items(
     where_sql, params = _build_gallery_where(
         year=year, month=month, album=album,
         favorites_only=favorites_only, no_faces_only=no_faces_only,
-        media_type=media_type, ext_filter=ext_filter, require_timestamp=False
+        media_type=media_type, ext_filter=ext_filter, require_timestamp=False,
+        date_from=date_from, date_to=date_to, periods=periods
     )
 
     direction = "ASC" if sort_order.lower() == "asc" else "DESC"
