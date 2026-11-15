@@ -2023,17 +2023,29 @@ function toggleLightboxDoubleClickZoom(e) {
     }
 }
 
+const _LB_PLAY_SVG = '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+const _LB_PAUSE_SVG = '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+const _LB_EDIT_PHOTO_SVG = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M3 16.5l4-3.5 4 3.5"/><path d="M19 3a1.8 1.8 0 0 1 2.5 2.5L15.5 11.5 13 9 19 3Z"/><path d="M13 9c-1.5.4-2.4 1.8-2.7 3.5 1.7-.3 3.1-1.2 3.7-2.5"/></svg>';
+const _LB_EDIT_VIDEO_SVG = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M10.5 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><polygon points="6.5 13.5 11 16.2 6.5 18.9" fill="currentColor" stroke="none"/><circle cx="16" cy="3.8" r="1.5"/><circle cx="20.2" cy="8" r="1.5"/><line x1="15.6" y1="5.2" x2="12.2" y2="12"/><line x1="18.8" y1="8.2" x2="11" y2="9.2"/></svg>';
+
+function updateLightboxEditButton(isVid) {
+    const btn = document.getElementById('lb-btn-edit');
+    if (!btn) return;
+    btn.innerHTML = isVid ? _LB_EDIT_VIDEO_SVG : _LB_EDIT_PHOTO_SVG;
+    btn.title = isVid ? 'Modifier la vidéo' : 'Modifier la photo';
+}
+
 function toggleLightboxSlideshow(forceStop = false) {
     const iconEl = document.getElementById('lb-slideshow-icon');
     const btnEl = document.getElementById('lb-btn-slideshow');
     if (lbSlideshowTimer || forceStop) {
         clearInterval(lbSlideshowTimer);
         lbSlideshowTimer = null;
-        if (iconEl) iconEl.textContent = '▶';
+        if (iconEl) iconEl.innerHTML = _LB_PLAY_SVG;
         if (btnEl) btnEl.classList.remove('bg-white/25');
         return;
     }
-    if (iconEl) iconEl.textContent = '⏸';
+    if (iconEl) iconEl.innerHTML = _LB_PAUSE_SVG;
     if (btnEl) btnEl.classList.add('bg-white/25');
     lbSlideshowTimer = setInterval(() => {
         if (currentLightboxIndex < currentGalleryItems.length - 1) {
@@ -2064,16 +2076,84 @@ function _preloadLightboxNeighbors(idx) {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const stage = document.getElementById('lb-media-stage');
+function handleLightboxFilmstripWheel(e) {
+    const strip = document.getElementById('lb-filmstrip');
+    if (!strip) return;
+    const rawDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (!rawDelta) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const unit = e.deltaMode === 1 ? 36 : (e.deltaMode === 2 ? strip.clientWidth : 1);
+    const delta = rawDelta * unit;
+    if (strip.scrollWidth > strip.clientWidth + 1) {
+        strip.scrollLeft += delta;
+    } else {
+        navigateLightbox(delta > 0 ? 1 : -1);
+    }
+}
+
+let _lbWheelNavLockUntil = 0;
+let _lbWheelNavAccum = 0;
+let _lbWheelNavDir = 0;
+
+function handleLightboxWheel(e) {
+    const lbModal = document.getElementById('lightbox-modal');
+    if (!lbModal || lbModal.classList.contains('hidden')) return;
+    if (e.target && e.target.closest('#lb-info-drawer, #lb-filmstrip, #lb-analyze-modal, #lb-faces-edit-modal, #lb-albums-edit-modal, #lb-location-edit-modal, #lb-delete-confirm')) {
+        return;
+    }
+
     const imgEl = document.getElementById('lb-img');
-    if (stage) {
-        stage.addEventListener('wheel', (e) => {
-            if (document.getElementById('lightbox-modal')?.classList.contains('hidden')) return;
-            if (!imgEl || imgEl.classList.contains('hidden')) return;
+    const vidEl = document.getElementById('lb-video');
+    if (vidEl && !vidEl.classList.contains('hidden') && (e.target === vidEl || vidEl.contains(e.target))) {
+        return;
+    }
+
+    const rawDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (!rawDelta) return;
+
+    if (imgEl && !imgEl.classList.contains('hidden')) {
+        const rect = imgEl.getBoundingClientRect();
+        const onImg = e.target === imgEl || (
+            rect.width > 0 && rect.height > 0 &&
+            e.clientX >= rect.left && e.clientX <= rect.right &&
+            e.clientY >= rect.top && e.clientY <= rect.bottom
+        );
+        if (onImg) {
             e.preventDefault();
-            adjustLightboxZoom(e.deltaY < 0 ? 0.25 : -0.25);
-        }, { passive: false });
+            adjustLightboxZoom(rawDelta < 0 ? 0.25 : -0.25);
+            return;
+        }
+    }
+
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 36 : (e.deltaMode === 2 ? window.innerHeight : 1);
+    const delta = rawDelta * unit;
+    const now = performance.now();
+    if (now < _lbWheelNavLockUntil) return;
+
+    const dir = delta > 0 ? 1 : -1;
+    if (dir !== _lbWheelNavDir) {
+        _lbWheelNavAccum = 0;
+        _lbWheelNavDir = dir;
+    }
+    _lbWheelNavAccum += Math.abs(delta);
+    if (_lbWheelNavAccum < 40) return;
+
+    _lbWheelNavAccum = 0;
+    _lbWheelNavLockUntil = now + 160;
+    navigateLightbox(dir);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const lbModal = document.getElementById('lightbox-modal');
+    const imgEl = document.getElementById('lb-img');
+    if (lbModal) {
+        lbModal.addEventListener('wheel', handleLightboxWheel, { passive: false });
+    }
+    const filmstrip = document.getElementById('lb-filmstrip');
+    if (filmstrip) {
+        filmstrip.addEventListener('wheel', handleLightboxFilmstripWheel, { passive: false });
     }
     if (imgEl) {
         imgEl.addEventListener('mousedown', (e) => {
@@ -2142,6 +2222,7 @@ async function openLightbox(idx) {
     }
 
     updateLightboxFavButton(item.is_favorite);
+    updateLightboxEditButton(isVid);
     const prevBtn = document.getElementById('lb-prev-btn');
     const nextBtn = document.getElementById('lb-next-btn');
     if (prevBtn) prevBtn.classList.toggle('opacity-30', idx <= 0);
@@ -2158,6 +2239,7 @@ async function openLightbox(idx) {
     if (localStorage.getItem('phototo_lb_info_open') === '1') {
         document.getElementById('lb-info-drawer')?.classList.remove('hidden');
     }
+    syncLightboxInfoButtonState();
     if (!document.getElementById('lb-info-drawer').classList.contains('hidden')) {
         await loadLightboxMetadataInfo();
     }
@@ -2178,6 +2260,7 @@ function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
 function closeLightbox() {
     cancelLightboxDelete();
     closeLightboxAnalyzeModal();
+    closeLightboxLocationEditor();
     toggleLightboxSlideshow(true);
     resetLightboxZoom();
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
@@ -2195,20 +2278,24 @@ function renderLightboxFilmstrip(activeIdx) {
         return;
     }
     strip.classList.remove('hidden');
-    const start = Math.max(0, activeIdx - 8);
-    const end = Math.min(currentGalleryItems.length - 1, activeIdx + 8);
+    const start = Math.max(0, activeIdx - 60);
+    const end = Math.min(currentGalleryItems.length - 1, activeIdx + 60);
     let html = '';
     for (let i = start; i <= end; i++) {
         const it = currentGalleryItems[i];
         const isActive = i === activeIdx;
         const ringCls = isActive ? 'ring-2 ring-white scale-105 opacity-100' : 'opacity-55 hover:opacity-100';
         html += `
-            <button type="button" onclick="event.stopPropagation(); openLightbox(${i})"
-                    class="shrink-0 w-8 h-8 rounded-lg overflow-hidden transition ${ringCls}">
+            <button type="button" ${isActive ? 'data-lb-active="1"' : ''} onclick="event.stopPropagation(); openLightbox(${i})"
+                    class="shrink-0 w-8 h-8 rounded-md overflow-hidden transition ${ringCls}">
                 <img src="/thumb?path=${encodeURIComponent(it.dest_path)}" loading="lazy" class="w-full h-full object-cover"/>
             </button>`;
     }
     strip.innerHTML = html;
+    const activeBtn = strip.querySelector('[data-lb-active="1"]');
+    if (activeBtn) {
+        strip.scrollLeft = Math.max(0, activeBtn.offsetLeft - (strip.clientWidth - activeBtn.offsetWidth) / 2);
+    }
 }
 
 function navigateLightbox(delta) {
@@ -2221,6 +2308,11 @@ window.addEventListener('keydown', e => {
     if (!lbOpen) return;
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     if (e.key === 'Escape') {
+        const locEditModal = document.getElementById('lb-location-edit-modal');
+        if (locEditModal && !locEditModal.classList.contains('hidden')) {
+            closeLightboxLocationEditor();
+            return;
+        }
         const albumsEditModal = document.getElementById('lb-albums-edit-modal');
         if (albumsEditModal && !albumsEditModal.classList.contains('hidden')) {
             closeLightboxAlbumsEditor();
@@ -2259,8 +2351,8 @@ function updateLightboxFavButton(isFav) {
     const btn = document.getElementById('lb-btn-fav');
     if (!icon || !btn) return;
     if (isFav) {
-        icon.setAttribute('fill', '#A385A6');
-        icon.setAttribute('stroke', '#A385A6');
+        icon.setAttribute('fill', '#f9a8d4');
+        icon.setAttribute('stroke', '#f9a8d4');
     } else {
         icon.setAttribute('fill', 'none');
         icon.setAttribute('stroke', 'currentColor');
@@ -2370,15 +2462,7 @@ async function submitAlbumPickerModal(e) {
 }
 
 async function lightboxAddToAlbum() {
-    const item = currentGalleryItems[currentLightboxIndex];
-    if (!item) return;
-    await openAlbumPickerModal([item.source_path], item.album_name || '', async (albumName) => {
-        item.album_name = albumName;
-        await loadGalleryFilters();
-        if (!document.getElementById('lb-info-drawer').classList.contains('hidden')) {
-            await loadLightboxMetadataInfo();
-        }
-    });
+    await openLightboxAlbumsEditor();
 }
 
 async function lightboxShareMedia() {
@@ -2452,11 +2536,26 @@ function lightboxOpenMetadataEditor() {
     if (item) openMetadataModalSingle(encodeURIComponent(item.source_path));
 }
 
+function syncLightboxInfoButtonState() {
+    const dr = document.getElementById('lb-info-drawer');
+    const btn = document.getElementById('lb-btn-info');
+    if (!dr || !btn) return;
+    const isOpen = !dr.classList.contains('hidden');
+    btn.setAttribute('aria-pressed', isOpen ? 'true' : 'false');
+    btn.title = isOpen ? 'Masquer les informations (I)' : 'Afficher les informations (I)';
+    btn.classList.toggle('bg-white', isOpen);
+    btn.classList.toggle('text-black', isOpen);
+    btn.classList.toggle('shadow-sm', isOpen);
+    btn.classList.toggle('hover:bg-white/20', !isOpen);
+    btn.classList.toggle('hover:text-amber-300', !isOpen);
+}
+
 async function toggleLightboxInfoDrawer() {
     const dr = document.getElementById('lb-info-drawer');
     dr.classList.toggle('hidden');
     const isOpen = !dr.classList.contains('hidden');
     localStorage.setItem('phototo_lb_info_open', isOpen ? '1' : '0');
+    syncLightboxInfoButtonState();
     if (isOpen) {
         await loadLightboxMetadataInfo();
     }
@@ -2699,6 +2798,46 @@ async function saveLightboxNoteEdit() {
 
 let _lbInfoReqSeq = 0;
 let _lbInfoAbortCtrl = null;
+const _lbCityCache = new Map();
+
+async function resolveLightboxPlaceCity(lat, lon, reqSeq, prefilledCity = '', prefilledLabel = '') {
+    const placeEl = document.getElementById('lb-info-place-title');
+    if (!placeEl) return;
+    const key = `${Number(lat).toFixed(2)},${Number(lon).toFixed(2)}`;
+    if (prefilledCity) {
+        _lbCityCache.set(key, { city: prefilledCity, label: prefilledLabel || prefilledCity });
+        return;
+    }
+    const cached = _lbCityCache.get(key);
+    if (cached) {
+        placeEl.textContent = cached.city || cached.label || 'Lieu inconnu';
+        placeEl.title = cached.label || cached.city || '';
+        return;
+    }
+    try {
+        const res = await fetch(`/api/map/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, {
+            signal: _lbInfoAbortCtrl ? _lbInfoAbortCtrl.signal : undefined
+        });
+        if (reqSeq !== _lbInfoReqSeq) return;
+        if (!res.ok) {
+            placeEl.textContent = 'Lieu inconnu';
+            return;
+        }
+        const geo = await res.json();
+        if (reqSeq !== _lbInfoReqSeq) return;
+        const city = (geo.city || '').trim();
+        const label = (geo.label || city || 'Lieu inconnu').trim();
+        const text = city || label || 'Lieu inconnu';
+        placeEl.textContent = text;
+        placeEl.title = label;
+        if (city) {
+            _lbCityCache.set(key, { city, label });
+        }
+    } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        if (reqSeq === _lbInfoReqSeq) placeEl.textContent = 'Lieu inconnu';
+    }
+}
 
 async function loadLightboxMetadataInfo() {
     const item = currentGalleryItems[currentLightboxIndex];
@@ -2846,13 +2985,13 @@ async function loadLightboxMetadataInfo() {
             albumsListEl.innerHTML = `
                 <button type="button" onclick="openLightboxAlbumsEditor()"
                         class="w-full text-left text-[11px] font-medium text-white/60 hover:text-white transition cursor-pointer">
-                    Aucun album • Ajouter...
+                    Ajouter à un album
                 </button>
             `;
         }
     }
 
-    // Carte Personnes + Carte Catégories + Bouton "Analyser le média"
+    // Carte Personnes + Carte Catégories + Bouton flottant "Analyser le média"
     const facesCard = document.getElementById('lb-info-faces-card');
     const catsCard = document.getElementById('lb-info-cats-card');
     const analyzeBtn = document.getElementById('lb-info-analyze-btn');
@@ -2891,7 +3030,7 @@ async function loadLightboxMetadataInfo() {
     }
 
     if (analyzeBtn) {
-        analyzeBtn.classList.toggle('hidden', facesList.length > 0 && catsList.length > 0);
+        analyzeBtn.classList.remove('hidden');
     }
 
     // Carte Lieu & Mini-Carte Leaflet (masquée si aucune coordonnée -> bouton "Ajouter un lieu")
@@ -2904,7 +3043,13 @@ async function loadLightboxMetadataInfo() {
         if (mapEmpty) mapEmpty.classList.add('hidden');
         const lat = Number(d.latitude);
         const lon = Number(d.longitude);
-        document.getElementById('lb-info-place-title').textContent = `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+        const placeEl = document.getElementById('lb-info-place-title');
+        const initialCity = (d.location_city || '').trim();
+        if (placeEl) {
+            placeEl.textContent = initialCity || 'Localisation...';
+            placeEl.title = (d.location_label || initialCity || '');
+        }
+        resolveLightboxPlaceCity(lat, lon, reqSeq, initialCity, d.location_label || '');
         if (mapsBtn) {
             mapsBtn.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
             mapsBtn.classList.remove('hidden');
@@ -3212,25 +3357,78 @@ function renderLightboxFacesEditor() {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    listEl.innerHTML = faces.map(f => {
-        const knownOptions = lbFacesEditorPersons.map(p => {
-            const sel = Number(p.person_id) === Number(f.person_id) ? 'selected' : '';
-            const label = p.name && p.name !== 'Inconnu' ? p.name : `Inconnu (#${p.person_id})`;
-            return `<option value="${p.person_id}" ${sel}>${escHtml(label)}</option>`;
-        }).join('');
+    const namedPersons = [];
+    const seenNames = new Set();
+    lbFacesEditorPersons.forEach(p => {
+        const pname = String(p.name || '').trim();
+        if (!pname || pname.toLowerCase() === 'inconnu') return;
+        const low = pname.toLowerCase();
+        if (seenNames.has(low)) return;
+        seenNames.add(low);
+        namedPersons.push(p);
+    });
+    const datalistHtml = `
+        <datalist id="lb-faces-persons-datalist">
+            ${namedPersons.map(p => `<option value="${escHtml(p.name)}"></option>`).join('')}
+        </datalist>`;
+
+    listEl.innerHTML = datalistHtml + faces.map(f => {
+        const rawName = String(f.name || '').trim();
+        const isUnknown = !rawName || rawName.toLowerCase() === 'inconnu';
+        const knownOptions = lbFacesEditorPersons
+            .filter(p => Number(p.person_id) !== Number(f.person_id))
+            .map(p => {
+                const label = p.name && p.name !== 'Inconnu' ? p.name : `Inconnu (#${p.person_id})`;
+                return `<option value="${p.person_id}">${escHtml(label)}</option>`;
+            }).join('');
+
+        const displayHtml = isUnknown
+            ? `<button type="button" onclick="startLightboxFaceNameEdit(${f.face_id})"
+                       title="Cliquer pour nommer ce visage"
+                       class="max-w-full text-left text-xs font-semibold italic text-white/65 hover:text-white underline decoration-dotted underline-offset-4 truncate transition cursor-pointer">
+                   Inconnu
+               </button>`
+            : `<div class="flex items-center gap-1.5 min-w-0">
+                   <span class="text-xs font-bold text-white truncate">${escHtml(rawName)}</span>
+                   <button type="button" onclick="startLightboxFaceNameEdit(${f.face_id})"
+                           title="Modifier le nom"
+                           class="shrink-0 w-5 h-5 rounded-full hover:bg-white/20 text-white/55 hover:text-white flex items-center justify-center transition cursor-pointer">
+                       <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                           <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                       </svg>
+                   </button>
+               </div>`;
+
         return `
             <div class="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl px-2.5 py-2">
                 <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
                      class="w-10 h-10 rounded-full object-cover bg-black/30 shrink-0"/>
                 <div class="flex-1 min-w-0">
-                    <select onchange="changeLightboxFacePerson(${f.face_id}, this)"
-                            class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-white/40">
-                        ${knownOptions}
-                        <option value="__NEW__">+ Nouveau nom...</option>
-                    </select>
+                    <div id="lb-face-view-${f.face_id}" class="min-w-0">
+                        ${displayHtml}
+                    </div>
+                    <div id="lb-face-editor-${f.face_id}" class="hidden space-y-1.5">
+                        <div class="flex items-center gap-1">
+                            <input id="lb-face-name-input-${f.face_id}" type="text" list="lb-faces-persons-datalist"
+                                   value="${isUnknown ? '' : escHtml(rawName)}"
+                                   placeholder="Nom de la personne..."
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitLightboxFaceNameEdit(${f.face_id});}else if(event.key==='Escape'){event.stopPropagation();cancelLightboxFaceNameEdit(${f.face_id});}"
+                                   class="flex-1 min-w-0 bg-black/45 border border-white/20 rounded-lg px-2 py-1 text-xs text-white placeholder-white/40 focus:outline-none focus:border-white/45"/>
+                            <button type="button" onclick="submitLightboxFaceNameEdit(${f.face_id})" title="Valider"
+                                    class="shrink-0 w-6 h-6 rounded-lg bg-white text-[#1E1E1E] hover:bg-white/90 text-[11px] font-bold flex items-center justify-center transition cursor-pointer">✓</button>
+                            <button type="button" onclick="cancelLightboxFaceNameEdit(${f.face_id})" title="Annuler"
+                                    class="shrink-0 w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] flex items-center justify-center transition cursor-pointer">✕</button>
+                        </div>
+                        ${knownOptions ? `
+                        <select onchange="changeLightboxFacePerson(${f.face_id}, this)"
+                                class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-white/85 focus:outline-none focus:border-white/40 cursor-pointer">
+                            <option value="">Ou choisir une personne existante...</option>
+                            ${knownOptions}
+                        </select>` : ''}
+                    </div>
                 </div>
                 <button type="button" onclick="removeLightboxFace(${f.face_id})" title="Retirer ce visage"
-                        class="w-7 h-7 rounded-full bg-red-500/15 hover:bg-red-500/35 text-red-300 flex items-center justify-center shrink-0 transition">
+                        class="w-7 h-7 rounded-full bg-red-500/15 hover:bg-red-500/35 text-red-300 flex items-center justify-center shrink-0 transition cursor-pointer">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
@@ -3240,22 +3438,26 @@ function renderLightboxFacesEditor() {
     }).join('');
 }
 
-async function changeLightboxFacePerson(faceId, selectEl) {
-    const val = selectEl?.value;
-    if (!val) return;
-
-    let payload;
-    if (val === '__NEW__') {
-        const name = (window.prompt('Nom de la personne :') || '').trim();
-        if (!name) {
-            renderLightboxFacesEditor();
-            return;
-        }
-        payload = { face_ids: [faceId], action: 'NEW_GROUP', new_group_name: name };
-    } else {
-        payload = { face_ids: [faceId], action: 'EXISTING_PERSON', target_person_id: Number(val) };
+function startLightboxFaceNameEdit(faceId) {
+    const viewEl = document.getElementById(`lb-face-view-${faceId}`);
+    const edEl = document.getElementById(`lb-face-editor-${faceId}`);
+    const inpEl = document.getElementById(`lb-face-name-input-${faceId}`);
+    if (viewEl) viewEl.classList.add('hidden');
+    if (edEl) edEl.classList.remove('hidden');
+    if (inpEl) {
+        inpEl.focus();
+        inpEl.select();
     }
+}
 
+function cancelLightboxFaceNameEdit(faceId) {
+    const viewEl = document.getElementById(`lb-face-view-${faceId}`);
+    const edEl = document.getElementById(`lb-face-editor-${faceId}`);
+    if (edEl) edEl.classList.add('hidden');
+    if (viewEl) viewEl.classList.remove('hidden');
+}
+
+async function _applyLightboxFaceReassign(payload) {
     const res = await fetch('/api/faces/reassign', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -3264,7 +3466,7 @@ async function changeLightboxFacePerson(faceId, selectEl) {
     if (!res.ok) {
         alert('Impossible de modifier cette personne.');
         renderLightboxFacesEditor();
-        return;
+        return false;
     }
     try {
         const pRes = await fetch('/api/persons');
@@ -3272,6 +3474,37 @@ async function changeLightboxFacePerson(faceId, selectEl) {
     } catch (e) {}
     await loadLightboxMetadataInfo();
     renderLightboxFacesEditor();
+    return true;
+}
+
+async function submitLightboxFaceNameEdit(faceId) {
+    const inpEl = document.getElementById(`lb-face-name-input-${faceId}`);
+    const newName = (inpEl?.value || '').trim();
+    if (!newName) {
+        cancelLightboxFaceNameEdit(faceId);
+        return;
+    }
+    const faces = (window._lbCurrentInspectData && window._lbCurrentInspectData.faces) || [];
+    const curFace = faces.find(f => Number(f.face_id) === Number(faceId));
+    const curName = String(curFace?.name || '').trim();
+    if (curName && curName.toLowerCase() !== 'inconnu' && curName === newName) {
+        cancelLightboxFaceNameEdit(faceId);
+        return;
+    }
+
+    const existing = lbFacesEditorPersons.find(
+        p => p.name && p.name.trim().toLowerCase() === newName.toLowerCase() && p.name.trim().toLowerCase() !== 'inconnu'
+    );
+    const payload = existing
+        ? { face_ids: [faceId], action: 'EXISTING_PERSON', target_person_id: Number(existing.person_id) }
+        : { face_ids: [faceId], action: 'NEW_GROUP', new_group_name: newName };
+    await _applyLightboxFaceReassign(payload);
+}
+
+async function changeLightboxFacePerson(faceId, selectEl) {
+    const val = selectEl?.value;
+    if (!val) return;
+    await _applyLightboxFaceReassign({ face_ids: [faceId], action: 'EXISTING_PERSON', target_person_id: Number(val) });
 }
 
 async function removeLightboxFace(faceId) {
@@ -3491,14 +3724,20 @@ async function openLightboxAlbumsEditor() {
 
     const curEl = document.getElementById('lb-albums-edit-current');
     if (curEl) curEl.innerHTML = `<div class="text-xs text-white/60 py-2 text-center">Chargement...</div>`;
+    const curItem = currentGalleryItems[currentLightboxIndex];
+    const needsInspect = !!(curItem && (!window._lbCurrentInspectData || window._lbCurrentInspectData.source_path !== curItem.source_path));
     try {
-        const [albRes, libRes] = await Promise.all([
+        const [albRes, libRes, inspRes] = await Promise.all([
             fetch('/api/albums/list?flat=true'),
-            fetch('/api/libraries').catch(() => null)
+            fetch('/api/libraries').catch(() => null),
+            needsInspect ? fetch(`/api/metadata/inspect?source_path=${encodeURIComponent(curItem.source_path)}`).catch(() => null) : Promise.resolve(null)
         ]);
         if (albRes.ok) {
             const data = await albRes.json();
             lbAlbumsEditorAll = data.all_albums || data.albums || [];
+        }
+        if (inspRes && inspRes.ok) {
+            window._lbCurrentInspectData = await inspRes.json();
         }
         if (libRes && libRes.ok) {
             const libData = await libRes.json();
@@ -3795,6 +4034,10 @@ async function _refreshAfterLightboxAlbumChange() {
         }
     } catch (e) {}
     await loadLightboxMetadataInfo();
+    const curItem = currentGalleryItems[currentLightboxIndex];
+    if (curItem && window._lbCurrentInspectData && window._lbCurrentInspectData.source_path === curItem.source_path) {
+        curItem.album_name = window._lbCurrentInspectData.album_name || '';
+    }
     await loadGalleryFilters();
     if (currentTab === 'albums') {
         if (openedAlbumName) loadSingleAlbumItems(true);
@@ -3873,4 +4116,282 @@ async function setLightboxMediaAsAlbumCover(albumId) {
         return;
     }
     await _refreshAfterLightboxAlbumChange();
+}
+
+// =========================================================================
+// ÉDITION DÉDIÉE DE LA LOCALISATION (LIGHTBOX)
+// =========================================================================
+let lbLocationPickerMap = null;
+let lbLocationPickerMarker = null;
+let _lbLocationReqSeq = 0;
+
+function _setLightboxLocationStatus(msg = '') {
+    const el = document.getElementById('lb-location-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.toggle('hidden', !msg);
+}
+
+function _isValidLatLon(lat, lon) {
+    return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
+async function _resolveLightboxPickerLabel(lat, lon) {
+    const labelEl = document.getElementById('lb-location-resolved-label');
+    if (!labelEl) return;
+    const reqSeq = ++_lbLocationReqSeq;
+    try {
+        const res = await fetch(`/api/map/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+        if (reqSeq !== _lbLocationReqSeq) return;
+        if (!res.ok) {
+            labelEl.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            return;
+        }
+        const geo = await res.json();
+        if (reqSeq !== _lbLocationReqSeq) return;
+        const city = (geo.city || '').trim();
+        const label = (geo.label || city || '').trim();
+        labelEl.textContent = label || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        labelEl.title = label;
+        if (city) {
+            const key = `${Number(lat).toFixed(2)},${Number(lon).toFixed(2)}`;
+            _lbCityCache.set(key, { city, label: label || city });
+        }
+    } catch (e) {
+        if (reqSeq === _lbLocationReqSeq) {
+            labelEl.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        }
+    }
+}
+
+function _setLightboxLocationPin(lat, lon, resolveCity = true, customLabel = '') {
+    if (!_isValidLatLon(lat, lon)) return;
+    const latEl = document.getElementById('lb-location-lat');
+    const lonEl = document.getElementById('lb-location-lon');
+    const saveBtn = document.getElementById('lb-location-save-btn');
+    const labelEl = document.getElementById('lb-location-resolved-label');
+    if (latEl) latEl.value = lat.toFixed(6);
+    if (lonEl) lonEl.value = lon.toFixed(6);
+    if (saveBtn) saveBtn.disabled = false;
+    _setLightboxLocationStatus('');
+
+    if (lbLocationPickerMap) {
+        if (lbLocationPickerMarker) {
+            lbLocationPickerMarker.setLatLng([lat, lon]);
+        } else {
+            lbLocationPickerMarker = L.marker([lat, lon]).addTo(lbLocationPickerMap);
+        }
+        lbLocationPickerMap.setView([lat, lon], Math.max(lbLocationPickerMap.getZoom(), 13));
+    }
+
+    if (customLabel && labelEl) {
+        labelEl.textContent = customLabel;
+        labelEl.title = customLabel;
+    } else if (labelEl && !resolveCity) {
+        labelEl.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    }
+    if (resolveCity) {
+        if (labelEl && !customLabel) labelEl.textContent = 'Localisation...';
+        _resolveLightboxPickerLabel(lat, lon);
+    }
+}
+
+function onInputLightboxLocationCoords() {
+    const lat = parseFloat(document.getElementById('lb-location-lat')?.value || '');
+    const lon = parseFloat(document.getElementById('lb-location-lon')?.value || '');
+    if (!_isValidLatLon(lat, lon)) {
+        const saveBtn = document.getElementById('lb-location-save-btn');
+        if (saveBtn) saveBtn.disabled = true;
+        return;
+    }
+    _setLightboxLocationPin(lat, lon, true);
+}
+
+async function openLightboxLocationEditor() {
+    const modal = document.getElementById('lb-location-edit-modal');
+    const curItem = currentGalleryItems[currentLightboxIndex];
+    if (!modal || !curItem) return;
+
+    const needsInspect = !window._lbCurrentInspectData || window._lbCurrentInspectData.source_path !== curItem.source_path;
+    if (needsInspect) {
+        try {
+            const res = await fetch(`/api/metadata/inspect?source_path=${encodeURIComponent(curItem.source_path)}`);
+            if (res.ok) window._lbCurrentInspectData = await res.json();
+        } catch (e) {}
+    }
+
+    const d = window._lbCurrentInspectData || {};
+    const lat = Number(d.latitude);
+    const lon = Number(d.longitude);
+    const hasCoords = _isValidLatLon(lat, lon) && (lat !== 0 || lon !== 0);
+
+    const titleEl = document.getElementById('lb-location-modal-title');
+    const searchEl = document.getElementById('lb-location-search-input');
+    const latEl = document.getElementById('lb-location-lat');
+    const lonEl = document.getElementById('lb-location-lon');
+    const labelEl = document.getElementById('lb-location-resolved-label');
+    const stripBtn = document.getElementById('lb-location-strip-btn');
+    const saveBtn = document.getElementById('lb-location-save-btn');
+
+    if (titleEl) titleEl.textContent = hasCoords ? 'Modifier le lieu' : 'Ajouter un lieu';
+    if (searchEl) searchEl.value = '';
+    _setLightboxLocationStatus('');
+    if (stripBtn) stripBtn.classList.toggle('hidden', !hasCoords);
+    if (saveBtn) {
+        saveBtn.disabled = !hasCoords;
+        saveBtn.textContent = 'Enregistrer';
+    }
+    if (latEl) latEl.value = hasCoords ? lat.toFixed(6) : '';
+    if (lonEl) lonEl.value = hasCoords ? lon.toFixed(6) : '';
+
+    if (labelEl) {
+        if (hasCoords) {
+            const initialPlace = (d.location_label || d.location_city || '').trim();
+            labelEl.textContent = initialPlace || 'Localisation...';
+            labelEl.title = initialPlace;
+            if (!initialPlace) _resolveLightboxPickerLabel(lat, lon);
+        } else {
+            labelEl.textContent = 'Cliquez sur la carte ou recherchez un lieu';
+            labelEl.title = '';
+        }
+    }
+
+    modal.classList.remove('hidden');
+
+    if (lbLocationPickerMap) {
+        lbLocationPickerMap.remove();
+        lbLocationPickerMap = null;
+        lbLocationPickerMarker = null;
+    }
+    setTimeout(() => {
+        const container = document.getElementById('lb-location-picker-map');
+        if (!container || modal.classList.contains('hidden')) return;
+        const center = hasCoords ? [lat, lon] : [46.6, 2.2];
+        const zoom = hasCoords ? 13 : 5;
+        lbLocationPickerMap = L.map('lb-location-picker-map').setView(center, zoom);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(lbLocationPickerMap);
+        if (hasCoords) {
+            lbLocationPickerMarker = L.marker([lat, lon]).addTo(lbLocationPickerMap);
+        }
+        lbLocationPickerMap.on('click', (e) => {
+            _setLightboxLocationPin(e.latlng.lat, e.latlng.lng, true);
+        });
+        lbLocationPickerMap.invalidateSize();
+        searchEl?.focus();
+    }, 60);
+}
+
+function closeLightboxLocationEditor() {
+    _lbLocationReqSeq++;
+    document.getElementById('lb-location-edit-modal')?.classList.add('hidden');
+    if (lbLocationPickerMap) {
+        lbLocationPickerMap.remove();
+        lbLocationPickerMap = null;
+        lbLocationPickerMarker = null;
+    }
+}
+
+async function searchLightboxLocationPlace() {
+    const inp = document.getElementById('lb-location-search-input');
+    const btn = document.getElementById('lb-location-search-btn');
+    const q = (inp?.value || '').trim();
+    if (!q) {
+        inp?.focus();
+        return;
+    }
+    if (btn) btn.disabled = true;
+    _setLightboxLocationStatus('Recherche...');
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+        if (!res.ok) {
+            _setLightboxLocationStatus('Erreur de recherche');
+            return;
+        }
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+            _setLightboxLocationStatus('Lieu introuvable');
+            return;
+        }
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        _setLightboxLocationPin(lat, lon, true, data[0].display_name || '');
+    } catch (e) {
+        _setLightboxLocationStatus('Erreur réseau');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function _refreshAfterLightboxLocationChange() {
+    await loadLightboxMetadataInfo();
+    refreshActiveMediaView();
+}
+
+async function saveLightboxLocationEdit() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    const lat = parseFloat(document.getElementById('lb-location-lat')?.value || '');
+    const lon = parseFloat(document.getElementById('lb-location-lon')?.value || '');
+    const saveBtn = document.getElementById('lb-location-save-btn');
+    if (!item || !_isValidLatLon(lat, lon)) {
+        _setLightboxLocationStatus('Coordonnées invalides');
+        return;
+    }
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Enregistrement...';
+    }
+    _setLightboxLocationStatus('');
+    try {
+        const res = await fetch('/api/metadata/batch_update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_paths: [item.source_path],
+                latitude: lat,
+                longitude: lon
+            })
+        });
+        if (!res.ok) {
+            _setLightboxLocationStatus("Erreur lors de l'enregistrement");
+            return;
+        }
+        closeLightboxLocationEditor();
+        await _refreshAfterLightboxLocationChange();
+    } catch (e) {
+        _setLightboxLocationStatus('Erreur réseau');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Enregistrer';
+        }
+    }
+}
+
+async function clearLightboxLocationEdit() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    const stripBtn = document.getElementById('lb-location-strip-btn');
+    if (!item) return;
+    if (stripBtn) stripBtn.disabled = true;
+    _setLightboxLocationStatus('');
+    try {
+        const res = await fetch('/api/metadata/batch_strip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_paths: [item.source_path],
+                strip_gps: true,
+                strip_all_exif: false
+            })
+        });
+        if (!res.ok) {
+            _setLightboxLocationStatus('Erreur lors de la suppression');
+            return;
+        }
+        closeLightboxLocationEditor();
+        await _refreshAfterLightboxLocationChange();
+    } catch (e) {
+        _setLightboxLocationStatus('Erreur réseau');
+    } finally {
+        if (stripBtn) stripBtn.disabled = false;
+    }
 }

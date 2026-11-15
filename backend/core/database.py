@@ -82,6 +82,17 @@ def get_db() -> sqlite3.Connection:
                 FOREIGN KEY (category_id) REFERENCES smart_categories(category_id) ON DELETE CASCADE
             )
         """)
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS geocode_cache (
+                lat_key REAL NOT NULL,
+                lon_key REAL NOT NULL,
+                city TEXT,
+                country TEXT,
+                display_label TEXT,
+                updated_at INTEGER DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (lat_key, lon_key)
+            )
+        """)
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_gallery ON processed_files(is_duplicate, is_trashed, timestamp DESC)")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_album ON processed_files(album_name)")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_fav ON processed_files(is_favorite)")

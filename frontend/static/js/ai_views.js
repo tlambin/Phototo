@@ -155,21 +155,34 @@ async function loadWorldMap(force) {
     const buckets = {};
     pts.forEach(pt => {
         const key = `${pt.latitude.toFixed(1)}, ${pt.longitude.toFixed(1)}`;
-        if (!buckets[key]) buckets[key] = { label: pt.album_name || `Zone (${key})`, count: 0, cover: pt.dest_path, lat: pt.latitude, lon: pt.longitude };
+        if (!buckets[key]) buckets[key] = { label: pt.album_name || 'Lieu localisé', needsCity: !pt.album_name, count: 0, cover: pt.dest_path, lat: pt.latitude, lon: pt.longitude };
         buckets[key].count++;
     });
     const topPlaces = Object.values(buckets).sort((a,b) => b.count - a.count).slice(0, 5);
-    document.getElementById('places-cards-grid').innerHTML = topPlaces.map(pl => `
+    document.getElementById('places-cards-grid').innerHTML = topPlaces.map((pl, idx) => `
         <div onclick="leafletMap.setView([${pl.lat}, ${pl.lon}], 12)" class="ui-card rounded-3xl overflow-hidden cursor-pointer shadow-sm group">
             <div class="aspect-square overflow-hidden">
                 ${renderMediaPreview(pl.cover, "w-full h-full object-cover group-hover:scale-105 transition")}
             </div>
             <div class="p-2.5 text-center">
-                <div class="text-xs font-extrabold truncate">${pl.label}</div>
+                <div id="place-card-label-${idx}" class="text-xs font-extrabold truncate">${pl.label}</div>
                 <div class="text-[10px] opacity-60 font-semibold">${pl.count} éléments</div>
             </div>
         </div>
     `).join('');
+    topPlaces.forEach(async (pl, idx) => {
+        try {
+            const gRes = await fetch(`/api/map/reverse?lat=${encodeURIComponent(pl.lat)}&lon=${encodeURIComponent(pl.lon)}`);
+            if (!gRes.ok) return;
+            const geo = await gRes.json();
+            const city = (geo.city || '').trim();
+            const el = document.getElementById(`place-card-label-${idx}`);
+            if (el && city) {
+                el.textContent = city;
+                el.title = geo.label || city;
+            }
+        } catch (e) {}
+    });
 }
 
 // ==================== DOUBLONS & SIMILAIRES ====================

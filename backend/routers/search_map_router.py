@@ -1,5 +1,8 @@
+import json
 import re
 import unicodedata
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from fastapi import APIRouter
 
@@ -230,3 +233,97 @@ def api_map_points():
     points = [dict(r) for r in cur.fetchall()]
     conn.close()
     return {"points": points, "count": len(points)}
+
+
+def _extract_city_from_nominatim(data: dict) -> tuple[str, str, str]:
+    addr = data.get("address") or {}
+    city = (
+        addr.get("city")
+        or addr.get("town")
+        or addr.get("village")
+        or addr.get("municipality")
+        or addr.get("hamlet")
+        or addr.get("suburb")
+        or addr.get("city_district")
+        or addr.get("county")
+        or addr.get("state")
+        or addr.get("region")
+        or ""
+    ).strip()
+    country = (addr.get("country") or "").strip()
+    if not city and country:
+        city = country
+    display_label = f"{city}, {country}" if (city and country and city != country) else (city or country or "")
+    return city, country, display_label
+
+
+def _reverse_geocode_offline_city(lat: float, lon: float) -> str:
+    """Offline fallback matching city bounding boxes (excluding broad country boxes)."""
+    candidates = []
+    for place_name, (lat_min, lat_max, lon_min, lon_max) in _PLACES_BBOX.items():
+        area = (lat_max - lat_min) * (lon_max - lon_min)
+        if area < 2.0 and lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
+            candidates.append((area, place_name.title()))
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
+
+
+def _fetch_nominatim_city(lat: float, lon: float) -> tuple[str, str, str]:
+    query = urllib.parse.urlencode({
+        "format": "jsonv2",
+        "lat": f"{lat:.6f}",
+        "lon": f"{lon:.6f}",
+        "zoom": "10",
+        "addressdetails": "1",
+        "accept-language": "fr",
+    })
+    url = f"https://nominatim.openstreetmap.org/reverse?{query}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Phototo/1.0 (local photo library)"})
+    with urllib.request.urlopen(req, timeout=3.5) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return _extract_city_from_nominatim(data)
+
+
+@router.get("/api/map/reverse")
+def api_reverse_geocode(lat: float, lon: float):
+    lat_key = round(float(lat), 2)
+    lon_key = round(float(lon), 2)
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT city, country, display_label FROM geocode_cache WHERE lat_key = ? AND lon_key = ?",
+            (lat_key, lon_key),
+        ).fetchone()
+        if row and (row["city"] or row["display_label"]):
+            city = (row["city"] or "").strip()
+            country = (row["country"] or "").strip()
+            label = (row["display_label"] or city).strip()
+            return {"city": city, "country": country, "label": label, "cached": True}
+
+        city, country, display_label = "", "", ""
+        try:
+            city, country, display_label = _fetch_nominatim_city(float(lat), float(lon))
+        except Exception:
+            city, country, display_label = "", "", ""
+
+        if city:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO geocode_cache (lat_key, lon_key, city, country, display_label, updated_at)
+                VALUES (?, ?, ?, ?, ?, strftime('%s','now'))
+                """,
+                (lat_key, lon_key, city, country, display_label),
+            )
+            conn.commit()
+            return {"city": city, "country": country, "label": display_label, "cached": False}
+
+        fallback_city = _reverse_geocode_offline_city(float(lat), float(lon))
+        if fallback_city:
+            return {"city": fallback_city, "country": "", "label": fallback_city, "cached": False}
+
+        return {"city": "", "country": "", "label": "Lieu inconnu", "cached": False}
+    finally:
+        conn.close()

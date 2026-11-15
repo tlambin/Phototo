@@ -278,6 +278,20 @@ def api_inspect_metadata(source_path: str):
         ]
     except Exception:
         d["smart_categories"] = []
+
+    d["location_city"] = ""
+    d["location_label"] = ""
+    if d.get("latitude") and d.get("longitude") and (d["latitude"] != 0 or d["longitude"] != 0):
+        try:
+            geo_row = cur.execute(
+                "SELECT city, display_label FROM geocode_cache WHERE lat_key = ? AND lon_key = ?",
+                (round(float(d["latitude"]), 2), round(float(d["longitude"]), 2)),
+            ).fetchone()
+            if geo_row:
+                d["location_city"] = (geo_row["city"] or "").strip()
+                d["location_label"] = (geo_row["display_label"] or d["location_city"]).strip()
+        except Exception:
+            pass
     conn.close()
 
     camera_model = ""

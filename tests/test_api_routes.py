@@ -869,20 +869,68 @@ class TestApiRoutes(unittest.TestCase):
         html = main.templates.get_template("index.html").render()
         for snippet in (
             "lb-faces-edit-modal",
+            "lb-btn-close",
+            "lb-btn-edit",
+            "hover:text-orange-300",
+            "hover:text-emerald-300",
+            "hover:text-pink-300",
+            "hover:text-purple-300",
+            "hover:text-sky-300",
+            "hover:text-amber-300",
+            "lb-center-pill",
+            "lb-btn-add-album",
+            '<polyline points="14.5 18 8.5 12 14.5 6"/>',
+            '<polyline points="9.5 18 15.5 12 9.5 6"/>',
+            '<rect x="3" y="6" width="14" height="14" rx="2.5"/>',
+            '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+            'ondblclick="if(event.target===this) closeLightbox()"',
             "openLightboxFacesEditor()",
             "openLightboxCategoriesEditor()",
+            "openLightboxLocationEditor()",
+            "lightboxOpenMetadataEditor()",
+            "lb-info-map-card",
+            "lb-location-edit-modal",
+            'id="lb-filmstrip" class="hidden bg-white/10 backdrop-blur-md rounded-xl',
             "Refaire l'analyse",
         ):
             self.assertIn(snippet, html)
+        self.assertNotIn("sticky bottom-1 z-20", html)
+        self.assertNotIn('onclick="if(event.target===this) closeLightbox()"', html)
+        self.assertGreater(html.index('id="lb-info-analyze-btn"'), html.index('id="lb-info-note"'))
+        self.assertLess(html.index("lightboxOpenStudio()"), html.index("lightboxDeleteMedia()"))
+        self.assertLess(html.index("lightboxDeleteMedia()"), html.index("lightboxDownloadMedia()"))
+        self.assertLess(html.index("lightboxToggleFavorite()"), html.index("lightboxAddToAlbum()"))
+        self.assertLess(html.index("lightboxAddToAlbum()"), html.index("lightboxShareMedia()"))
+        self.assertLess(html.index("lightboxShareMedia()"), html.index("toggleLightboxInfoDrawer()"))
 
         gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
         for js_fn in (
             "function openLightboxSmartCategory(",
             "function openLightboxCategoriesEditor(",
             "async function openLightboxFacesEditor(",
+            "function startLightboxFaceNameEdit(",
+            "function cancelLightboxFaceNameEdit(",
+            "async function submitLightboxFaceNameEdit(",
+            "Cliquer pour nommer ce visage",
+            "Modifier le nom",
+            "lb-faces-persons-datalist",
             "async function rerunLightboxFacesAnalysis(",
+            "function syncLightboxInfoButtonState(",
+            "icon.setAttribute('fill', '#f9a8d4')",
+            "function handleLightboxFilmstripWheel(",
+            "function handleLightboxWheel(",
+            "function updateLightboxEditButton(",
+            "async function openLightboxLocationEditor(",
+            "function closeLightboxLocationEditor(",
+            "async function searchLightboxLocationPlace(",
+            "async function saveLightboxLocationEdit(",
+            "async function clearLightboxLocationEdit(",
+            "_LB_EDIT_PHOTO_SVG",
+            "_LB_EDIT_VIDEO_SVG",
+            "strip.scrollLeft += delta",
         ):
             self.assertIn(js_fn, gallery_js)
+        self.assertNotIn("analyzeBtn.classList.toggle('hidden'", gallery_js)
 
         img_path = self.dest_dir / "photo.jpg"
         cv2.imwrite(str(img_path), np.full((240, 240, 3), 128, dtype=np.uint8))
@@ -977,8 +1025,11 @@ class TestApiRoutes(unittest.TestCase):
             "lb-albums-edit-new-source",
             "onInputLightboxAlbumSearch",
             "openLightboxAlbumsEditor()",
+            '<div class="text-sm font-bold">Ajouter à un album</div>',
+            '<div class="text-[11px] font-bold text-white/70">Mes albums</div>',
         ):
             self.assertIn(snippet, html)
+        self.assertNotIn('<div class="text-sm font-bold">Modifier les albums</div>', html)
         self.assertNotIn("lb-albums-edit-new-parent", html)
         self.assertNotIn("addLightboxMediaToAlbumFromInput", html)
 
@@ -1003,11 +1054,15 @@ class TestApiRoutes(unittest.TestCase):
             "async function setLightboxPrimaryAlbum(",
             "function openLightboxAlbum(",
             "async function openLightboxAlbumsEditor(",
+            "async function lightboxAddToAlbum() {\n    await openLightboxAlbumsEditor();",
             "async function addLightboxMediaToAlbum(",
             "async function removeLightboxMediaFromAlbum(",
             "async function setLightboxMediaAsAlbumCover(",
+            "Ajouter à un album",
         ):
             self.assertIn(js_fn, gallery_js)
+        self.assertNotIn("Aucun album • Ajouter...", gallery_js)
+        self.assertIn("needsInspect", gallery_js)
 
         img1 = self.dest_dir / "a1.jpg"
         img2 = self.dest_dir / "a2.jpg"
@@ -1111,6 +1166,120 @@ class TestApiRoutes(unittest.TestCase):
                 gallery_router.api_create_album(
                     gallery_router.CreateAlbumPayload(name="BadSource", parent_id=None, source_dir=str(self.tmp_path / "other"))
                 )
+
+    def test_reverse_geocode_city_display_and_cache(self):
+        import search_map_router
+        import metadata_studio_router
+
+        with patch.object(search_map_router, "_fetch_nominatim_city", return_value=("Lyon", "France", "Lyon, France")) as mock_nom:
+            first = search_map_router.api_reverse_geocode(45.7640, 4.8357)
+            self.assertEqual(first["city"], "Lyon")
+            self.assertEqual(first["label"], "Lyon, France")
+            self.assertFalse(first["cached"])
+            self.assertEqual(mock_nom.call_count, 1)
+
+            second = search_map_router.api_reverse_geocode(45.7641, 4.8358)
+            self.assertEqual(second["city"], "Lyon")
+            self.assertTrue(second["cached"])
+            self.assertEqual(mock_nom.call_count, 1)
+
+        with patch.object(search_map_router, "_fetch_nominatim_city", side_effect=RuntimeError("offline")):
+            offline_paris = search_map_router.api_reverse_geocode(48.8566, 2.3522)
+            self.assertEqual(offline_paris["city"], "Paris")
+            offline_unknown = search_map_router.api_reverse_geocode(0.5, 0.5)
+            self.assertEqual(offline_unknown["city"], "")
+            self.assertEqual(offline_unknown["label"], "Lieu inconnu")
+
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+                ("src_geo.jpg", "geo.jpg", 1700000200, 45.7640, 4.8357),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        with patch.object(metadata_studio_router, "resolve_actual_path", return_value=None):
+            inspected = metadata_studio_router.api_inspect_metadata(source_path="src_geo.jpg")
+        self.assertEqual(inspected["location_city"], "Lyon")
+        self.assertEqual(inspected["location_label"], "Lyon, France")
+
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        self.assertIn("resolveLightboxPlaceCity", gallery_js)
+        self.assertNotIn("`${lat.toFixed(3)}, ${lon.toFixed(3)}`", gallery_js)
+        ai_views_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
+        self.assertNotIn("Zone (${key})", ai_views_js)
+
+    def test_lightbox_location_editor_ui_and_gps_update(self):
+        import metadata_studio_router
+        from unittest.mock import MagicMock
+
+        html = (ROOT_DIR / "frontend" / "templates" / "components" / "modals" / "lightbox_modal.html").read_text(encoding="utf-8")
+        self.assertIn('id="lb-location-edit-modal"', html)
+        self.assertIn('id="lb-location-picker-map"', html)
+        self.assertIn('onclick="openLightboxLocationEditor()"', html)
+        self.assertIn('onclick="saveLightboxLocationEdit()"', html)
+        self.assertIn('onclick="clearLightboxLocationEdit()"', html)
+
+        img_file = self.dest_dir / "loc_photo.jpg"
+        img_file.write_bytes(b"fakejpg")
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+                ("src_loc.jpg", str(img_file), 1700000300, 0.0, 0.0),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        fake_et = MagicMock()
+        fake_et_cm = MagicMock()
+        fake_et_cm.__enter__.return_value = fake_et
+        fake_et_cm.__exit__.return_value = False
+
+        with patch.object(metadata_studio_router.exiftool, "ExifToolHelper", return_value=fake_et_cm):
+            upd = metadata_studio_router.api_batch_update_metadata(
+                metadata_studio_router.BatchMetadataUpdatePayload(
+                    source_paths=["src_loc.jpg"],
+                    latitude=45.764,
+                    longitude=4.8357,
+                )
+            )
+            self.assertEqual(upd["status"], "updated")
+
+            conn = database.get_db()
+            try:
+                row = conn.execute(
+                    "SELECT latitude, longitude, timestamp FROM processed_files WHERE source_path=?",
+                    ("src_loc.jpg",),
+                ).fetchone()
+                self.assertAlmostEqual(row["latitude"], 45.764, places=4)
+                self.assertAlmostEqual(row["longitude"], 4.8357, places=4)
+                self.assertEqual(row["timestamp"], 1700000300)
+            finally:
+                conn.close()
+
+            stripped = metadata_studio_router.api_batch_strip_metadata(
+                metadata_studio_router.BatchMetadataStripPayload(
+                    source_paths=["src_loc.jpg"],
+                    strip_gps=True,
+                    strip_all_exif=False,
+                )
+            )
+            self.assertEqual(stripped["status"], "stripped")
+
+            conn = database.get_db()
+            try:
+                row = conn.execute(
+                    "SELECT latitude, longitude FROM processed_files WHERE source_path=?",
+                    ("src_loc.jpg",),
+                ).fetchone()
+                self.assertEqual(row["latitude"], 0.0)
+                self.assertEqual(row["longitude"], 0.0)
+            finally:
+                conn.close()
 
 
 if __name__ == "__main__":

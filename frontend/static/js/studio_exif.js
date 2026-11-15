@@ -139,14 +139,22 @@ async function saveMetadataChanges() {
             description: document.getElementById('meta-desc').value || null
         })
     });
-    closeMetadataModal(); refreshActiveMediaView();
+    closeMetadataModal();
+    refreshActiveMediaView();
+    if (typeof loadLightboxMetadataInfo === 'function' && !document.getElementById('lb-info-drawer')?.classList.contains('hidden')) {
+        await loadLightboxMetadataInfo();
+    }
 }
 async function stripMetadata(gpsOnly, allExif) {
     await fetch('/api/metadata/batch_strip', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({source_paths: metaTargetSourcePaths, strip_gps: gpsOnly, strip_all_exif: allExif})
     });
-    closeMetadataModal(); refreshActiveMediaView();
+    closeMetadataModal();
+    refreshActiveMediaView();
+    if (typeof loadLightboxMetadataInfo === 'function' && !document.getElementById('lb-info-drawer')?.classList.contains('hidden')) {
+        await loadLightboxMetadataInfo();
+    }
 }
 
 let studioSourcePath = "", studioDestPath = "", studioIsVideo = false, studioMouseTool = "CROP";
