@@ -50,9 +50,6 @@ def get_clip_models():
 def search_photos_by_natural_text(db_path: Path, query_fr: str, top_k: int = 60, min_score: float = 0.21) -> list[dict]:
     if not query_fr.strip():
         return []
-    _, text_model = get_clip_models()
-    text_emb = text_model.encode([query_fr.strip()], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
-    expected_dim = int(text_emb.shape[0])
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -65,6 +62,10 @@ def search_photos_by_natural_text(db_path: Path, query_fr: str, top_k: int = 60,
     if total_emb == 0:
         conn.close()
         return []
+
+    _, text_model = get_clip_models()
+    text_emb = text_model.encode([query_fr.strip()], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
+    expected_dim = int(text_emb.shape[0])
 
     cache_key = (str(Path(db_path).resolve()), total_emb, expected_dim)
     if _search_matrix_cache["key"] == cache_key and _search_matrix_cache["matrix"] is not None:

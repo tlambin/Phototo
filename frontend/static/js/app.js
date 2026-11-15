@@ -293,7 +293,7 @@ window.addEventListener('click', e => {
 
 // ==================== NAVIGATION PRINCIPALE ====================
 
-const ALL_TABS = ['gallery', 'albums', 'favorites', 'faces', 'map', 'types', 'tools', 'dups', 'similar', 'trash', 'activities', 'settings'];
+const ALL_TABS = ['gallery', 'albums', 'favorites', 'faces', 'map', 'types', 'tools', 'dups', 'similar', 'trash', 'activities', 'settings', 'search'];
 
 function switchTab(tab) {
     currentTab = tab;
@@ -364,19 +364,27 @@ function refreshActiveMediaView() {
 async function runGlobalSearch() {
     const q = document.getElementById('global-search-input').value.trim();
     if (!q) return;
-    switchTab('tools');
-    document.getElementById('global-search-results-panel').classList.remove('hidden');
+    switchTab('search');
+    const qLbl = document.getElementById('search-query-label');
+    if (qLbl) qLbl.textContent = `« ${q} »`;
+    const cntLbl = document.getElementById('search-results-count');
+    if (cntLbl) cntLbl.textContent = 'Recherche en cours...';
     const res = await fetch(`/api/semantic/search?q=${encodeURIComponent(q)}`);
     const d = await res.json();
-    document.getElementById('semantic-results-grid').innerHTML = (d.results||[]).map(r => {
-        const sEnc = encodeURIComponent(r.source_path || r.dest_path);
-        const dEnc = encodeURIComponent(r.dest_path);
-        return `
-        <div onclick="openLightboxForCustomItem('${sEnc}', '${dEnc}', ${r.timestamp || 0})" class="ui-card rounded-2xl p-2 cursor-pointer">
-            ${renderMediaPreview(r.dest_path, "w-full aspect-square object-cover rounded-xl mb-1")}
-            <div class="flex justify-between text-[11px] font-bold px-1"><span>${formatDate(r.timestamp)}</span><span>${r.similarity}%</span></div>
-        </div>`;
-    }).join('');
+    const results = d.results || [];
+    if (cntLbl) cntLbl.textContent = `${results.length} résultat${results.length > 1 ? 's' : ''}`;
+    document.getElementById('semantic-results-grid').innerHTML = results.length
+        ? results.map(r => {
+            const sEnc = encodeURIComponent(r.source_path || r.dest_path);
+            const dEnc = encodeURIComponent(r.dest_path);
+            const badgeText = r.match_label ? r.match_label : `${r.similarity}%`;
+            return `
+            <div onclick="openLightboxForCustomItem('${sEnc}', '${dEnc}', ${r.timestamp || 0})" class="ui-card rounded-2xl p-2 cursor-pointer">
+                ${renderMediaPreview(r.dest_path, "w-full aspect-square object-cover rounded-xl mb-1")}
+                <div class="flex justify-between text-[11px] font-bold px-1"><span>${formatDate(r.timestamp)}</span><span>${badgeText}</span></div>
+            </div>`;
+        }).join('')
+        : `<div class="col-span-full text-center text-xs font-semibold opacity-60 py-6">Aucun média trouvé pour « ${q} ».</div>`;
 }
 
 // ==================== CONTRÔLES DU PIPELINE IA (LANCER, PAUSE, REPRISE, STOP, LOGS) ====================

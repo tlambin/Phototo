@@ -135,6 +135,42 @@ class TestApiRoutes(unittest.TestCase):
         gal_multi_ext = gallery_router.api_gallery_items(ext_filter=".mp4", periods="2025-09-01:2025-09-15")
         self.assertEqual({it["source_path"] for it in gal_multi_ext["items"]}, {"src_in_video"})
 
+    def test_search_without_ai_embeddings(self):
+        from datetime import datetime
+        import search_map_router
+
+        p1 = self.dest_dir / "IMG_vacances_plage.jpg"
+        p2 = self.dest_dir / "portrait.jpg"
+        p3 = self.dest_dir / "tour_eiffel.jpg"
+        for f in (p1, p2, p3):
+            f.write_bytes(b"data")
+
+        ts_sep = int(datetime(2025, 9, 10, 12, 0, 0).timestamp())
+        ts_jan = int(datetime(2024, 1, 5, 12, 0, 0).timestamp())
+
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', ?, 0, 0)",
+            ("s1", str(p1), str(p1), ts_sep),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', ?, 0, 0)",
+            ("s2", str(p2), str(p2), ts_jan),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, latitude, longitude, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', ?, 48.8584, 2.2945, 0, 0)",
+            ("s3", str(p3), str(p3), ts_jan),
+        )
+        conn.execute("INSERT INTO persons (person_id, name) VALUES (1, 'Thomas')")
+        conn.execute("INSERT INTO faces (source_path, dest_path, person_id) VALUES ('s2', ?, 1)", (str(p2),))
+        conn.commit()
+        conn.close()
+
+        self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("vacances")["results"]}, {"s1"})
+        self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("septembre 2025")["results"]}, {"s1"})
+        self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("Thomas")["results"]}, {"s2"})
+        self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("paris")["results"]}, {"s3"})
+
     def test_duplicates_display_and_dedup_reset(self):
         win_f = self.dest_dir / "win.jpg"
         dup_f = self.dest_dir / "dup.jpg"
