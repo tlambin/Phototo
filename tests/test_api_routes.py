@@ -14,6 +14,7 @@ import main
 import database
 import system_router
 import gallery_router
+import search_map_router
 import deduplicateur as dedup
 
 
@@ -33,6 +34,7 @@ class TestApiRoutes(unittest.TestCase):
             patch.object(database, "get_active_db_and_dest", side_effect=_fake_active),
             patch.object(system_router, "get_active_db_and_dest", side_effect=_fake_active),
             patch.object(gallery_router, "get_active_db_and_dest", side_effect=_fake_active),
+            patch.object(search_map_router, "get_active_db_and_dest", side_effect=_fake_active),
         ]
         for pt in self.patchers:
             pt.start()
@@ -170,6 +172,41 @@ class TestApiRoutes(unittest.TestCase):
         self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("septembre 2025")["results"]}, {"s1"})
         self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("Thomas")["results"]}, {"s2"})
         self.assertEqual({r["source_path"] for r in search_map_router.api_semantic_search("paris")["results"]}, {"s3"})
+
+    def test_smart_categories_and_animated_summary(self):
+        img = self.dest_dir / "photo.jpg"
+        gif = self.dest_dir / "anim.gif"
+        vid = self.dest_dir / "clip.mp4"
+        for f in (img, gif, vid):
+            f.write_bytes(b"data")
+
+        conn = database.get_db()
+        for src, dst in [("sp1", img), ("sp2", gif), ("sp3", vid)]:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', 1700000000, 100, 0, 0)",
+                (src, str(dst), str(dst)),
+            )
+        conn.commit()
+        conn.close()
+
+        summary = gallery_router.api_types_summary()
+        self.assertEqual(summary["categories"]["PHOTOS"]["count"], 1)
+        self.assertEqual(summary["categories"]["ANIMATED"]["count"], 1)
+        self.assertEqual(summary["categories"]["VIDEOS"]["count"], 1)
+
+        cats = gallery_router.api_categories_list()["categories"]
+        self.assertEqual(cats, [])
+
+        created = gallery_router.api_categories_create(gallery_router.SmartCategoryCreatePayload(name="Chats", prompt="chat"))
+        cid = created["category_id"]
+        gallery_router.api_categories_assign(gallery_router.SmartCategoryAssignPayload(category_id=cid, source_paths=["sp1"], action="ADD"))
+        items = gallery_router.api_categories_items(cid)
+        self.assertEqual(items["total"], 1)
+        self.assertEqual(items["items"][0]["source_path"], "sp1")
+
+        gallery_router.api_categories_delete(gallery_router.SmartCategoryDeletePayload(category_id=cid))
+        cats_after = gallery_router.api_categories_list()["categories"]
+        self.assertFalse(any(c["category_id"] == cid for c in cats_after))
 
     def test_duplicates_display_and_dedup_reset(self):
         win_f = self.dest_dir / "win.jpg"

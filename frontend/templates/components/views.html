@@ -116,6 +116,7 @@
                                     <option value="">Catégories</option>
                                     <option value="PHOTOS">Photos</option>
                                     <option value="VIDEOS">Vidéos</option>
+                                    <option value="ANIMATED">Images animées</option>
                                     <option value="RAW">RAW</option>
                                     <option value="SCREENSHOTS">Captures</option>
                                 </select>
@@ -462,14 +463,59 @@
     </div>
 
     <!-- ==================== VUE 5 : CATÉGORIES / TYPES ==================== -->
-    <div id="tab-types" class="hidden space-y-6">
-        <div class="sticky-view-header flex items-baseline gap-3 mb-4">
-            <h1 class="text-4xl font-extrabold tracking-tight">Catégories</h1>
+    <!-- ==================== VUE 5 : CATÉGORIES ==================== -->
+    <div id="tab-types" class="hidden space-y-6 pr-4">
+        <div id="types-overview-panel" class="space-y-6">
+            <div class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-baseline gap-3">
+                    <h1 class="text-4xl font-extrabold tracking-tight leading-none">Catégories</h1>
+                    <span class="text-2xl font-bold opacity-60">...</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <button type="button" onclick="promptCreateSmartCategory()" class="ui-card px-5 py-2 rounded-full text-xs font-bold shadow-sm hover:opacity-85 transition">
+                        + Ajouter
+                    </button>
+                    <button id="btn-analyze-categories" type="button" onclick="analyzeSmartCategories()" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">
+                        Analyser
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pilules compactes : Photos | Vidéos | Images animées | Formats -->
+            <div id="types-cards-grid" class="flex flex-wrap items-center gap-3"></div>
+
+            <div id="categories-status-banner" class="hidden ui-card rounded-2xl px-4 py-2.5 text-xs font-bold shadow-sm"></div>
+
+            <!-- Tableau des formats (affiché au clic sur la pilule Formats) -->
+            <div id="types-formats-panel" class="hidden ui-card rounded-3xl p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-extrabold">Formats & Extensions</h3>
+                    <button type="button" onclick="toggleFormatsPanel(false)" class="text-xs font-bold opacity-60 hover:opacity-100">✕</button>
+                </div>
+                <div id="types-ext-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+            </div>
+
+            <!-- Grille des catégories intelligentes (IA + manuelles) -->
+            <div id="smart-categories-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"></div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-5" id="types-cards-grid"></div>
-        <div class="ui-card rounded-3xl p-5">
-            <h3 class="text-sm font-extrabold mb-3">Formats & Extensions</h3>
-            <div id="types-ext-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+
+        <!-- Vue détaillée d'une catégorie -->
+        <div id="category-single-panel" class="hidden space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <button type="button" onclick="closeSingleCategoryView()" class="ui-card px-4 py-2 rounded-full text-xs font-bold shadow-sm">
+                    ← Toutes les catégories
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="deleteCurrentSmartCategory()" class="bg-rose-600/90 hover:bg-rose-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">
+                        Supprimer la catégorie
+                    </button>
+                </div>
+            </div>
+            <div class="sticky-view-header flex items-center justify-between">
+                <h1 id="single-category-title" class="text-3xl font-extrabold leading-none"></h1>
+                <span id="single-category-count" class="text-xs font-bold opacity-60"></span>
+            </div>
+            <div id="category-single-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4"></div>
         </div>
     </div>
 

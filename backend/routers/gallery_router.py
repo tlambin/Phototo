@@ -131,12 +131,14 @@ def _probe_video_duration_and_save(video_path: Path, conn: sqlite3.Connection | 
 def _media_type_sql(media_type: str) -> str:
     if media_type == "VIDEOS":
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in VIDEO_EXTS]) + ")"
+    if media_type == "ANIMATED":
+        return "(LOWER(pf.dest_path) LIKE '%.gif' OR LOWER(pf.dest_path) LIKE '%live%')"
     if media_type == "RAW":
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in RAW_EXTS]) + ")"
     if media_type == "SCREENSHOTS":
         return "(LOWER(pf.dest_path) LIKE '%screenshot%' OR LOWER(pf.dest_path) LIKE '%capture%' OR LOWER(pf.dest_path) LIKE '%ecran%')"
     if media_type == "PHOTOS":
-        std_imgs = IMAGE_EXTS - RAW_EXTS
+        std_imgs = IMAGE_EXTS - RAW_EXTS - {".gif"}
         return "(" + " OR ".join([f"LOWER(pf.dest_path) LIKE '%{e}'" for e in std_imgs]) + ")"
     return ""
 
@@ -575,6 +577,7 @@ def api_types_summary():
     cats = {
         "PHOTOS": {"count": 0, "bytes": 0},
         "VIDEOS": {"count": 0, "bytes": 0},
+        "ANIMATED": {"count": 0, "bytes": 0},
         "RAW": {"count": 0, "bytes": 0},
         "SCREENSHOTS": {"count": 0, "bytes": 0},
     }
@@ -590,7 +593,10 @@ def api_types_summary():
         exts[ext]["count"] += 1
         exts[ext]["mb"] = round(exts[ext]["mb"] + sz / (1024 * 1024), 1)
 
-        if "screenshot" in name_low or "capture" in name_low or "ecran" in name_low:
+        if ext == ".gif" or "live" in name_low:
+            cats["ANIMATED"]["count"] += 1
+            cats["ANIMATED"]["bytes"] += sz
+        elif "screenshot" in name_low or "capture" in name_low or "ecran" in name_low:
             cats["SCREENSHOTS"]["count"] += 1
             cats["SCREENSHOTS"]["bytes"] += sz
         elif ext in RAW_EXTS:
@@ -607,6 +613,276 @@ def api_types_summary():
     summary = {k: {"count": v["count"], "gb": round(v["bytes"] / (1024**3), 2)} for k, v in cats.items()}
     ext_list = sorted(exts.values(), key=lambda x: x["count"], reverse=True)
     return {"categories": summary, "extensions": ext_list}
+
+
+class SmartCategoryCreatePayload(BaseModel):
+    name: str
+    prompt: str = ""
+
+
+class SmartCategoryDeletePayload(BaseModel):
+    category_id: int
+
+
+class SmartCategoryAssignPayload(BaseModel):
+    category_id: int
+    source_paths: list[str]
+    action: str = "ADD"
+
+
+def _heuristic_where_for_category(name: str, tables: set[str]) -> str:
+    low = (name or "").lower()
+    if "capture" in low or "screenshot" in low or "écran" in low or "ecran" in low:
+        return "(LOWER(pf.dest_path) LIKE '%screenshot%' OR LOWER(pf.dest_path) LIKE '%capture%' OR LOWER(pf.dest_path) LIKE '%ecran%')"
+    if "document" in low or "facture" in low:
+        ocr_cond = " OR EXISTS (SELECT 1 FROM ocr_results o WHERE o.source_path = pf.source_path AND COALESCE(o.line_count, 0) >= 5)" if "ocr_results" in tables else ""
+        return f"(LOWER(pf.dest_path) LIKE '%doc%' OR LOWER(pf.dest_path) LIKE '%scan%' OR LOWER(pf.dest_path) LIKE '%facture%' OR LOWER(pf.dest_path) LIKE '%receipt%'{ocr_cond})"
+    return ""
+
+
+@router.get("/api/categories/list")
+def api_categories_list():
+    conn = get_db()
+    cur = conn.cursor()
+    tables = {r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)").fetchall()}
+    ai_indexed = 0
+    if "clip_embedding" in cols:
+        ai_indexed = int(cur.execute("SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND clip_embedding IS NOT NULL").fetchone()[0] or 0)
+
+    cur.execute("SELECT category_id, name, prompt, source FROM smart_categories ORDER BY category_id ASC")
+    cats = [dict(r) for r in cur.fetchall()]
+
+    out = []
+    for c in cats:
+        cid = c["category_id"]
+        heur = _heuristic_where_for_category(c["name"], tables)
+        heur_sql = f" OR {heur}" if heur else ""
+        row = cur.execute(f"""
+            SELECT COUNT(DISTINCT pf.source_path) as cnt,
+                   (SELECT pf2.dest_path FROM processed_files pf2
+                    WHERE pf2.is_duplicate = 0 AND pf2.is_trashed = 0 AND pf2.dest_path IS NOT NULL
+                      AND (EXISTS (SELECT 1 FROM media_categories mc2 WHERE mc2.source_path = pf2.source_path AND mc2.category_id = ?)
+                           {heur_sql.replace('pf.', 'pf2.')})
+                    ORDER BY COALESCE(pf2.timestamp, 0) DESC LIMIT 1) as cover_path
+            FROM processed_files pf
+            WHERE pf.is_duplicate = 0 AND pf.is_trashed = 0 AND pf.dest_path IS NOT NULL
+              AND (EXISTS (SELECT 1 FROM media_categories mc WHERE mc.source_path = pf.source_path AND mc.category_id = ?)
+                   {heur_sql})
+        """, (cid, cid)).fetchone()
+        cnt = int(row["cnt"] or 0) if row else 0
+        if c["source"] == "AI" and cnt == 0:
+            continue
+        out.append({
+            "category_id": cid,
+            "name": c["name"],
+            "prompt": c["prompt"],
+            "source": c["source"],
+            "count": cnt,
+            "cover_path": row["cover_path"] if row else None,
+        })
+    conn.close()
+    return {"categories": out, "ai_indexed": ai_indexed}
+
+
+@router.post("/api/categories/create")
+def api_categories_create(payload: SmartCategoryCreatePayload):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nom de catégorie requis.")
+    prompt = (payload.prompt or "").strip() or name
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO smart_categories (name, prompt, source) VALUES (?, ?, 'MANUAL')",
+            (name, prompt),
+        )
+        cid = cur.lastrowid
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Cette catégorie existe déjà.")
+
+    # Si des empreintes CLIP existent déjà en base, associer instantanément sans ré-analyser les images
+    assigned = 0
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(processed_files)").fetchall()}
+        if "clip_embedding" in cols:
+            has_emb = conn.execute("SELECT 1 FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND clip_embedding IS NOT NULL LIMIT 1").fetchone()
+            if has_emb:
+                db_p, _ = get_active_db_and_dest()
+                from indexeur_semantique_gps import search_photos_by_natural_text
+                matches = search_photos_by_natural_text(db_p, prompt, top_k=200, min_score=0.22)
+                for m in matches:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'AI', ?)",
+                        (m["source_path"], cid, float(m.get("similarity", 0)) / 100.0),
+                    )
+                    assigned += 1
+                conn.commit()
+    except Exception:
+        pass
+    conn.close()
+    return {"status": "ok", "category_id": cid, "name": name, "prompt": prompt, "assigned": assigned}
+
+
+@router.post("/api/categories/delete")
+def api_categories_delete(payload: SmartCategoryDeletePayload):
+    conn = get_db()
+    conn.execute("DELETE FROM media_categories WHERE category_id = ?", (payload.category_id,))
+    conn.execute("DELETE FROM smart_categories WHERE category_id = ?", (payload.category_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+@router.post("/api/categories/assign")
+def api_categories_assign(payload: SmartCategoryAssignPayload):
+    if not payload.source_paths:
+        return {"status": "ok", "updated": 0}
+    conn = get_db()
+    cur = conn.cursor()
+    updated = 0
+    if payload.action.upper() == "REMOVE":
+        for sp in payload.source_paths:
+            cur.execute("DELETE FROM media_categories WHERE source_path = ? AND category_id = ?", (sp, payload.category_id))
+            updated += cur.rowcount
+    else:
+        for sp in payload.source_paths:
+            cur.execute(
+                "INSERT OR REPLACE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'MANUAL', 1.0)",
+                (sp, payload.category_id),
+            )
+            updated += 1
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "updated": updated}
+
+
+@router.get("/api/categories/items")
+def api_categories_items(category_id: int):
+    conn = get_db()
+    cur = conn.cursor()
+    cat = cur.execute("SELECT category_id, name, prompt, source FROM smart_categories WHERE category_id = ?", (category_id,)).fetchone()
+    if not cat:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Catégorie introuvable.")
+    tables = {r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    heur = _heuristic_where_for_category(cat["name"], tables)
+    heur_sql = f" OR {heur}" if heur else ""
+    cur.execute(f"""
+        SELECT pf.source_path, pf.dest_path, pf.timestamp, pf.is_favorite, pf.album_name,
+               COALESCE(mc.assigned_by, 'AUTO') as assigned_by
+        FROM processed_files pf
+        LEFT JOIN media_categories mc ON mc.source_path = pf.source_path AND mc.category_id = ?
+        WHERE pf.is_duplicate = 0 AND pf.is_trashed = 0 AND pf.dest_path IS NOT NULL
+          AND (mc.source_path IS NOT NULL{heur_sql})
+        ORDER BY COALESCE(pf.timestamp, 0) DESC
+        LIMIT 300
+    """, (category_id,))
+    items = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return {"category": dict(cat), "items": items, "total": len(items)}
+
+
+_AI_CATEGORY_CATALOG = [
+    ("Captures d'écran", "capture d'écran interface téléphone ordinateur"),
+    ("Documents", "document papier facture texte reçu lettre"),
+    ("Livres", "livre page bibliothèque lecture"),
+    ("Arbres & Forêts", "arbre forêt bois nature feuilles"),
+    ("Fleurs & Plantes", "fleur plante jardin bouquet"),
+    ("Montagnes", "montagne sommet randonnée paysage"),
+    ("Plage & Mer", "plage mer océan sable vagues"),
+    ("Couchers de soleil", "coucher de soleil lever de soleil ciel coloré"),
+    ("Neige & Hiver", "neige hiver ski montagne enneigée"),
+    ("Chiens", "chien chiot animal"),
+    ("Chats", "chat chaton animal"),
+    ("Animaux", "animal oiseau faune sauvage"),
+    ("Nourriture", "plat nourriture repas restaurant gâteau"),
+    ("Boissons & Cafés", "café verre boisson cocktail vin"),
+    ("Voitures", "voiture automobile route véhicule"),
+    ("Vélos & Motos", "vélo bicyclette moto"),
+    ("Avions & Voyages", "avion aéroport vol voyage"),
+    ("Trains & Gares", "train gare rail métro"),
+    ("Bateaux", "bateau navire port voilier"),
+    ("Ponts", "pont rivière viaduc architecture"),
+    ("Architecture", "bâtiment monument église château immeuble"),
+    ("Intérieurs", "salon chambre cuisine maison intérieur"),
+    ("Fêtes & Soirées", "fête anniversaire soirée groupe amis"),
+    ("Concerts & Musique", "concert scène musique instrument"),
+    ("Sport", "sport football course vélo natation"),
+    ("Nuit", "nuit étoiles éclairage nocturne ville nuit"),
+    ("Art & Musées", "tableau peinture sculpture musée art"),
+]
+
+
+@router.post("/api/categories/analyze")
+def api_categories_analyze():
+    db_p, _ = get_active_db_and_dest()
+    conn = get_db()
+    cur = conn.cursor()
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)").fetchall()}
+    if "clip_embedding" not in cols:
+        conn.close()
+        return {"status": "no_embeddings", "assigned": 0}
+    total_emb = int(cur.execute("SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND clip_embedding IS NOT NULL").fetchone()[0] or 0)
+    if total_emb == 0:
+        conn.close()
+        return {"status": "no_embeddings", "assigned": 0}
+
+    existing_cats = [dict(r) for r in cur.execute("SELECT category_id, name, prompt, source FROM smart_categories").fetchall()]
+    conn.close()
+
+    from indexeur_semantique_gps import search_photos_by_natural_text
+    assigned = 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM media_categories WHERE assigned_by = 'AI'")
+
+    # 1. Analyser les catégories existantes (manuelles + IA déjà créées)
+    seen_names = set()
+    for c in existing_cats:
+        seen_names.add(c["name"].lower())
+        matches = search_photos_by_natural_text(db_p, c["prompt"] or c["name"], top_k=200, min_score=0.22)
+        for m in matches:
+            cur.execute(
+                "INSERT OR IGNORE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'AI', ?)",
+                (m["source_path"], c["category_id"], float(m.get("similarity", 0)) / 100.0),
+            )
+            assigned += cur.rowcount
+
+    # 2. Découvrir automatiquement les catégories du catalogue qui ont de vrais résultats
+    for c_name, c_prompt in _AI_CATEGORY_CATALOG:
+        if c_name.lower() in seen_names:
+            continue
+        matches = search_photos_by_natural_text(db_p, c_prompt, top_k=200, min_score=0.23)
+        if not matches:
+            continue
+        cur.execute(
+            "INSERT OR IGNORE INTO smart_categories (name, prompt, source) VALUES (?, ?, 'AI')",
+            (c_name, c_prompt),
+        )
+        row = cur.execute("SELECT category_id FROM smart_categories WHERE name = ?", (c_name,)).fetchone()
+        if not row:
+            continue
+        cid = row["category_id"]
+        for m in matches:
+            cur.execute(
+                "INSERT OR IGNORE INTO media_categories (source_path, category_id, assigned_by, score) VALUES (?, ?, 'AI', ?)",
+                (m["source_path"], cid, float(m.get("similarity", 0)) / 100.0),
+            )
+            assigned += cur.rowcount
+
+    # Supprimer les catégories IA vides
+    cur.execute("""
+        DELETE FROM smart_categories
+        WHERE source = 'AI'
+          AND NOT EXISTS (SELECT 1 FROM media_categories mc WHERE mc.category_id = smart_categories.category_id)
+    """)
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "assigned": assigned}
 
 
 @router.get("/api/gallery/items")

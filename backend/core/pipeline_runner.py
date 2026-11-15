@@ -802,6 +802,11 @@ def run_step_clip(lib: dict):
                 done += len(batch_rows)
                 STATE.update_progress(done, total, unit="médias/s")
     conn.close()
+    try:
+        import gallery_router
+        gallery_router.api_categories_analyze()
+    except Exception:
+        pass
 
 
 TASK_REGISTRY = {

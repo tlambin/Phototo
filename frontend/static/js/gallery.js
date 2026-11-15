@@ -1627,31 +1627,238 @@ async function emptyAllTrash() { if(confirm("Vider définitivement la corbeille 
 
 // ==================== CATÉGORIES / TYPES ====================
 
+let _openedCategoryId = null;
+
+function toggleFormatsPanel(forceState) {
+    const panel = document.getElementById('types-formats-panel');
+    const btn = document.getElementById('type-pill-FORMATS');
+    if (!panel) return;
+    const willShow = typeof forceState === 'boolean' ? forceState : panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willShow);
+    if (btn) btn.classList.toggle('nav-item-active', willShow);
+}
+
 async function loadTypesSummary() {
-    const res = await fetch('/api/types/summary');
-    const d = await res.json();
-    const c = d.categories;
-    const cards = [
-        {id: 'PHOTOS', icon: '📷', title: 'Photos Standard', count: c.PHOTOS.count, gb: c.PHOTOS.gb},
-        {id: 'VIDEOS', icon: '🎬', title: 'Vidéos', count: c.VIDEOS.count, gb: c.VIDEOS.gb},
-        {id: 'RAW', icon: '🎞️', title: 'Fichiers RAW', count: c.RAW.count, gb: c.RAW.gb},
-        {id: 'SCREENSHOTS', icon: '📱', title: "Captures d'écran", count: c.SCREENSHOTS.count, gb: c.SCREENSHOTS.gb}
+    closeSingleCategoryView();
+    const [resTypes, resCats] = await Promise.all([
+        fetch('/api/types/summary'),
+        fetch('/api/categories/list')
+    ]);
+    const d = await resTypes.json();
+    const catsData = await resCats.json();
+    const c = d.categories || {};
+
+    const pills = [
+        {
+            id: 'PHOTOS',
+            title: 'Photos',
+            count: (c.PHOTOS?.count || 0),
+            onclick: "filterGalleryByType('PHOTOS')",
+            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`
+        },
+        {
+            id: 'VIDEOS',
+            title: 'Vidéos',
+            count: (c.VIDEOS?.count || 0),
+            onclick: "filterGalleryByType('VIDEOS')",
+            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 12h20"/></svg>`
+        },
+        {
+            id: 'ANIMATED',
+            title: 'Images animées',
+            count: (c.ANIMATED?.count || 0),
+            onclick: "filterGalleryByType('ANIMATED')",
+            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>`
+        },
+        {
+            id: 'FORMATS',
+            title: 'Formats',
+            count: (d.extensions || []).length,
+            onclick: "toggleFormatsPanel()",
+            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`
+        }
     ];
-    document.getElementById('types-cards-grid').innerHTML = cards.map(k => `
-        <div onclick="filterGalleryByType('${k.id}')" class="ui-card rounded-3xl p-5 cursor-pointer hover:scale-[1.02] transition shadow-sm">
-            <div class="text-2xl mb-1">${k.icon}</div>
-            <div class="text-sm font-extrabold">${k.title}</div>
-            <div class="text-xl font-black mt-1">${k.count} fichiers</div>
-            <div class="text-xs opacity-60 font-bold">${k.gb} Go</div>
-        </div>
+
+    document.getElementById('types-cards-grid').innerHTML = pills.map(k => `
+        <button id="type-pill-${k.id}" type="button" onclick="${k.onclick}"
+                class="ui-card rounded-2xl px-5 py-3 cursor-pointer hover:scale-[1.02] transition shadow-sm flex items-center gap-2.5 text-xs font-extrabold">
+            ${k.icon}
+            <span>${k.title}</span>
+            <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-75">${k.count}</span>
+        </button>
     `).join('');
 
     document.getElementById('types-ext-grid').innerHTML = (d.extensions || []).map(e => `
-        <div onclick="filterGalleryByExt('${e.ext}')" class="ui-pill rounded-2xl p-3 cursor-pointer flex justify-between items-center font-bold text-xs">
+        <div onclick="filterGalleryByExt('${e.ext}')" class="ui-pill rounded-2xl p-3 cursor-pointer flex justify-between items-center font-bold text-xs hover:opacity-85 transition">
             <span class="font-mono">${e.ext}</span>
             <span class="opacity-70">${e.count}</span>
         </div>
     `).join('');
+
+    renderSmartCategoriesGrid(catsData.categories || []);
+}
+
+function renderSmartCategoriesGrid(categories) {
+    const grid = document.getElementById('smart-categories-grid');
+    if (!grid) return;
+    if (!categories.length) {
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucune catégorie. Cliquez sur "+ Ajouter" pour en créer une.</div>`;
+        return;
+    }
+    grid.innerHTML = categories.map(cat => {
+        const coverHtml = cat.cover_path
+            ? `<img src="/thumb?path=${encodeURIComponent(cat.cover_path)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition"/>`
+            : `<div class="w-full h-full flex items-center justify-center opacity-20">
+                   <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+               </div>`;
+        const escName = _escTileText(cat.name);
+        return `
+            <div onclick="openSingleCategoryView(${cat.category_id})"
+                 class="ui-card rounded-3xl overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition flex flex-col relative">
+                <div class="aspect-square overflow-hidden bg-black/5 relative">
+                    ${coverHtml}
+                    <button type="button" onclick="event.stopPropagation(); deleteSmartCategoryById(${cat.category_id}, '${escName.replace(/'/g, "\\'")}')" title="Supprimer"
+                            class="absolute top-2 right-2 w-7 h-7 rounded-full bg-rose-600/90 text-white flex items-center justify-center text-xs font-bold shadow opacity-0 group-hover:opacity-100 hover:scale-110 transition z-10">✕</button>
+                </div>
+                <div class="p-3 text-center">
+                    <div class="text-sm font-extrabold truncate">${escName}</div>
+                    <div class="text-[10px] opacity-60 font-semibold">${cat.count} élément${cat.count > 1 ? 's' : ''}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function promptCreateSmartCategory() {
+    const name = prompt("Nom de la nouvelle catégorie (ex: Chats, Voitures, Montagnes) :");
+    if (!name || !name.trim()) return;
+    const promptTxt = prompt("Mots-clés pour l'IA (laisser vide pour utiliser le nom) :", name.trim());
+    const res = await fetch('/api/categories/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name.trim(), prompt: (promptTxt || '').trim()})
+    });
+    if (!res.ok) {
+        try {
+            const err = await res.json();
+            alert(err.detail || "Impossible de créer la catégorie.");
+        } catch (e) {}
+        return;
+    }
+    loadTypesSummary();
+}
+
+async function deleteSmartCategoryById(catId, name) {
+    if (!confirm(`Supprimer la catégorie « ${name} » ?`)) return;
+    await fetch('/api/categories/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({category_id: catId})
+    });
+    loadTypesSummary();
+}
+
+function _setCategoriesStatusBanner(msg, isError = false) {
+    const el = document.getElementById('categories-status-banner');
+    if (!el) return;
+    if (!msg) {
+        el.classList.add('hidden');
+        el.textContent = '';
+        return;
+    }
+    el.textContent = msg;
+    el.classList.remove('hidden', 'text-rose-600');
+    if (isError) el.classList.add('text-rose-600');
+}
+
+async function analyzeSmartCategories() {
+    const btn = document.getElementById('btn-analyze-categories');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Analyse...';
+    }
+    _setCategoriesStatusBanner('Analyse des catégories en cours...');
+    try {
+        const res = await fetch('/api/categories/analyze', {method: 'POST'});
+        if (!res.ok) {
+            const errTxt = await res.text().catch(() => '');
+            _setCategoriesStatusBanner(`Erreur lors de l'analyse (${res.status}). ${errTxt}`, true);
+            return;
+        }
+        const d = await res.json();
+        if (d.status === 'no_embeddings') {
+            _setCategoriesStatusBanner("Aucune empreinte CLIP en base : lancement de l'indexation IA CLIP en arrière-plan...");
+            if (typeof runTask === 'function') {
+                await runTask('CLIP');
+            }
+            _setCategoriesStatusBanner("Indexation IA CLIP lancée en arrière-plan (voir Activités). Les catégories seront remplies automatiquement à la fin.");
+        } else {
+            await loadTypesSummary();
+            _setCategoriesStatusBanner(`Analyse terminée : ${d.assigned || 0} correspondance(s) enregistrée(s).`);
+        }
+    } catch (e) {
+        _setCategoriesStatusBanner(`Erreur réseau : ${e.message || e}`, true);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Analyser';
+        }
+    }
+}
+
+async function openSingleCategoryView(categoryId) {
+    _openedCategoryId = categoryId;
+    const ov = document.getElementById('types-overview-panel');
+    const sp = document.getElementById('category-single-panel');
+    if (ov) ov.classList.add('hidden');
+    if (sp) sp.classList.remove('hidden');
+
+    const res = await fetch(`/api/categories/items?category_id=${categoryId}`);
+    const d = await res.json();
+    const titleEl = document.getElementById('single-category-title');
+    const countEl = document.getElementById('single-category-count');
+    if (titleEl) titleEl.textContent = d.category?.name || 'Catégorie';
+    if (countEl) countEl.textContent = `${d.total || 0} élément${(d.total || 0) > 1 ? 's' : ''}`;
+
+    const grid = document.getElementById('category-single-grid');
+    if (!grid) return;
+    const items = d.items || [];
+    if (!items.length) {
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun média dans cette catégorie pour le moment.</div>`;
+        return;
+    }
+    grid.innerHTML = items.map(it => {
+        const sEnc = encodeURIComponent(it.source_path || it.dest_path);
+        const dEnc = encodeURIComponent(it.dest_path);
+        return `
+            <div onclick="openLightboxForCustomItem('${sEnc}', '${dEnc}', ${it.timestamp || 0})"
+                 class="ui-card rounded-2xl overflow-hidden cursor-pointer group shadow-sm relative">
+                <div class="aspect-square overflow-hidden bg-black/5">
+                    ${renderMediaPreview(it.dest_path, 'w-full h-full object-cover group-hover:scale-105 transition')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function closeSingleCategoryView() {
+    _openedCategoryId = null;
+    const ov = document.getElementById('types-overview-panel');
+    const sp = document.getElementById('category-single-panel');
+    if (sp) sp.classList.add('hidden');
+    if (ov) ov.classList.remove('hidden');
+}
+
+async function deleteCurrentSmartCategory() {
+    if (!_openedCategoryId) return;
+    if (!confirm("Supprimer cette catégorie ?")) return;
+    await fetch('/api/categories/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({category_id: _openedCategoryId})
+    });
+    closeSingleCategoryView();
+    loadTypesSummary();
 }
 
 function filterGalleryByType(typeCode) {

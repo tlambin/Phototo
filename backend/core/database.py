@@ -61,6 +61,25 @@ def get_db() -> sqlite3.Connection:
                 FOREIGN KEY(parent_id) REFERENCES albums(album_id) ON DELETE CASCADE
             )
         """)
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS smart_categories (
+                category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                prompt TEXT NOT NULL,
+                source TEXT DEFAULT 'MANUAL',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS media_categories (
+                source_path TEXT NOT NULL,
+                category_id INTEGER NOT NULL,
+                assigned_by TEXT DEFAULT 'MANUAL',
+                score REAL DEFAULT 1.0,
+                PRIMARY KEY (source_path, category_id),
+                FOREIGN KEY (category_id) REFERENCES smart_categories(category_id) ON DELETE CASCADE
+            )
+        """)
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_gallery ON processed_files(is_duplicate, is_trashed, timestamp DESC)")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_album ON processed_files(album_name)")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_fav ON processed_files(is_favorite)")
