@@ -9,7 +9,7 @@
             <button onclick="selectAllGalleryPage(false)" class="text-xs opacity-70 underline">Tout décocher</button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <button onclick="runGalleryBatch('FAVORITE_ADD')" class="ui-pill text-xs font-bold px-3 py-1.5 rounded-full text-[#8B6B8E]">♥ Favoris</button>
+            <button onclick="runGalleryBatch('FAVORITE_ADD')" class="ui-pill text-xs font-bold px-3 py-1.5 rounded-full hover:text-pink-400 transition">♥ Favoris</button>
             <input id="batch-album-input" list="albums-datalist" type="text" placeholder="Album ou Parent/Sous-album..." class="ui-pill rounded-full px-3 py-1 text-xs w-44 outline-none"/>
             <datalist id="albums-datalist"></datalist>
             <button onclick="runGalleryBatch('ALBUM_ADD')" class="plum-btn text-xs font-bold px-3.5 py-1.5 rounded-full">+ Album</button>
@@ -23,25 +23,25 @@
     <!-- ==================== VUE 1 : GALERIE ==================== -->
     <div id="tab-gallery" class="space-y-4">
 
-        <!-- En-tête sticky : Titre "Galerie" + Bouton Options (icône seule) + Barre d'options -->
-        <div id="gallery-sticky-header" class="sticky-view-header space-y-3 pr-4">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
+        <!-- En-tête sticky en pilules flottantes : Titre "Galerie" + Nombre d'éléments à gauche, Bouton Options à droite (seul au scroll) -->
+        <div id="gallery-sticky-header" class="sticky-view-header sticky-options-header space-y-3 pr-4">
+            <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 id="gallery-main-title" class="text-4xl font-extrabold tracking-tight leading-none">Galerie</h1>
-                    <button id="gal-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options de la galerie"
-                            class="ui-card w-9 h-9 rounded-full shadow-sm flex items-center justify-center hover:opacity-85 transition select-none shrink-0">
-                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
-                    </button>
-                    <span id="gallery-active-filter-badge" class="hidden ui-pill px-3.5 py-1 rounded-full text-xs font-extrabold items-center gap-2">
+                    <span id="gal-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 éléments</span>
+                    <span id="gallery-active-filter-badge" class="hidden ui-card px-3.5 py-1.5 rounded-full text-xs font-extrabold leading-none translate-y-[1px] items-center gap-2 pointer-events-auto">
                         <span id="gallery-active-filter-text"></span>
                         <button onclick="resetAllGalleryFilters()" class="hover:text-rose-500 font-bold">✕</button>
                     </span>
                 </div>
-                <span id="gal-total-label" class="text-xs font-bold opacity-60">0 éléments</span>
+                <button id="gal-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options de la galerie"
+                        class="sticky-options-toggle ml-auto ui-card w-10 h-10 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
             </div>
 
             <!-- OPTIONS DE LA GALERIE (Trier | Grouper | Bouton Filtrer | Disposition + Taille sur la même ligne) -->
-            <div id="filter-drawer" class="space-y-2.5">
+            <div id="filter-drawer" class="sticky-options-drawer space-y-2.5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3">
                     <!-- Pilule Trier par -->
@@ -54,11 +54,14 @@
                             <option value="modified">Modification</option>
                             <option value="added">Date d'ajout</option>
                         </select>
-                        <select id="gal-sort-order" onchange="refreshActiveMediaView()"
-                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
-                            <option value="desc">Décroissant</option>
-                            <option value="asc">Croissant</option>
-                        </select>
+                        <input type="hidden" id="gal-sort-order" value="desc"/>
+                        <button type="button" id="gal-sort-dir-btn" onclick="toggleGallerySortOrder()"
+                                title="Ordre décroissant (cliquer pour inverser)"
+                                class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                            <svg id="gal-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                        </button>
                     </div>
 
                     <!-- Pilule Grouper par -->
@@ -212,7 +215,7 @@
                  class="hidden sm:flex shrink-0 sticky top-0 h-[calc(100vh-140px)] items-center justify-end self-start pointer-events-none transition-all duration-200">
                 <aside id="gallery-timeline-box"
                        class="pointer-events-auto w-14 md:w-16 max-h-full ui-card rounded-l-3xl rounded-r-none border-r-0 py-3 px-0 flex flex-col items-center overflow-y-auto no-scrollbar select-none shadow-sm transition-all duration-200">
-                    <div id="timeline-items-container" class="w-full flex flex-col items-center space-y-1.5 text-[11px] font-extrabold"></div>
+                    <div id="timeline-items-container" class="w-full flex flex-col items-end space-y-1.5 text-[11px] font-extrabold"></div>
                 </aside>
             </div>
         </div>
@@ -221,22 +224,22 @@
     <!-- ==================== VUE 2 : ALBUMS ==================== -->
     <div id="tab-albums" class="hidden">
         <div id="albums-overview-panel">
-            <div id="albums-sticky-header" class="sticky-view-header space-y-3 mb-6">
-              <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <h1 class="text-4xl font-extrabold tracking-tight leading-none">Albums</h1>
+            <div id="albums-sticky-header" class="sticky-view-header sticky-options-header space-y-3 mb-6 pr-4">
+              <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+                <h1 class="sticky-hide-on-stuck text-4xl font-extrabold tracking-tight leading-none">Albums</h1>
+                <div class="sticky-header-actions ml-auto flex items-center gap-2.5">
+                    <button onclick="promptCreateNewAlbum()" class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-bold shadow flex items-center gap-2">
+                        <span>+</span> <span>Nouveau</span>
+                    </button>
                     <button id="alb-options-btn" type="button" onclick="toggleAlbumsOptionsBar()" title="Afficher/Masquer les options des albums"
-                            class="ui-card w-9 h-9 rounded-full shadow-sm flex items-center justify-center hover:opacity-85 transition select-none shrink-0">
+                            class="sticky-options-toggle ui-card w-10 h-10 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
                         <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
                     </button>
                 </div>
-                <button onclick="promptCreateNewAlbum()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow flex items-center gap-2">
-                    <span>+</span> <span>Nouveau</span>
-                </button>
               </div>
 
               <!-- Options des Albums : Trier par + Grouper par + Filtrer + Disposition (Grille / Liste) + Taille (Petit / Moyen / Grand) -->
-              <div id="albums-options-drawer">
+              <div id="albums-options-drawer" class="sticky-options-drawer">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="ui-card rounded-full px-5 py-2.5 flex flex-wrap items-center gap-3 text-xs font-extrabold shadow-sm">
@@ -247,11 +250,14 @@
                             <option value="name">Nom</option>
                             <option value="modified">Modification</option>
                         </select>
-                        <select id="alb-sort-order" onchange="onAlbumControlsChanged()"
-                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
-                            <option value="desc">Décroissant</option>
-                            <option value="asc">Croissant</option>
-                        </select>
+                        <input type="hidden" id="alb-sort-order" value="desc"/>
+                        <button type="button" id="alb-sort-dir-btn" onclick="toggleAlbumSortOrder()"
+                                title="Ordre décroissant (cliquer pour inverser)"
+                                class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                            <svg id="alb-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                        </button>
                     </div>
 
                     <div class="ui-card rounded-full px-5 py-2.5 flex flex-wrap items-center gap-3 text-xs font-extrabold shadow-sm">
@@ -376,15 +382,15 @@
                     <button onclick="confirmDeleteCurrentAlbum()" class="bg-rose-600/90 hover:bg-rose-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">Supprimer</button>
                 </div>
             </div>
-            <div id="album-single-sticky-header" class="sticky-view-header flex items-center justify-between">
-                <div class="flex items-center gap-3">
+            <div id="album-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3 pr-4">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 id="single-album-title" class="text-3xl font-extrabold leading-none"></h1>
-                    <button type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
-                            class="ui-card w-8 h-8 rounded-full shadow-sm flex items-center justify-center hover:opacity-85 transition select-none shrink-0">
-                        <svg class="w-3.5 h-3.5 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
-                    </button>
+                    <span id="single-album-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
                 </div>
-                <span id="single-album-count" class="text-xs font-bold opacity-60"></span>
+                <button type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
+                        class="ml-auto ui-card w-10 h-10 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
             </div>
             <div id="subalbums-section" class="hidden space-y-3">
                 <h3 class="text-xs font-extrabold uppercase tracking-wider opacity-60">Sous-albums</h3>
@@ -404,14 +410,14 @@
     <!-- ==================== VUE 3 : PERSONNES ==================== -->
     <div id="tab-faces" class="hidden">
         <div id="persons-overview-panel">
-            <div class="sticky-view-header flex items-center justify-between mb-6">
-                <div class="flex items-baseline gap-3">
-                    <h1 class="text-4xl font-extrabold tracking-tight">Personnes</h1>
-                    <button onclick="toggleSuggestionsPanel()" title="Suggestions et fusion de personnes" class="text-2xl font-bold opacity-60 hover:opacity-100 px-2">...</button>
+            <div class="sticky-view-header flex items-center justify-between mb-6 gap-3">
+                <div class="flex items-center gap-3">
+                    <h1 class="text-4xl font-extrabold tracking-tight leading-none">Personnes</h1>
+                    <button onclick="toggleSuggestionsPanel()" title="Suggestions et fusion de personnes" class="ui-card w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold opacity-80 hover:opacity-100 transition cursor-pointer">...</button>
                 </div>
                 <div class="flex items-center gap-2">
                     <button id="btn-merge-selected" onclick="mergeSelectedPersons()" class="hidden ui-card px-4 py-2 rounded-full text-xs font-bold">Fusionner la sélection</button>
-                    <button onclick="runTask('FACES')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+                    <button onclick="runTask('FACES')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
                 </div>
             </div>
 
@@ -449,12 +455,12 @@
 
     <!-- ==================== VUE 4 : LIEUX ==================== -->
     <div id="tab-map" class="hidden">
-        <div class="flex items-center justify-between mb-5">
-            <div class="flex items-baseline gap-3">
-                <h1 class="text-4xl font-extrabold tracking-tight">Lieux</h1>
-                <span id="map-stats-label" class="text-xs font-bold opacity-60">...</span>
+        <div class="flex items-center justify-between mb-5 gap-3">
+            <div class="flex items-center gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Lieux</h1>
+                <span id="map-stats-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
             </div>
-            <button onclick="openMetadataModalForSelection()" class="plum-btn px-6 py-2 rounded-full text-xs font-bold shadow flex items-center gap-2">
+            <button onclick="openMetadataModalForSelection()" class="plum-btn px-6 py-2.5 rounded-full text-xs font-bold shadow flex items-center gap-2">
                 <span>+</span> <span>Ajouter</span>
             </button>
         </div>
@@ -472,10 +478,10 @@
                     <span class="text-2xl font-bold opacity-60">...</span>
                 </div>
                 <div class="flex items-center gap-2.5">
-                    <button type="button" onclick="promptCreateSmartCategory()" class="ui-card px-5 py-2 rounded-full text-xs font-bold shadow-sm hover:opacity-85 transition">
+                    <button type="button" onclick="promptCreateSmartCategory()" class="ui-card px-5 py-2.5 rounded-full text-xs font-bold shadow-sm hover:opacity-85 transition">
                         + Ajouter
                     </button>
-                    <button id="btn-analyze-categories" type="button" onclick="analyzeSmartCategories()" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">
+                    <button id="btn-analyze-categories" type="button" onclick="analyzeSmartCategories()" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">
                         Analyser
                     </button>
                 </div>
@@ -511,9 +517,9 @@
                     </button>
                 </div>
             </div>
-            <div class="sticky-view-header flex items-center justify-between">
+            <div class="sticky-view-header flex items-center justify-between gap-3">
                 <h1 id="single-category-title" class="text-3xl font-extrabold leading-none"></h1>
-                <span id="single-category-count" class="text-xs font-bold opacity-60"></span>
+                <span id="single-category-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
             </div>
             <div id="category-single-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4"></div>
         </div>
@@ -522,7 +528,7 @@
     <!-- ==================== VUE 6 : OUTILS ==================== -->
     <div id="tab-tools" class="hidden space-y-6">
         <div class="flex items-baseline gap-3 mb-4">
-            <h1 class="text-4xl font-extrabold tracking-tight">Outils</h1>
+            <h1 class="text-4xl font-extrabold tracking-tight leading-none">Outils</h1>
             <span class="text-2xl font-bold opacity-60">...</span>
         </div>
 
@@ -589,10 +595,10 @@
     <!-- ==================== VUE RECHERCHE DEDIEE ==================== -->
     <div id="tab-search" class="hidden space-y-5 pr-4">
         <div class="sticky-view-header flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-baseline gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <h1 class="text-4xl font-extrabold tracking-tight leading-none">Recherche</h1>
-                <span id="search-query-label" class="ui-pill px-3 py-1 rounded-full text-xs font-extrabold"></span>
-                <span id="search-results-count" class="text-xs font-bold opacity-60"></span>
+                <span id="search-query-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none"></span>
+                <span id="search-results-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
             </div>
             <button type="button" onclick="switchTab('gallery')" class="ui-card px-4 py-2 rounded-full text-xs font-bold shadow-sm hover:opacity-85 transition">
                 ← Retour à la galerie
@@ -606,14 +612,14 @@
 
     <!-- ==================== VUE 7 : DOUBLONS ==================== -->
     <div id="tab-dups" class="hidden space-y-5">
-        <div class="sticky-view-header flex items-center justify-between">
+        <div class="sticky-view-header flex items-center justify-between gap-3">
             <div class="flex items-baseline gap-3">
-                <h1 class="text-4xl font-extrabold tracking-tight">Doublons</h1>
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Doublons</h1>
                 <span class="text-2xl font-bold opacity-60">...</span>
             </div>
             <div class="flex gap-2">
-                <button id="btn-delete-checked-dups" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
-                <button onclick="runTask('DEDUP')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+                <button id="btn-delete-checked-dups" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
+                <button onclick="runTask('DEDUP')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
             </div>
         </div>
 
@@ -621,7 +627,7 @@
             <div id="dups-status-title" class="text-xs font-extrabold text-center">Analyse en cours...</div>
             <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
                 <div id="cov-bar-dedup" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
-                <span id="cov-pct-dedup" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white">0 %</span>
+                <span id="cov-pct-dedup" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">0 %</span>
             </div>
             <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
                 <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-dedup">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
@@ -636,14 +642,14 @@
 
     <!-- ==================== VUE 8 : SIMILAIRES ==================== -->
     <div id="tab-similar" class="hidden space-y-5">
-        <div class="sticky-view-header flex items-center justify-between">
+        <div class="sticky-view-header flex items-center justify-between gap-3">
             <div class="flex items-baseline gap-3">
-                <h1 class="text-4xl font-extrabold tracking-tight">Similaires</h1>
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Similaires</h1>
                 <span class="text-2xl font-bold opacity-60">...</span>
             </div>
             <div class="flex gap-2">
-                <button id="btn-delete-checked-sims" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
-                <button onclick="runTask('SIMILAR')" class="plum-btn px-7 py-2 rounded-full text-xs font-bold shadow">Analyser</button>
+                <button id="btn-delete-checked-sims" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
+                <button onclick="runTask('SIMILAR')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
             </div>
         </div>
 
@@ -651,7 +657,7 @@
             <div class="text-xs font-extrabold text-center">Analyse en cours...</div>
             <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
                 <div id="cov-bar-similar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
-                <span id="cov-pct-similar" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white">0 %</span>
+                <span id="cov-pct-similar" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">0 %</span>
             </div>
             <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
                 <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-similar">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
@@ -666,12 +672,12 @@
 
     <!-- ==================== VUE 9 : CORBEILLE ==================== -->
     <div id="tab-trash" class="hidden">
-        <div class="sticky-view-header flex items-center justify-between mb-6">
-            <div class="flex items-baseline gap-3">
-                <h1 class="text-4xl font-extrabold tracking-tight">Corbeille</h1>
-                <span id="trash-summary-label" class="text-xs font-bold opacity-60">...</span>
+        <div class="sticky-view-header flex items-center justify-between mb-6 gap-3">
+            <div class="flex items-center gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Corbeille</h1>
+                <span id="trash-summary-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
             </div>
-            <button onclick="emptyAllTrash()" class="plum-btn px-8 py-2 rounded-full text-xs font-bold shadow">Vider</button>
+            <button onclick="emptyAllTrash()" class="plum-btn px-8 py-2.5 rounded-full text-xs font-bold shadow">Vider</button>
         </div>
         <div id="trash-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5 pb-10"></div>
     </div>
@@ -679,7 +685,7 @@
     <!-- ==================== VUE 10 : PARAMÈTRES ==================== -->
     <div id="tab-settings" class="hidden max-w-5xl pb-10 space-y-6">
         <div class="sticky-view-header flex items-center justify-between mb-2">
-            <h1 class="text-4xl font-extrabold tracking-tight">Paramètres</h1>
+            <h1 class="text-4xl font-extrabold tracking-tight leading-none">Paramètres</h1>
             <div class="flex items-center gap-3">
                 <button onclick="restartApplication()" title="Redémarrer le logiciel"
                         class="w-11 h-11 rounded-2xl bg-[#E5C168] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
@@ -819,7 +825,7 @@
 
     <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES) ==================== -->
     <div id="tab-activities" class="hidden max-w-3xl space-y-5">
-        <h1 class="text-4xl font-extrabold tracking-tight mb-6">Activités</h1>
+        <h1 class="text-4xl font-extrabold tracking-tight leading-none mb-6">Activités</h1>
         <div id="activities-full-list" class="space-y-3">
             <div class="ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">
                 Aucune activité enregistrée pour le moment.

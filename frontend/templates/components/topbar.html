@@ -1,11 +1,11 @@
-<header class="h-20 px-6 flex items-center gap-6 z-30 shrink-0">
+<header class="h-20 pl-6 pr-[22px] flex items-center gap-6 z-30 shrink-0">
     <!-- Gauche (même largeur w-48 que la sidebar) : Logo Phototo -->
     <div id="topbar-logo-box" onclick="toggleSidebarMini()" title="Cliquer pour réduire / agrandir le menu latéral"
          class="w-48 flex items-center gap-2.5 cursor-pointer group shrink-0 transition-all duration-200">
-        <svg class="w-7 h-7 text-[#593E5A] group-hover:scale-110 transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="w-7 h-7 group-hover:scale-110 transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
         </svg>
-        <span id="topbar-logo-text" class="text-2xl font-extrabold tracking-tight text-[#593E5A]">Phototo</span>
+        <span id="topbar-logo-text" class="text-2xl font-extrabold tracking-tight">Phototo</span>
     </div>
 
     <!-- Zone alignée avec le titre de la page : Barre de recherche à gauche + Cloche Notifications & Bibliothèque à droite -->
@@ -17,21 +17,11 @@
                 </svg>
                 <input id="global-search-input" type="text" placeholder="Rechercher..."
                        onkeydown="if(event.key==='Enter') runGlobalSearch()"
-                       class="ui-card w-full rounded-full pl-11 pr-4 py-2.5 text-sm outline-none shadow-sm focus:ring-2 focus:ring-[#593E5A]"/>
+                       class="ui-card w-full rounded-full pl-11 pr-4 py-2.5 text-sm outline-none shadow-sm focus:ring-2 focus:ring-current/25"/>
             </div>
         </div>
 
-        <div class="relative flex items-center gap-4">
-            <!-- Bouton Cloche Notifications -->
-            <button id="notif-bell-btn" onclick="toggleNotificationsPopover(event)" title="Notifications d'activités"
-                    class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5 transition relative">
-                <svg class="w-5 h-5 text-[#593E5A]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                </svg>
-                <span id="notif-unread-dot" class="hidden absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white"></span>
-            </button>
-
+        <div class="relative flex items-center gap-3">
             <!-- Pilule Bibliothèque + Sismographe -->
             <div class="ui-card rounded-full pl-5 pr-1 py-1 flex items-center gap-3 shadow-sm">
                 <button id="lib-name-btn" onclick="toggleLibMenuPopover(event)"
@@ -47,21 +37,32 @@
                 </button>
             </div>
 
+            <!-- Bouton Cloche Notifications (aligné verticalement avec le bouton Options) -->
+            <button id="notif-bell-btn" onclick="toggleNotificationsPopover(event)" title="Notifications d'activités"
+                    class="ui-card w-10 h-10 rounded-full flex items-center justify-center hover:opacity-85 transition relative shadow-sm shrink-0 cursor-pointer">
+                <svg class="w-5 h-5 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span id="notif-unread-dot" class="hidden absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white"></span>
+            </button>
+
             <!-- POPOVER CLOCHE : NOTIFICATIONS DES ACTIVITÉS TERMINÉES / ÉCHOUÉES -->
-            <div id="notif-popover" class="hidden absolute right-48 top-14 w-80 ui-card rounded-3xl shadow-2xl p-4 z-50 space-y-3" onclick="event.stopPropagation()">
-                <div class="flex items-center justify-between border-b border-black/10 pb-2">
+            <div id="notif-popover" class="hidden absolute right-0 top-14 w-80 ui-card rounded-3xl shadow-2xl p-4 z-50 space-y-3" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between pb-2">
                     <span class="text-xs font-extrabold uppercase tracking-wider">Notifications</span>
-                    <button onclick="switchTab('activities'); document.getElementById('notif-popover').classList.add('hidden')" class="text-[11px] font-bold text-[#593E5A] hover:underline">
+                    <button onclick="switchTab('activities'); document.getElementById('notif-popover').classList.add('hidden')" class="text-[11px] font-bold opacity-80 hover:opacity-100 hover:underline">
                         Tout voir
                     </button>
                 </div>
+                <div class="h-px ui-divider w-full"></div>
                 <div id="notif-popover-list" class="space-y-2 max-h-64 overflow-y-auto text-xs">
                     <div class="py-4 text-center opacity-60 font-semibold">Aucune activité récente</div>
                 </div>
             </div>
 
             <!-- POPOVER 1 : SÉLECTEUR DE BIBLIOTHÈQUE -->
-            <div id="lib-menu-popover" class="hidden absolute right-12 top-14 w-72 ui-card rounded-3xl shadow-2xl p-4 z-50">
+            <div id="lib-menu-popover" class="hidden absolute right-24 top-14 w-72 ui-card rounded-3xl shadow-2xl p-4 z-50">
                 <div class="ui-pill rounded-full px-4 py-2 mb-4 flex items-center justify-between">
                     <select id="library-selector" onchange="switchLibrary(this.value)"
                             class="bg-transparent font-extrabold text-sm w-full outline-none cursor-pointer"></select>
@@ -89,7 +90,7 @@
             </div>
 
             <!-- POPOVER 2 : TÂCHE EN COURS -->
-            <div id="task-popover" class="hidden absolute right-0 top-14 w-96 z-50 space-y-3" onclick="event.stopPropagation()">
+            <div id="task-popover" class="hidden absolute right-14 top-14 w-96 z-50 space-y-3" onclick="event.stopPropagation()">
                 <div class="ui-card rounded-3xl shadow-2xl p-5 relative">
                     <div id="task-empty-state" class="text-center space-y-4 py-2">
                         <div class="text-base font-extrabold">Aucune tâche en cours</div>
@@ -128,7 +129,7 @@
                                 </svg>
                             </button>
                             <button id="btn-task-warning" onclick="toggleTaskMissingMetaSubpanel(event)" title="Certaines métadonnées sont manquantes"
-                                    class="hidden absolute right-1 bottom-0.5 text-[#593E5A] hover:scale-110 transition">
+                                    class="hidden absolute right-1 bottom-0.5 text-amber-500 hover:scale-110 transition">
                                 <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>

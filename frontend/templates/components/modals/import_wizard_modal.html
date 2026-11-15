@@ -1,5 +1,5 @@
 <!-- ==================== FENÊTRE D'IMPORTATION EN 3 ÉTAPES ==================== -->
-<div id="import-wizard-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeImportWizard()">
+<div id="import-wizard-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeImportWizard()">
     <div class="ui-card rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
 
         <!-- ÉTAPE 1 : Importer des fichiers (Glisser-déposer, Dossier ou Google Photos) -->
@@ -11,8 +11,8 @@
 
             <div id="drop-zone"
                  onclick="document.getElementById('hidden-file-input').click()"
-                 ondragover="event.preventDefault(); this.classList.add('ring-2','ring-[#593E5A]')"
-                 ondragleave="this.classList.remove('ring-2','ring-[#593E5A]')"
+                 ondragover="event.preventDefault(); this.classList.add('ring-2','ring-current')"
+                 ondragleave="this.classList.remove('ring-2','ring-current')"
                  ondrop="handleDroppedFiles(event)"
                  class="ui-pill rounded-2xl h-28 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:opacity-90 transition">
                 <svg class="w-6 h-6 opacity-50" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -22,14 +22,14 @@
                 <input id="hidden-file-input" type="file" multiple class="hidden" onchange="handleSelectedFilesInput(this.files)"/>
             </div>
 
-            <button onclick="pickStandardFolderForImport()" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+            <button onclick="pickStandardFolderForImport()" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 </div>
                 <span class="text-sm font-extrabold">Sélectionner un dossier</span>
             </button>
 
-            <button onclick="showImportStep(2)" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+            <button onclick="showImportStep(2)" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -50,14 +50,14 @@
                 <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
             </div>
 
-            <button onclick="pickTakeoutSource('TAKEOUT_FOLDER')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+            <button onclick="pickTakeoutSource('TAKEOUT_FOLDER')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 </div>
                 <span class="text-sm font-extrabold">Dossier décompressé</span>
             </button>
 
-            <button onclick="pickTakeoutSource('TAKEOUT_ZIPS')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl hover:bg-black/5 transition text-left">
+            <button onclick="pickTakeoutSource('TAKEOUT_ZIPS')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>

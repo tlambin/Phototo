@@ -24,16 +24,19 @@ const FULL_MONTHS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin
 
 function getSelectIconHTML(isSelected) {
     if (isSelected) {
-        return `<div class="w-5 h-5 rounded-full border-2 border-[#A385A6] bg-white/90 flex items-center justify-center shadow-sm">
-                    <div class="w-2.5 h-2.5 rounded-full bg-[#A385A6]"></div>
+        return `<div class="select-badge-checked w-6 h-6 rounded-full flex items-center justify-center scale-100 transition-transform duration-150">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>`;
     }
-    return `<div class="w-4 h-4 rounded-full border-[1.8px] border-[#A385A6]/80 bg-white/40 opacity-0 group-hover:opacity-100 transition"></div>`;
+    return `<div class="select-badge-idle w-6 h-6 rounded-full border-2 border-white/90 bg-black/25 backdrop-blur-sm flex items-center justify-center text-white/75 opacity-0 group-hover:opacity-100 hover:scale-110 transition-all duration-150 shadow-sm">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>`;
 }
 
 function getFavHeartHTML(isFav) {
-    const fill = isFav ? '#A385A6' : 'none';
-    return `<svg class="w-5 h-5 drop-shadow-sm" fill="${fill}" stroke="#A385A6" stroke-width="2" viewBox="0 0 24 24">
+    const fill = isFav ? '#ef4444' : 'rgba(0,0,0,0.25)';
+    const stroke = isFav ? '#ef4444' : 'rgba(255,255,255,0.92)';
+    return `<svg class="w-6 h-6 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" fill="${fill}" stroke="${stroke}" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
             </svg>`;
 }
@@ -130,8 +133,8 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
     const durText = formatDuration(it.duration_sec);
 
     const borderClass = isSel
-        ? 'ring-[6px] ring-[#A385A6] dark:ring-[#8B6B8E]'
-        : 'hover:ring-2 hover:ring-[#A385A6]/50';
+        ? 'tile-selected'
+        : 'hover:ring-2 hover:ring-current/20';
 
     const favVisibility = it.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-85';
 
@@ -139,7 +142,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         <button type="button"
                 onclick="event.stopPropagation(); handleGalleryTileSelect(event, ${idx})"
                 title="Sélectionner"
-                class="tile-select-btn absolute top-2.5 left-2.5 z-10 p-0.5">
+                class="tile-select-btn absolute top-2 left-2 z-10 p-0.5">
             ${getSelectIconHTML(isSel)}
         </button>`;
 
@@ -147,14 +150,14 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         <button type="button"
                 onclick="event.stopPropagation(); toggleTileFavoriteDirect(${idx})"
                 title="Favori"
-                class="tile-fav-btn absolute bottom-2.5 left-2.5 z-10 ${favVisibility} hover:scale-110 transition">
+                class="tile-fav-btn absolute top-2 right-2 z-10 p-0.5 ${favVisibility} hover:scale-110 transition">
             ${getFavHeartHTML(it.is_favorite)}
         </button>`;
 
     const videoBadge = isVid
-        ? `<div class="absolute bottom-2.5 right-2.5 z-10 bg-white/80 dark:bg-black/60 backdrop-blur-sm text-[#A385A6] text-[11px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
+        ? `<div class="absolute bottom-2.5 left-2.5 z-10 bg-black/30 backdrop-blur-sm text-white/95 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
+             <svg class="w-2.5 h-2.5 opacity-90" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
              <span>${durText}</span>
-             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
            </div>`
         : '';
 
@@ -171,7 +174,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         const padCls = gallerySize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (gallerySize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
         const titleCls = gallerySize === 'SM' ? 'text-xs' : (gallerySize === 'LG' ? 'text-base' : 'text-sm');
 
-        const listSelectBorder = isSel ? 'ring-2 ring-[#A385A6] dark:ring-[#8B6B8E]' : 'hover:ring-1 hover:ring-[#A385A6]/50';
+        const listSelectBorder = isSel ? 'tile-selected-list' : 'hover:ring-1 hover:ring-current/20';
         const metaParts = [dtStr, dimStr, sizeStr].filter(Boolean).join(' • ');
 
         return `
@@ -185,7 +188,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
             </button>
             <div class="relative shrink-0 ${thumbSizeCls} overflow-hidden bg-black/10">
                 <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-full object-cover select-none pointer-events-none"/>
-                ${isVid ? `<span class="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">${durText}</span>` : ''}
+                ${isVid ? `<span class="absolute bottom-1 left-1 bg-black/35 backdrop-blur-sm text-white/95 text-[9px] font-semibold tabular-nums px-1.5 py-[1px] rounded-full pointer-events-none">${durText}</span>` : ''}
             </div>
             <div class="flex-1 min-w-0">
                 <div class="font-bold truncate ${titleCls}">${fileName}</div>
@@ -704,12 +707,10 @@ function updateSingleTileSelectionDOM(idx, isSelected) {
     const tile = _getActiveMediaTileEl(idx);
     if (!tile) return;
     if (galleryLayout === 'LIST') {
-        tile.classList.toggle('ring-2', isSelected);
+        tile.classList.toggle('tile-selected-list', isSelected);
     } else {
-        tile.classList.toggle('ring-[6px]', isSelected);
+        tile.classList.toggle('tile-selected', isSelected);
     }
-    tile.classList.toggle('ring-[#A385A6]', isSelected);
-    tile.classList.toggle('dark:ring-[#8B6B8E]', isSelected);
     const btn = tile.querySelector('.tile-select-btn');
     if (btn) btn.innerHTML = getSelectIconHTML(isSelected);
 }
@@ -777,10 +778,15 @@ function selectAllGalleryPage(chk) {
 }
 
 function updateGalleryBatchBar() {
-    document.getElementById('gal-batch-bar').classList.toggle('hidden', selectedGalleryPaths.size === 0);
+    const hasSelection = selectedGalleryPaths.size > 0;
+    document.getElementById('gal-batch-bar').classList.toggle('hidden', !hasSelection);
     document.getElementById('gal-batch-count').textContent = `${selectedGalleryPaths.size} sélectionné(s)`;
     const remBtn = document.getElementById('btn-batch-album-remove');
     if (remBtn) remBtn.classList.toggle('hidden', !openedAlbumName);
+    ['gallery-content-area', 'album-single-content-area'].forEach(id => {
+        const area = document.getElementById(id);
+        if (area) area.classList.toggle('selection-active', hasSelection);
+    });
 }
 
 async function runGalleryBatch(action) {
@@ -875,13 +881,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
 });
 
+function _timelineItemClass(isFiltered, isActive, activeTextSize, inactiveClasses) {
+    if (isFiltered) {
+        return `plum-btn pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none ${activeTextSize} font-extrabold shadow-sm cursor-pointer transition text-right`;
+    }
+    if (isActive) {
+        return `nav-item-active pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none ${activeTextSize} font-extrabold shadow-sm cursor-pointer transition text-right`;
+    }
+    return `${inactiveClasses} opacity-55 hover:opacity-100 cursor-pointer py-0.5 pl-1 pr-2 transition text-right`;
+}
+
 function renderTimelineScrubberDOM() {
     const scrubber = document.getElementById('gallery-timeline-box');
     const container = document.getElementById('timeline-items-container');
     if (!scrubber || !container) return;
 
     if (!cachedTimelineData.length) {
-        container.innerHTML = `<span class="text-[9px] opacity-40">—</span>`;
+        container.innerHTML = `<span class="text-[9px] opacity-40 pr-2">—</span>`;
         return;
     }
 
@@ -893,12 +909,7 @@ function renderTimelineScrubberDOM() {
     container.innerHTML = cachedTimelineData.map(yObj => {
         const isYearActive = String(yObj.year) === String(expandedYear);
         const isYearFiltered = String(yObj.year) === String(selectedYear);
-
-        const yearBtnClass = isYearFiltered
-            ? 'plum-btn px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shadow-sm cursor-pointer transition'
-            : (isYearActive
-                ? 'nav-item-active px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shadow-sm cursor-pointer transition'
-                : 'opacity-55 hover:opacity-100 text-[11px] font-extrabold cursor-pointer py-0.5 transition');
+        const yearBtnClass = _timelineItemClass(isYearFiltered, isYearActive, 'text-[11px]', 'text-[11px] font-extrabold');
 
         let monthsHtml = '';
         if (isYearActive && yObj.months && yObj.months.length) {
@@ -909,11 +920,7 @@ function renderTimelineScrubberDOM() {
                     const mName = SHORT_MONTHS_FR[mNum] || mCode;
                     const isMonthFiltered = isYearFiltered && String(selectedMonth) === mCode;
                     const isMonthVisible = String(activeMonth) === mCode;
-                    const mClass = isMonthFiltered
-                        ? 'plum-btn pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none text-[9px] font-extrabold shadow-sm cursor-pointer transition text-right'
-                        : (isMonthVisible
-                            ? 'nav-item-active pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none text-[9px] font-extrabold shadow-sm cursor-pointer transition text-right'
-                            : 'text-[8px] font-bold opacity-55 hover:opacity-100 cursor-pointer py-0.5 pl-1 pr-2 transition text-right');
+                    const mClass = _timelineItemClass(isMonthFiltered, isMonthVisible, 'text-[9px]', 'text-[8px] font-bold');
                     return `<div onclick="event.stopPropagation(); selectTimelineMonth('${yObj.year}', '${mCode}')"
                                  title="${FULL_MONTHS_FR[mNum]} ${yObj.year} (${mObj.count})"
                                  class="${mClass}">${mName}</div>`;
@@ -922,7 +929,7 @@ function renderTimelineScrubberDOM() {
         }
 
         return `
-            <div ${isYearActive ? 'id="tl-active-year"' : ''} class="w-full flex flex-col items-center">
+            <div ${isYearActive ? 'id="tl-active-year"' : ''} class="w-full flex flex-col items-end">
                 <div onclick="event.stopPropagation(); selectTimelineYear('${yObj.year}')"
                      title="${yObj.year} (${yObj.count} médias)"
                      class="${yearBtnClass}">
@@ -1014,6 +1021,30 @@ function setAlbumSize(size) {
     localStorage.setItem('phototo_album_size', size);
     syncAlbumLayoutSizeButtons();
     renderAlbumsOverviewFromCache();
+}
+
+function _syncSortDirButtonUI(isAsc, btnId, arrowId) {
+    const arrow = document.getElementById(arrowId);
+    const btn = document.getElementById(btnId);
+    if (arrow) arrow.classList.toggle('rotate-180', isAsc);
+    if (btn) btn.title = isAsc ? 'Ordre croissant (cliquer pour inverser)' : 'Ordre décroissant (cliquer pour inverser)';
+}
+
+function _toggleSortOrderInput(inputId, btnId, arrowId, onChange) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const isAsc = input.value !== 'asc';
+    input.value = isAsc ? 'asc' : 'desc';
+    _syncSortDirButtonUI(isAsc, btnId, arrowId);
+    if (typeof onChange === 'function') onChange();
+}
+
+function toggleGallerySortOrder() {
+    _toggleSortOrderInput('gal-sort-order', 'gal-sort-dir-btn', 'gal-sort-arrow', refreshActiveMediaView);
+}
+
+function toggleAlbumSortOrder() {
+    _toggleSortOrderInput('alb-sort-order', 'alb-sort-dir-btn', 'alb-sort-arrow', onAlbumControlsChanged);
 }
 
 function onAlbumControlsChanged() {
@@ -3610,11 +3641,7 @@ let lbAlbumsEditorSortDir = 'desc';
 function _syncLightboxAlbumEditorSortUI() {
     const sel = document.getElementById('lb-albums-edit-sort-by');
     if (sel) sel.value = lbAlbumsEditorSortBy;
-    const arrow = document.getElementById('lb-albums-edit-sort-arrow');
-    const btn = document.getElementById('lb-albums-edit-sort-dir-btn');
-    const isAsc = lbAlbumsEditorSortDir === 'asc';
-    if (arrow) arrow.classList.toggle('rotate-180', isAsc);
-    if (btn) btn.title = isAsc ? 'Ordre croissant (cliquer pour inverser)' : 'Ordre décroissant (cliquer pour inverser)';
+    _syncSortDirButtonUI(lbAlbumsEditorSortDir === 'asc', 'lb-albums-edit-sort-dir-btn', 'lb-albums-edit-sort-arrow');
 }
 
 function onChangeLightboxAlbumEditorSortBy() {

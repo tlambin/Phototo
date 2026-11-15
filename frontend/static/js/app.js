@@ -115,8 +115,8 @@ function renderMediaPreview(destPath, css = "w-full h-40 object-cover rounded-2x
         return `
         <div class="relative w-full h-full">
             <img src="${url}" loading="lazy" decoding="async" class="${css}"/>
-            <span class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
-                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="absolute bottom-1.5 left-1.5 bg-black/30 backdrop-blur-sm text-white/95 px-1.5 py-1 rounded-full flex items-center pointer-events-none">
+                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
             </span>
         </div>`;
     }
@@ -345,7 +345,7 @@ function setGalleryViewMode(mode) {
         const b = document.getElementById(`view-btn-${m}`);
         if (b) {
             b.className = (m === mode)
-                ? "px-2.5 py-1 rounded-lg bg-[#593E5A] text-white"
+                ? "px-2.5 py-1 rounded-lg plum-btn"
                 : "px-2.5 py-1 rounded-lg";
         }
     });

@@ -84,7 +84,7 @@ function renderCustomSubfoldersList() {
             <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer font-bold">
                 <input type="checkbox" ${sf.include ? 'checked' : ''}
                        onchange="wizardDetectedSubfolders[${idx}].include = this.checked"
-                       class="w-3.5 h-3.5 accent-[#593E5A] shrink-0"/>
+                       class="w-3.5 h-3.5 accent-[var(--accent)] shrink-0"/>
                 <span class="truncate" title="${sf.display_name}">${sf.display_name}</span>
                 <span class="opacity-50 text-[10px] shrink-0">(${sf.media_count})</span>
             </label>
@@ -92,7 +92,7 @@ function renderCustomSubfoldersList() {
                 <label class="flex items-center gap-1 text-[10px] opacity-80 cursor-pointer" title="Créer un album pour ce sous-dossier">
                     <input type="checkbox" ${sf.create_album ? 'checked' : ''}
                            onchange="wizardDetectedSubfolders[${idx}].create_album = this.checked; document.getElementById('wiz-sf-alb-${idx}').disabled = !this.checked;"
-                           class="w-3 h-3 accent-[#593E5A]"/>
+                           class="w-3 h-3 accent-[var(--accent)]"/>
                     <span>Album:</span>
                 </label>
                 <input id="wiz-sf-alb-${idx}" type="text" value="${(sf.album_name || '').replace(/"/g, '&quot;')}"
@@ -214,7 +214,7 @@ function rePickStep3Paths() {
 async function handleDroppedFiles(event) {
     event.preventDefault();
     const dz = document.getElementById('drop-zone');
-    if (dz) dz.classList.remove('ring-2', 'ring-[#593E5A]');
+    if (dz) dz.classList.remove('ring-2', 'ring-current');
     if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
         await handleSelectedFilesInput(event.dataTransfer.files);
     }

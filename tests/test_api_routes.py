@@ -69,6 +69,14 @@ class TestApiRoutes(unittest.TestCase):
             "/static/js/studio_exif.js",
         ):
             self.assertIn(js, html)
+        for legacy_col in ("#593E5A", "#8B6B8E", "#A385A6"):
+            self.assertNotIn(legacy_col, html)
+
+        theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
+        for tok in ("backdrop-filter: blur(", "--btn-bg: #18181B;", "--btn-bg: #FFFFFF;", "--bg-active: #18181B;", "--bg-active: #FFFFFF;", "background: transparent;", ".count-pill:empty", ".sticky-view-header.is-stuck .sticky-hide-on-stuck", ".sticky-options-header.is-stuck"):
+            self.assertIn(tok, theme_css)
+        self.assertIn('class="sticky-hide-on-stuck flex flex-wrap items-center gap-3"', html)
+        self.assertIn('id="gal-total-label" class="count-pill ui-card', html)
 
     def test_stats_and_gallery_items_and_favorites(self):
         img = self.dest_dir / "photo1.jpg"
@@ -348,11 +356,15 @@ class TestApiRoutes(unittest.TestCase):
         html = main.templates.get_template("index.html").render()
         for token in (
             'value="modified"', "layout-btn-LIST", "size-btn-SM", "size-btn-MD", "size-btn-LG",
-            "gal-options-btn", "alb-options-btn", "albums-options-drawer",
-            "alb-sort-by", "alb-sort-order", "alb-layout-btn-GRID", "alb-layout-btn-LIST",
+            "gal-options-btn", "gal-sort-dir-btn", "gal-sort-arrow", "toggleGallerySortOrder()",
+            "alb-options-btn", "albums-options-drawer",
+            "alb-sort-by", "alb-sort-order", "alb-sort-dir-btn", "alb-sort-arrow", "toggleAlbumSortOrder()",
+            "alb-layout-btn-GRID", "alb-layout-btn-LIST",
             "alb-size-btn-SM", "alb-size-btn-MD", "alb-size-btn-LG",
         ):
             self.assertIn(token, html)
+        self.assertNotIn("<option value=\"desc\">Décroissant</option>", html)
+        self.assertNotIn("<option value=\"asc\">Croissant</option>", html)
 
         conn = database.get_db()
         rows = [

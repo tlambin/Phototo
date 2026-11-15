@@ -1,6 +1,6 @@
 <!-- ==================== MODALES DE CONFIGURATION (CRÉER/MODIFIER BIBLIOTHÈQUE, FUSION, VISAGE, EXIF, STUDIO) ==================== -->
 <!-- ==================== 1, 2 & 3. MODALE BIBLIOTHÈQUE (CRÉER / MODIFIER / SUPPRIMER) ==================== -->
-<div id="library-modal" class="hidden fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeLibraryModal()">
+<div id="library-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeLibraryModal()">
 
     <!-- ÉCRAN 1 : CRÉER UNE BIBLIOTHÈQUE (Maquette 1) -->
     <div id="lib-view-create" class="ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-5 relative">
@@ -8,7 +8,7 @@
 
         <div class="text-center">
             <h2 class="text-base font-extrabold pb-2">Créer une bibliotheque</h2>
-            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+            <div class="w-3/4 mx-auto h-[2px] ui-divider rounded-full"></div>
         </div>
 
         <input id="lib-create-name" type="text" placeholder="Choisir un nom"
@@ -19,7 +19,7 @@
             <div id="lib-create-selected-path" class="hidden text-[11px] font-bold opacity-60 truncate px-1"></div>
 
             <button type="button" onclick="pickLibraryFolder('create', false)"
-                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -29,7 +29,7 @@
             </button>
 
             <button type="button" onclick="pickLibraryFolder('create', true)"
-                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
@@ -52,7 +52,7 @@
 
         <div class="text-center">
             <h2 class="text-base font-extrabold pb-2">Modifier la bibliotheque</h2>
-            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+            <div class="w-3/4 mx-auto h-[2px] ui-divider rounded-full"></div>
         </div>
 
         <div class="space-y-2">
@@ -71,7 +71,7 @@
             </div>
 
             <button type="button" onclick="pickLibraryFolder('edit', false)"
-                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -81,7 +81,7 @@
             </button>
 
             <button type="button" onclick="pickLibraryFolder('edit', true)"
-                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition text-left">
+                    class="w-full flex items-center gap-3.5 p-1 rounded-2xl ui-hover transition text-left">
                 <div class="plum-btn w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
@@ -120,7 +120,7 @@
 
         <div>
             <h2 class="text-base font-extrabold pb-2">Supprimer la bibliotheque</h2>
-            <div class="w-3/4 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+            <div class="w-3/4 mx-auto h-[2px] ui-divider rounded-full"></div>
         </div>
 
         <p class="text-xs font-extrabold leading-relaxed px-2">
@@ -137,7 +137,7 @@
         </div>
 
         <label class="inline-flex items-center justify-center gap-2 cursor-pointer text-[11px] font-extrabold pt-1">
-            <input id="lib-delete-win-files" type="checkbox" class="w-3.5 h-3.5 rounded accent-[#593E5A] cursor-pointer"/>
+            <input id="lib-delete-win-files" type="checkbox" class="w-3.5 h-3.5 rounded accent-[var(--accent)] cursor-pointer"/>
             <span>Supprimer les fichiers de windows</span>
         </label>
     </div>
@@ -145,7 +145,7 @@
 </div>
 
 <!-- ==================== 4, 5 & 6. MODALE FUSION & GESTION DES DOUBLONS AUTOMATIQUE ==================== -->
-<div id="merge-lib-modal" class="hidden fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeMergeLibraryModal()">
+<div id="merge-lib-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeMergeLibraryModal()">
 
     <!-- ÉCRAN 4 : FUSIONNER LA BIBLIOTHÈQUE (Maquette 4) -->
     <div id="merge-step-select" class="ui-card rounded-[28px] max-w-xs w-full p-6 shadow-2xl space-y-4 relative text-center">
@@ -195,7 +195,7 @@
     <div id="merge-step-done" class="hidden ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-5 relative text-center">
         <div>
             <h2 class="text-base font-extrabold pb-2">Fusion terminée avec succès</h2>
-            <div class="w-4/5 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+            <div class="w-4/5 mx-auto h-[2px] ui-divider rounded-full"></div>
         </div>
 
         <div class="space-y-1 text-xs font-extrabold">
@@ -224,7 +224,7 @@
         <div class="ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-4 relative text-left">
             <div class="text-center">
                 <h2 class="text-base font-extrabold pb-2">Gestion des doublons automatique</h2>
-                <div class="w-4/5 mx-auto h-[2px] bg-black/10 dark:bg-white/10 rounded-full"></div>
+                <div class="w-4/5 mx-auto h-[2px] ui-divider rounded-full"></div>
             </div>
 
             <!-- Choix Radio : Garder les deux / Ne garder qu'un seul -->
@@ -253,11 +253,11 @@
                 <!-- Cases à cocher -->
                 <div class="space-y-1.5 pl-4 text-[10px] font-extrabold">
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input id="autodup-chk-albums" type="checkbox" checked class="w-3 h-3 accent-[#593E5A]"/>
+                        <input id="autodup-chk-albums" type="checkbox" checked class="w-3 h-3 accent-[var(--accent)]"/>
                         <span>Mettre à jour les albums existants</span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input id="autodup-chk-trash" type="checkbox" checked class="w-3 h-3 accent-[#593E5A]"/>
+                        <input id="autodup-chk-trash" type="checkbox" checked class="w-3 h-3 accent-[var(--accent)]"/>
                         <span>Déplacer les doublons dans la corbeille</span>
                     </label>
                 </div>
