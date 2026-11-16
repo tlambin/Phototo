@@ -77,6 +77,11 @@ class TestApiRoutes(unittest.TestCase):
             self.assertIn(tok, theme_css)
         self.assertIn('class="sticky-hide-on-stuck flex flex-wrap items-center gap-3"', html)
         self.assertIn('id="gal-total-label" class="count-pill ui-card', html)
+        self.assertIn('id="floating-topbar"', html)
+        self.assertIn('#floating-topbar::before', theme_css)
+        sidebar_start = html.index('id="main-sidebar"')
+        sidebar_end = html.index('</aside>', sidebar_start)
+        self.assertIn('id="topbar-logo-box"', html[sidebar_start:sidebar_end])
 
     def test_stats_and_gallery_items_and_favorites(self):
         img = self.dest_dir / "photo1.jpg"
@@ -883,9 +888,11 @@ class TestApiRoutes(unittest.TestCase):
             "lb-faces-edit-modal",
             "lb-btn-close",
             "lb-btn-edit",
+            "lb-btn-delete",
+            "hover:bg-rose-500/20 hover:text-rose-400",
             "hover:text-orange-300",
             "hover:text-emerald-300",
-            "hover:text-pink-300",
+            "hover:text-rose-400",
             "hover:text-purple-300",
             "hover:text-sky-300",
             "hover:text-amber-300",
@@ -928,7 +935,10 @@ class TestApiRoutes(unittest.TestCase):
             "lb-faces-persons-datalist",
             "async function rerunLightboxFacesAnalysis(",
             "function syncLightboxInfoButtonState(",
-            "icon.setAttribute('fill', '#f9a8d4')",
+            "icon.setAttribute('fill', '#fb7185')",
+            "function openBatchTrashConfirm(",
+            "async function downloadGalleryBatch(",
+            "async function shareGalleryBatch(",
             "function handleLightboxFilmstripWheel(",
             "function handleLightboxWheel(",
             "function updateLightboxEditButton(",
@@ -1292,6 +1302,86 @@ class TestApiRoutes(unittest.TestCase):
                 self.assertEqual(row["longitude"], 0.0)
             finally:
                 conn.close()
+
+    def test_gallery_batch_bar_actions_and_batch_download(self):
+        import zipfile
+
+        html = main.templates.get_template("index.html").render()
+        batch_start = html.index('id="gal-batch-bar"')
+        batch_end = html.index('id="tab-gallery"', batch_start)
+        batch_html = html[batch_start:batch_end]
+        for snippet in (
+            "runGalleryBatch('FAVORITE_ADD')",
+            "openBatchAlbumsEditor()",
+            "shareGalleryBatch()",
+            "downloadGalleryBatch()",
+            "openBatchAnalyzeModal()",
+            "gal-batch-analyze-btn",
+            "openMetadataModalForSelection()",
+            "runGalleryBatch('TRASH')",
+            "hover:text-rose-400",
+            "hover:text-purple-300",
+            "hover:text-sky-300",
+            "hover:text-emerald-300",
+            "Analyser les médias",
+            "hover:text-orange-300",
+            "hover:bg-rose-500/20 hover:text-rose-400",
+        ):
+            self.assertIn(snippet, batch_html)
+
+        self.assertIn('id="lb-analyze-modal" class="hidden fixed inset-0 z-[60]', html)
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
+        self.assertIn("function openBatchAnalyzeModal(", gallery_js)
+        self.assertIn("async function _runBatchMediaAnalysis(", gallery_js)
+        self.assertIn("function syncBatchBarBounds(", gallery_js)
+        self.assertIn("syncBatchBarBounds();", app_js)
+        self.assertIn(".sticky-options-header {\n  z-index: 28;", theme_css)
+
+        dir_a = self.dest_dir / "a"
+        dir_b = self.dest_dir / "b"
+        dir_a.mkdir(parents=True, exist_ok=True)
+        dir_b.mkdir(parents=True, exist_ok=True)
+        f1 = dir_a / "dupname.jpg"
+        f2 = dir_b / "dupname.jpg"
+        f1.write_bytes(b"img-one")
+        f2.write_bytes(b"img-two")
+
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, status, is_duplicate, is_trashed) VALUES (?, ?, 'ok', 0, 0)",
+                ("src_dl_1", str(f1)),
+            )
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, status, is_duplicate, is_trashed) VALUES (?, ?, 'ok', 0, 0)",
+                ("src_dl_2", str(f2)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        single_resp = gallery_router.api_gallery_batch_download(
+            gallery_router.GalleryBatchDownloadPayload(source_paths=["src_dl_1"])
+        )
+        self.assertEqual(Path(single_resp.path), f1)
+        self.assertEqual(single_resp.filename, "dupname.jpg")
+
+        zip_resp = gallery_router.api_gallery_batch_download(
+            gallery_router.GalleryBatchDownloadPayload(source_paths=["src_dl_1", "src_dl_2"])
+        )
+        self.assertEqual(zip_resp.media_type, "application/zip")
+        self.assertEqual(zip_resp.filename, "phototo_selection.zip")
+        zip_path = Path(zip_resp.path)
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                names = zf.namelist()
+                self.assertEqual(sorted(names), ["dupname (1).jpg", "dupname.jpg"])
+                self.assertEqual(zf.read("dupname.jpg"), b"img-one")
+                self.assertEqual(zf.read("dupname (1).jpg"), b"img-two")
+        finally:
+            zip_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

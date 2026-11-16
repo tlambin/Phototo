@@ -26,8 +26,8 @@
                     </svg>
                 </button>
                 <!-- Corbeille / Supprimer -->
-                <button onclick="lightboxDeleteMedia()" title="Mettre à la corbeille (Suppr)"
-                        class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-red-300 flex items-center justify-center transition">
+                <button id="lb-btn-delete" onclick="lightboxDeleteMedia()" title="Mettre à la corbeille (Suppr)"
+                        class="w-7 h-7 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M3 6h18"/>
                         <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -79,7 +79,7 @@
         <div class="flex items-center gap-1 bg-white/10 backdrop-blur-md text-white p-1 rounded-full">
             <!-- Favori -->
             <button id="lb-btn-fav" onclick="lightboxToggleFavorite()" title="Mettre en favori (F)"
-                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-pink-300 flex items-center justify-center transition">
+                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-rose-400 flex items-center justify-center transition">
                 <svg id="lb-fav-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
                 </svg>
@@ -426,118 +426,6 @@
             </div>
         </aside>
 
-    <!-- CONFIRMATION SUPPRESSION -->
-    <div id="lb-delete-confirm" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) cancelLightboxDelete()">
-        <div class="w-full max-w-xs bg-[#1E1E1E]/85 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl text-center space-y-4">
-            <div class="w-10 h-10 mx-auto rounded-full bg-red-500/20 text-red-300 flex items-center justify-center">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-            </div>
-            <div class="space-y-1">
-                <div class="text-sm font-bold">Mettre à la corbeille ?</div>
-                <div id="lb-delete-filename" class="text-xs text-white/60 truncate px-2"></div>
-            </div>
-            <div class="flex items-center justify-center gap-2 pt-1">
-                <button type="button" onclick="cancelLightboxDelete()"
-                        class="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition">
-                    Annuler
-                </button>
-                <button type="button" onclick="confirmLightboxDelete()"
-                        class="px-4 py-1.5 rounded-full bg-red-500/85 hover:bg-red-500 text-white text-xs font-semibold transition">
-                    Supprimer
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE ANALYSER LE MÉDIA (Visages & Analyse Visuelle) -->
-    <div id="lb-analyze-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAnalyzeModal()">
-        <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
-            <div class="flex items-center justify-between">
-                <div class="text-sm font-bold">Analyser le média</div>
-                <button type="button" onclick="closeLightboxAnalyzeModal()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
-            </div>
-
-            <!-- Étape 1 : Choix de l'analyse -->
-            <div id="lb-analyze-choice" class="space-y-2">
-                <p class="text-xs text-white/65">Choisissez le type d'analyse à exécuter uniquement sur ce média :</p>
-                <button type="button" onclick="runSingleMediaAnalysis(true, false)"
-                        class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition">
-                    <svg class="w-4 h-4 shrink-0 text-white/80" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    <div>
-                        <div class="text-xs font-bold">Reconnaissance faciale</div>
-                        <div class="text-[10px] text-white/60">Détecter et identifier les visages</div>
-                    </div>
-                </button>
-                <button type="button" onclick="runSingleMediaAnalysis(false, true)"
-                        class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition">
-                    <svg class="w-4 h-4 shrink-0 text-white/80" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                    </svg>
-                    <div>
-                        <div class="text-xs font-bold">Analyse visuelle</div>
-                        <div class="text-[10px] text-white/60">Proposer des catégories pour ce média</div>
-                    </div>
-                </button>
-                <button type="button" onclick="runSingleMediaAnalysis(true, true)"
-                        class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-left transition">
-                    <svg class="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-                    </svg>
-                    <div>
-                        <div class="text-xs font-bold">Les deux</div>
-                        <div class="text-[10px] text-white/70">Visages + éléments visuels</div>
-                    </div>
-                </button>
-            </div>
-
-            <!-- Étape 2 : Chargement -->
-            <div id="lb-analyze-loading" class="hidden py-6 flex flex-col items-center justify-center gap-3 text-center">
-                <div class="w-7 h-7 rounded-full border-2 border-white/25 border-t-white animate-spin"></div>
-                <div class="text-xs text-white/75 font-semibold">Analyse du média en cours...</div>
-            </div>
-
-            <!-- Étape 3 : Résultats & Validation -->
-            <div id="lb-analyze-results" class="hidden space-y-3">
-                <div id="lb-analyze-faces-section" class="hidden space-y-2">
-                    <div class="text-xs font-bold text-white/85">Visages détectés</div>
-                    <div id="lb-analyze-faces-body" class="flex flex-wrap items-center gap-2.5"></div>
-                </div>
-
-                <div id="lb-analyze-visual-section" class="hidden space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="text-xs font-bold text-white/85">Éléments visuels à catégoriser</div>
-                        <button type="button" onclick="runSingleMediaAnalysis(false, true)" title="Relancer l'analyse visuelle"
-                                class="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white/80 transition">
-                            ↻ Refaire l'analyse
-                        </button>
-                    </div>
-                    <div id="lb-analyze-visual-body" class="max-h-44 overflow-y-auto no-scrollbar flex flex-wrap gap-1.5"></div>
-                    <div class="flex items-center gap-1.5 pt-1">
-                        <input id="lb-analyze-custom-cat" type="text" placeholder="Ajouter une catégorie..."
-                               onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAnalyzeCategory();}"
-                               class="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-xl px-2.5 py-1 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
-                        <button type="button" onclick="addCustomAnalyzeCategory()" class="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-[11px] font-bold">+</button>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-                    <button type="button" onclick="closeLightboxAnalyzeModal()"
-                            class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition">
-                        Fermer
-                    </button>
-                    <button type="button" id="lb-analyze-validate-btn" onclick="confirmLightboxAnalyzeResults()"
-                            class="px-4 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
-                        Valider
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- MODALE ÉDITION DES VISAGES DU MÉDIA -->
     <div id="lb-faces-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxFacesEditor()">
         <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
@@ -558,83 +446,6 @@
                     </button>
                 </div>
                 <button type="button" onclick="closeLightboxFacesEditor()"
-                        class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
-                    Fermer
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE ÉDITION DES ALBUMS DU MÉDIA -->
-    <div id="lb-albums-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAlbumsEditor()">
-        <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
-            <div class="flex items-center justify-between">
-                <div class="text-sm font-bold">Ajouter à un album</div>
-                <button type="button" onclick="closeLightboxAlbumsEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
-            </div>
-
-            <div class="space-y-1.5">
-                <div class="text-[11px] font-bold text-white/70">Albums actuels</div>
-                <div id="lb-albums-edit-current" class="max-h-40 overflow-y-auto no-scrollbar space-y-1.5"></div>
-            </div>
-
-            <div class="space-y-2 pt-2 border-t border-white/10">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="text-[11px] font-bold text-white/70">Mes albums</div>
-                    <div class="flex items-center gap-1">
-                        <select id="lb-albums-edit-sort-by" onchange="onChangeLightboxAlbumEditorSortBy()"
-                                title="Trier la liste des albums"
-                                class="bg-black/40 border border-white/15 rounded-lg px-2 py-0.5 text-[10px] font-semibold text-white/85 focus:outline-none focus:border-white/40 cursor-pointer">
-                            <option value="date">Date</option>
-                            <option value="modified">Modification</option>
-                            <option value="name">Nom</option>
-                        </select>
-                        <button type="button" id="lb-albums-edit-sort-dir-btn" onclick="toggleLightboxAlbumEditorSortDir()"
-                                title="Ordre décroissant (cliquer pour inverser)"
-                                class="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white/80 hover:text-white flex items-center justify-center transition cursor-pointer">
-                            <svg id="lb-albums-edit-sort-arrow" class="w-3 h-3 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="relative flex items-center">
-                    <svg class="w-3.5 h-3.5 absolute left-2.5 text-white/45 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input id="lb-albums-edit-input" type="text" placeholder="Rechercher un album..."
-                           oninput="onInputLightboxAlbumSearch(this.value)"
-                           onkeydown="if(event.key==='Escape'&&this.value){event.stopPropagation();this.value='';onInputLightboxAlbumSearch('');}"
-                           class="w-full bg-black/40 border border-white/15 rounded-xl pl-8 pr-2.5 py-1.5 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
-                </div>
-                <div id="lb-albums-edit-available" class="max-h-40 overflow-y-auto no-scrollbar space-y-1"></div>
-                <div class="pt-0.5">
-                    <button type="button" id="lb-albums-edit-create-toggle" onclick="toggleLightboxAlbumCreateBox()"
-                            class="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-dashed border-white/20 text-[11px] font-bold text-white/85 hover:text-white transition cursor-pointer">
-                        + Créer un nouvel album
-                    </button>
-                    <div id="lb-albums-edit-create-box" class="hidden mt-2 p-2.5 rounded-xl bg-black/35 border border-white/15 space-y-2">
-                        <input id="lb-albums-edit-new-name" type="text" placeholder="Nom du nouvel album..."
-                               onkeydown="if(event.key==='Enter'){event.preventDefault();submitLightboxCreateAlbum();}"
-                               class="w-full bg-black/45 border border-white/15 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
-                        <div id="lb-albums-edit-new-source-wrap" class="hidden space-y-1">
-                            <label for="lb-albums-edit-new-source" class="block text-[10px] font-semibold text-white/65">Dossier source</label>
-                            <select id="lb-albums-edit-new-source"
-                                    class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white/85 focus:outline-none focus:border-white/40"></select>
-                        </div>
-                        <p id="lb-albums-edit-create-error" class="hidden text-[10px] text-red-300"></p>
-                        <div class="flex items-center justify-end gap-1.5">
-                            <button type="button" onclick="toggleLightboxAlbumCreateBox(false)"
-                                    class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-semibold transition">Annuler</button>
-                            <button type="button" onclick="submitLightboxCreateAlbum()"
-                                    class="px-3 py-1 rounded-lg bg-white text-[#1E1E1E] hover:bg-white/90 text-[10px] font-bold transition">Créer et ajouter</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-                <button type="button" onclick="closeLightboxAlbumsEditor()"
                         class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
                     Fermer
                 </button>
@@ -710,6 +521,198 @@
                         Enregistrer
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE ÉDITION / AJOUT À UN ALBUM (partagée Visionneuse + Sélection par lot) -->
+<div id="lb-albums-edit-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAlbumsEditor()">
+    <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="text-sm font-bold">Ajouter à un album</div>
+            <button type="button" onclick="closeLightboxAlbumsEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
+        </div>
+
+        <div class="space-y-1.5">
+            <div id="lb-albums-edit-current-label" class="text-[11px] font-bold text-white/70">Albums actuels</div>
+            <div id="lb-albums-edit-current" class="max-h-40 overflow-y-auto no-scrollbar space-y-1.5"></div>
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-white/10">
+            <div class="flex items-center justify-between gap-2">
+                <div class="text-[11px] font-bold text-white/70">Mes albums</div>
+                <div class="flex items-center gap-1">
+                    <select id="lb-albums-edit-sort-by" onchange="onChangeLightboxAlbumEditorSortBy()"
+                            title="Trier la liste des albums"
+                            class="bg-black/40 border border-white/15 rounded-lg px-2 py-0.5 text-[10px] font-semibold text-white/85 focus:outline-none focus:border-white/40 cursor-pointer">
+                        <option value="date">Date</option>
+                        <option value="modified">Modification</option>
+                        <option value="name">Nom</option>
+                    </select>
+                    <button type="button" id="lb-albums-edit-sort-dir-btn" onclick="toggleLightboxAlbumEditorSortDir()"
+                            title="Ordre décroissant (cliquer pour inverser)"
+                            class="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white/80 hover:text-white flex items-center justify-center transition cursor-pointer">
+                        <svg id="lb-albums-edit-sort-arrow" class="w-3 h-3 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="relative flex items-center">
+                <svg class="w-3.5 h-3.5 absolute left-2.5 text-white/45 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input id="lb-albums-edit-input" type="text" placeholder="Rechercher un album..."
+                       oninput="onInputLightboxAlbumSearch(this.value)"
+                       onkeydown="if(event.key==='Escape'&&this.value){event.stopPropagation();this.value='';onInputLightboxAlbumSearch('');}"
+                       class="w-full bg-black/40 border border-white/15 rounded-xl pl-8 pr-2.5 py-1.5 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
+            </div>
+            <div id="lb-albums-edit-available" class="max-h-40 overflow-y-auto no-scrollbar space-y-1"></div>
+            <div class="pt-0.5">
+                <button type="button" id="lb-albums-edit-create-toggle" onclick="toggleLightboxAlbumCreateBox()"
+                        class="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-dashed border-white/20 text-[11px] font-bold text-white/85 hover:text-white transition cursor-pointer">
+                    + Créer un nouvel album
+                </button>
+                <div id="lb-albums-edit-create-box" class="hidden mt-2 p-2.5 rounded-xl bg-black/35 border border-white/15 space-y-2">
+                    <input id="lb-albums-edit-new-name" type="text" placeholder="Nom du nouvel album..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();submitLightboxCreateAlbum();}"
+                           class="w-full bg-black/45 border border-white/15 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
+                    <div id="lb-albums-edit-new-source-wrap" class="hidden space-y-1">
+                        <label for="lb-albums-edit-new-source" class="block text-[10px] font-semibold text-white/65">Dossier source</label>
+                        <select id="lb-albums-edit-new-source"
+                                class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white/85 focus:outline-none focus:border-white/40"></select>
+                    </div>
+                    <p id="lb-albums-edit-create-error" class="hidden text-[10px] text-red-300"></p>
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button type="button" onclick="toggleLightboxAlbumCreateBox(false)"
+                                class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-semibold transition">Annuler</button>
+                        <button type="button" onclick="submitLightboxCreateAlbum()"
+                                class="px-3 py-1 rounded-lg bg-white text-[#1E1E1E] hover:bg-white/90 text-[10px] font-bold transition">Créer et ajouter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+            <button type="button" onclick="closeLightboxAlbumsEditor()"
+                    class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
+                Fermer
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- CONFIRMATION MISE À LA CORBEILLE (partagée Visionneuse + Sélection par lot) -->
+<div id="lb-delete-confirm" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) cancelLightboxDelete()">
+    <div class="w-full max-w-xs bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl text-center space-y-4">
+        <div class="w-10 h-10 mx-auto rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+            </svg>
+        </div>
+        <div class="space-y-1">
+            <div class="text-sm font-bold">Mettre à la corbeille ?</div>
+            <div id="lb-delete-filename" class="text-xs text-white/60 truncate px-2"></div>
+        </div>
+        <div class="flex items-center justify-center gap-2 pt-1">
+            <button type="button" onclick="cancelLightboxDelete()"
+                    class="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition cursor-pointer">
+                Annuler
+            </button>
+            <button type="button" onclick="confirmLightboxDelete()"
+                    class="px-4 py-1.5 rounded-full bg-rose-500/85 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer">
+                Mettre à la corbeille
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE ANALYSER LES MÉDIAS (partagée Visionneuse + Sélection par lot) -->
+<div id="lb-analyze-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAnalyzeModal()">
+    <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+            <div id="lb-analyze-title" class="text-sm font-bold">Analyser le média</div>
+            <button type="button" onclick="closeLightboxAnalyzeModal()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
+        </div>
+
+        <!-- Étape 1 : Choix de l'analyse -->
+        <div id="lb-analyze-choice" class="space-y-2">
+            <p id="lb-analyze-subtitle" class="text-xs text-white/65">Choisissez le type d'analyse à exécuter uniquement sur ce média :</p>
+            <button type="button" onclick="runSingleMediaAnalysis(true, false)"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition cursor-pointer">
+                <svg class="w-4 h-4 shrink-0 text-white/80" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                <div>
+                    <div class="text-xs font-bold">Reconnaissance faciale</div>
+                    <div class="text-[10px] text-white/60">Détecter et identifier les visages</div>
+                </div>
+            </button>
+            <button type="button" onclick="runSingleMediaAnalysis(false, true)"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition cursor-pointer">
+                <svg class="w-4 h-4 shrink-0 text-white/80" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                <div>
+                    <div class="text-xs font-bold">Analyse visuelle</div>
+                    <div class="text-[10px] text-white/60">Proposer des catégories visuelles</div>
+                </div>
+            </button>
+            <button type="button" onclick="runSingleMediaAnalysis(true, true)"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-left transition cursor-pointer">
+                <svg class="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                <div>
+                    <div class="text-xs font-bold">Les deux</div>
+                    <div class="text-[10px] text-white/70">Visages + éléments visuels</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Étape 2 : Chargement -->
+        <div id="lb-analyze-loading" class="hidden py-6 flex flex-col items-center justify-center gap-3 text-center">
+            <div class="w-7 h-7 rounded-full border-2 border-white/25 border-t-white animate-spin"></div>
+            <div id="lb-analyze-loading-text" class="text-xs text-white/75 font-semibold">Analyse du média en cours...</div>
+        </div>
+
+        <!-- Étape 3 : Résultats & Validation -->
+        <div id="lb-analyze-results" class="hidden space-y-3">
+            <div id="lb-analyze-faces-section" class="hidden space-y-2">
+                <div class="text-xs font-bold text-white/85">Visages détectés</div>
+                <div id="lb-analyze-faces-body" class="flex flex-wrap items-center gap-2.5"></div>
+            </div>
+
+            <div id="lb-analyze-visual-section" class="hidden space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="text-xs font-bold text-white/85">Éléments visuels à catégoriser</div>
+                    <button id="lb-analyze-redo-visual-btn" type="button" onclick="runSingleMediaAnalysis(false, true)" title="Relancer l'analyse visuelle"
+                            class="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white/80 transition">
+                        ↻ Refaire l'analyse
+                    </button>
+                </div>
+                <div id="lb-analyze-visual-body" class="max-h-44 overflow-y-auto no-scrollbar flex flex-wrap gap-1.5"></div>
+                <div id="lb-analyze-custom-cat-row" class="flex items-center gap-1.5 pt-1">
+                    <input id="lb-analyze-custom-cat" type="text" placeholder="Ajouter une catégorie..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAnalyzeCategory();}"
+                           class="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-xl px-2.5 py-1 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
+                    <button type="button" onclick="addCustomAnalyzeCategory()" class="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-[11px] font-bold">+</button>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                <button type="button" onclick="closeLightboxAnalyzeModal()"
+                        class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition">
+                    Fermer
+                </button>
+                <button type="button" id="lb-analyze-validate-btn" onclick="confirmLightboxAnalyzeResults()"
+                        class="px-4 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
+                    Valider
+                </button>
             </div>
         </div>
     </div>

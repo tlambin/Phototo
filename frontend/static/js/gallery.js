@@ -20,6 +20,7 @@ let gallerySize = localStorage.getItem('phototo_gallery_size') || 'MD';        /
 let galleryGroupBy = 'NONE';   // 'NONE' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
 
 const SHORT_MONTHS_FR = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const TIMELINE_MONTHS_FR = ["", "Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const FULL_MONTHS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
 function getSelectIconHTML(isSelected) {
@@ -34,8 +35,8 @@ function getSelectIconHTML(isSelected) {
 }
 
 function getFavHeartHTML(isFav) {
-    const fill = isFav ? '#ef4444' : 'rgba(0,0,0,0.25)';
-    const stroke = isFav ? '#ef4444' : 'rgba(255,255,255,0.92)';
+    const fill = isFav ? '#fb7185' : 'rgba(0,0,0,0.25)';
+    const stroke = isFav ? '#fb7185' : 'rgba(255,255,255,0.92)';
     return `<svg class="w-6 h-6 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" fill="${fill}" stroke="${stroke}" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
             </svg>`;
@@ -76,6 +77,7 @@ document.addEventListener('DOMContentLoaded', syncGalleryLayoutSizeButtons);
 
 function onChangeGroupBy(groupMode) {
     galleryGroupBy = groupMode;
+    updateFloatingGroupPill();
     refreshActiveMediaView();
 }
 
@@ -308,7 +310,13 @@ function appendMediaBatchToContainer(containerId, newItems, startIndex, reset = 
             lastRenderedGroupTitle[containerId] = title;
             const sectionHtml = `
                 <div class="space-y-3 group-section">
-                    <h3 class="text-sm font-extrabold opacity-80">${title}</h3>
+                    <div class="flex items-center gap-2.5">
+                        <button type="button" onclick="toggleGroupSectionSelection(this)" title="Tout sélectionner / désélectionner dans ce groupe"
+                                class="group-select-btn shrink-0 flex items-center justify-center cursor-pointer">
+                            ${getGroupSelectIconHTML('none')}
+                        </button>
+                        <h3 class="group-section-title text-sm font-extrabold opacity-80">${title}</h3>
+                    </div>
                     <div class="${gridClass}"></div>
                 </div>`;
             container.insertAdjacentHTML('beforeend', sectionHtml);
@@ -618,7 +626,10 @@ async function loadGalleryItems(append = false, customSkip = -1) {
         }
         updateGalleryBatchBar();
         updateGalleryPrevBar();
-        requestAnimationFrame(updateActiveTimelineFromScroll);
+        requestAnimationFrame(() => {
+            updateActiveTimelineFromScroll();
+            updateFloatingGroupPill();
+        });
     } finally {
         galleryIsLoading = false;
         if (spinner) spinner.classList.add('hidden');
@@ -678,7 +689,10 @@ async function loadPreviousGalleryItems() {
         }
         updateGalleryBatchBar();
         updateGalleryPrevBar();
-        requestAnimationFrame(updateActiveTimelineFromScroll);
+        requestAnimationFrame(() => {
+            updateActiveTimelineFromScroll();
+            updateFloatingGroupPill();
+        });
     } finally {
         galleryIsLoading = false;
         if (spinner) spinner.classList.add('hidden');
@@ -777,8 +791,118 @@ function selectAllGalleryPage(chk) {
     updateGalleryBatchBar();
 }
 
+function getGroupSelectIconHTML(state) {
+    if (state === 'all') {
+        return `<div class="select-badge-checked w-5 h-5 rounded-full flex items-center justify-center transition-transform duration-150">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>`;
+    }
+    if (state === 'partial') {
+        return `<div class="select-badge-checked w-5 h-5 rounded-full flex items-center justify-center opacity-85 transition-transform duration-150">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" viewBox="0 0 24 24"><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                </div>`;
+    }
+    return `<div class="w-5 h-5 rounded-full border-2 border-current/35 opacity-55 hover:opacity-100 hover:border-current flex items-center justify-center transition-all duration-150">
+                <svg class="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>`;
+}
+
+function _getGroupSectionSelectionState(sectionEl) {
+    if (!sectionEl) return { state: 'none', indices: [] };
+    const tiles = sectionEl.querySelectorAll('.media-tile[data-tile-idx]');
+    const indices = [];
+    let selected = 0;
+    tiles.forEach(tile => {
+        const idx = parseInt(tile.getAttribute('data-tile-idx'), 10);
+        const it = currentGalleryItems[idx];
+        if (!it || !it.source_path) return;
+        indices.push(idx);
+        if (selectedGalleryPaths.has(it.source_path)) selected++;
+    });
+    const state = (indices.length > 0 && selected === indices.length) ? 'all' : (selected > 0 ? 'partial' : 'none');
+    return { state, indices };
+}
+
+function syncGroupSectionSelectionButtons() {
+    document.querySelectorAll('.group-section .group-select-btn').forEach(btn => {
+        const sec = btn.closest('.group-section');
+        const { state } = _getGroupSectionSelectionState(sec);
+        btn.innerHTML = getGroupSelectIconHTML(state);
+    });
+    const floatBtn = document.getElementById('floating-group-select-btn');
+    if (floatBtn) {
+        if (_activeFloatingGroupSection && !_activeFloatingGroupSection.closest('#albums-grid')) {
+            const { state } = _getGroupSectionSelectionState(_activeFloatingGroupSection);
+            floatBtn.innerHTML = getGroupSelectIconHTML(state);
+            floatBtn.classList.remove('hidden');
+        } else {
+            floatBtn.classList.add('hidden');
+        }
+    }
+}
+
+function toggleGroupSectionElement(sectionEl) {
+    if (!sectionEl) return;
+    const { state, indices } = _getGroupSectionSelectionState(sectionEl);
+    if (!indices.length) return;
+    const willSelect = state !== 'all';
+    indices.forEach(idx => {
+        const it = currentGalleryItems[idx];
+        if (!it || !it.source_path) return;
+        if (willSelect) selectedGalleryPaths.add(it.source_path);
+        else selectedGalleryPaths.delete(it.source_path);
+        updateSingleTileSelectionDOM(idx, willSelect);
+    });
+    lastClickedGalleryIdx = null;
+    updateGalleryBatchBar();
+}
+
+function toggleGroupSectionSelection(btn) {
+    toggleGroupSectionElement(btn ? btn.closest('.group-section') : null);
+}
+
+function toggleActiveFloatingGroupSelection() {
+    toggleGroupSectionElement(_activeFloatingGroupSection);
+}
+
+function syncBatchBarBounds() {
+    const batchBar = document.getElementById('gal-batch-bar');
+    if (!batchBar || batchBar.classList.contains('hidden')) return;
+
+    const topbarEl = document.getElementById('floating-topbar');
+    const minTop = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().bottom + 8) : 88;
+    let topPx = minTop;
+
+    if (currentTab === 'gallery' || currentTab === 'favorites') {
+        const drawer = document.getElementById('filter-drawer');
+        const header = document.getElementById('gallery-sticky-header');
+        if (drawer && !drawer.classList.contains('hidden')) {
+            const dRect = drawer.getBoundingClientRect();
+            if (dRect.height > 0 && dRect.bottom > topPx) {
+                topPx = Math.ceil(dRect.bottom + 8);
+            }
+        } else if (header && !header.classList.contains('is-stuck')) {
+            const hRect = header.getBoundingClientRect();
+            if (hRect.height > 0 && hRect.bottom > minTop && hRect.top < minTop + 60) {
+                topPx = Math.ceil(hRect.bottom + 8);
+            }
+        }
+    } else if (currentTab === 'albums' && openedAlbumName) {
+        const albHeader = document.getElementById('album-single-sticky-header');
+        if (albHeader && !albHeader.classList.contains('is-scroll-hidden')) {
+            const aRect = albHeader.getBoundingClientRect();
+            if (aRect.height > 0 && aRect.bottom > minTop && aRect.top < minTop + 60) {
+                topPx = Math.ceil(aRect.bottom + 8);
+            }
+        }
+    }
+
+    batchBar.style.top = `${topPx}px`;
+}
+
 function updateGalleryBatchBar() {
-    const hasSelection = selectedGalleryPaths.size > 0;
+    const mediaVisible = currentTab === 'gallery' || currentTab === 'favorites' || (currentTab === 'albums' && !!openedAlbumName);
+    const hasSelection = mediaVisible && selectedGalleryPaths.size > 0;
     document.getElementById('gal-batch-bar').classList.toggle('hidden', !hasSelection);
     document.getElementById('gal-batch-count').textContent = `${selectedGalleryPaths.size} sélectionné(s)`;
     const remBtn = document.getElementById('btn-batch-album-remove');
@@ -787,10 +911,18 @@ function updateGalleryBatchBar() {
         const area = document.getElementById(id);
         if (area) area.classList.toggle('selection-active', hasSelection);
     });
+    syncGroupSectionSelectionButtons();
+    syncBatchBarBounds();
+    updateFloatingGroupPill();
 }
 
-async function runGalleryBatch(action) {
-    let alb = document.getElementById('batch-album-input').value.trim();
+async function runGalleryBatch(action, skipConfirm = false) {
+    if (action === 'TRASH' && !skipConfirm) {
+        openBatchTrashConfirm();
+        return;
+    }
+    if (selectedGalleryPaths.size === 0) return;
+    let alb = (document.getElementById('batch-album-input')?.value || '').trim();
     if (action === 'ALBUM_REMOVE' && !alb && openedAlbumName) {
         alb = openedAlbumName;
     }
@@ -803,6 +935,48 @@ async function runGalleryBatch(action) {
     await loadGalleryFilters();
     refreshActiveMediaView();
     loadStats();
+}
+
+function getSelectedGalleryItems() {
+    const bySrc = new Map();
+    (currentGalleryItems || []).forEach(it => {
+        if (it && it.source_path && selectedGalleryPaths.has(it.source_path)) {
+            bySrc.set(it.source_path, it);
+        }
+    });
+    return Array.from(selectedGalleryPaths).map(src => bySrc.get(src) || { source_path: src, dest_path: src });
+}
+
+async function downloadGalleryBatch() {
+    const items = getSelectedGalleryItems();
+    if (!items.length) return;
+    if (items.length === 1 && items[0].dest_path) {
+        const destPath = items[0].dest_path;
+        _triggerDownloadHref(`/media?path=${encodeURIComponent(destPath)}`, destPath.split(/[\\/]/).pop() || 'media');
+        return;
+    }
+    const res = await fetch('/api/gallery/batch_download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_paths: items.map(it => it.source_path) })
+    });
+    if (!res.ok) {
+        alert('Impossible de télécharger la sélection.');
+        return;
+    }
+    const blob = await res.blob();
+    const disp = res.headers.get('Content-Disposition') || '';
+    const match = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+    const fileName = match ? decodeURIComponent(match[1]) : 'phototo_selection.zip';
+    const url = URL.createObjectURL(blob);
+    _triggerDownloadHref(url, fileName);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function shareGalleryBatch() {
+    const items = getSelectedGalleryItems();
+    if (!items.length) return;
+    await _shareMediaItems(items);
 }
 
 // ==================== CASE TIMELINE DROITE (FILTRE AU CLIC ANNÉE / MOIS) ====================
@@ -830,6 +1004,7 @@ async function loadGalleryTimeline() {
     const d = await res.json();
     cachedTimelineData = d.timeline || [];
     renderTimelineScrubberDOM();
+    if (typeof syncTimelineWrapperBounds === 'function') syncTimelineWrapperBounds();
 }
 
 let activeScrollTimelineYear = '';
@@ -843,7 +1018,7 @@ function updateActiveTimelineFromScroll() {
     if (!tabGal || tabGal.classList.contains('hidden') || !scroller || !area) return;
 
     const scrollerRect = scroller.getBoundingClientRect();
-    const probeTop = scrollerRect.top + 80;
+    const probeTop = scrollerRect.top + 110;
     const tiles = area.querySelectorAll('.media-tile[data-ts]');
     let foundTs = 0;
 
@@ -877,18 +1052,104 @@ document.addEventListener('DOMContentLoaded', () => {
         _timelineScrollRaf = requestAnimationFrame(() => {
             _timelineScrollRaf = null;
             updateActiveTimelineFromScroll();
+            updateFloatingGroupPill();
         });
     }, { passive: true });
 });
 
-function _timelineItemClass(isFiltered, isActive, activeTextSize, inactiveClasses) {
+let _activeFloatingGroupSection = null;
+
+function _getActiveGroupedContainerAndMode() {
+    if (currentTab === 'albums') {
+        if (openedAlbumName) {
+            return { container: document.getElementById('album-single-content-area'), mode: galleryGroupBy, headerId: 'album-single-sticky-header', drawerId: 'filter-drawer' };
+        }
+        const albMode = document.getElementById('alb-group-by')?.value || 'NONE';
+        return { container: document.getElementById('albums-grid'), mode: albMode, headerId: 'albums-sticky-header', drawerId: 'albums-options-drawer' };
+    }
+    if (currentTab === 'gallery' || currentTab === 'favorites') {
+        return { container: document.getElementById('gallery-content-area'), mode: galleryGroupBy, headerId: 'gallery-sticky-header', drawerId: 'filter-drawer' };
+    }
+    return { container: null, mode: 'NONE', headerId: '', drawerId: '' };
+}
+
+function updateFloatingGroupPill() {
+    const pill = document.getElementById('floating-group-pill');
+    const scroller = document.getElementById('main-scroll-container');
+    if (!pill || !scroller) return;
+
+    const { container, mode, headerId, drawerId } = _getActiveGroupedContainerAndMode();
+    if (!container || mode === 'NONE' || (scroller.scrollTop || 0) <= 64) {
+        _activeFloatingGroupSection = null;
+        pill.classList.add('hidden');
+        pill.classList.remove('flex');
+        return;
+    }
+
+    const topbarEl = document.getElementById('floating-topbar');
+    let topAnchor = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().bottom + 10) : 90;
+    const batchBar = document.getElementById('gal-batch-bar');
+    if (batchBar && !batchBar.classList.contains('hidden')) {
+        topAnchor = Math.max(topAnchor, Math.ceil(batchBar.getBoundingClientRect().bottom + 8));
+    }
+    const header = headerId ? document.getElementById(headerId) : null;
+    const drawer = drawerId ? document.getElementById(drawerId) : null;
+    if (header && header.classList.contains('is-stuck') && drawer && !drawer.classList.contains('hidden')) {
+        topAnchor = Math.max(topAnchor, Math.ceil(drawer.getBoundingClientRect().bottom + 8));
+    }
+
+    const sections = container.querySelectorAll('.group-section');
+    let matchedSection = null;
+    let matchedLabel = '';
+    for (let i = 0; i < sections.length; i++) {
+        const sec = sections[i];
+        const titleEl = sec.querySelector('.group-section-title');
+        if (!titleEl || sec.offsetHeight < 260) continue;
+        const tRect = titleEl.getBoundingClientRect();
+        const sRect = sec.getBoundingClientRect();
+        if (tRect.top < topAnchor - 4 && sRect.bottom > topAnchor + 56) {
+            matchedSection = sec;
+            matchedLabel = titleEl.textContent.trim();
+        }
+    }
+
+    if (!matchedSection || !matchedLabel) {
+        _activeFloatingGroupSection = null;
+        pill.classList.add('hidden');
+        pill.classList.remove('flex');
+        return;
+    }
+
+    const cRect = container.getBoundingClientRect();
+    _activeFloatingGroupSection = matchedSection;
+    const lblBtn = document.getElementById('floating-group-label-btn');
+    if (lblBtn) lblBtn.textContent = matchedLabel;
+    pill.style.top = `${topAnchor}px`;
+    pill.style.left = `${Math.round(cRect.left)}px`;
+    pill.classList.remove('hidden');
+    pill.classList.add('flex');
+    syncGroupSectionSelectionButtons();
+}
+
+function scrollToActiveGroupTop() {
+    const scroller = document.getElementById('main-scroll-container');
+    if (!scroller || !_activeFloatingGroupSection) return;
+    const titleEl = _activeFloatingGroupSection.querySelector('.group-section-title');
+    if (!titleEl) return;
+    const topbarEl = document.getElementById('floating-topbar');
+    const offset = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().height + 16) : 96;
+    const target = Math.max(0, scroller.scrollTop + titleEl.getBoundingClientRect().top - offset);
+    scroller.scrollTo({ top: target, behavior: 'smooth' });
+}
+
+function _timelineItemClass(isFiltered, isActive, activeSize, inactiveClasses) {
     if (isFiltered) {
-        return `plum-btn pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none ${activeTextSize} font-extrabold shadow-sm cursor-pointer transition text-right`;
+        return `plum-btn w-full py-0.5 px-1 rounded-full ${activeSize} font-extrabold shadow-sm cursor-pointer transition text-center`;
     }
     if (isActive) {
-        return `nav-item-active pl-2.5 pr-2 py-0.5 rounded-l-full rounded-r-none ${activeTextSize} font-extrabold shadow-sm cursor-pointer transition text-right`;
+        return `nav-item-active w-full py-0.5 px-1 rounded-full ${activeSize} font-extrabold shadow-sm cursor-pointer transition text-center`;
     }
-    return `${inactiveClasses} opacity-55 hover:opacity-100 cursor-pointer py-0.5 pl-1 pr-2 transition text-right`;
+    return `${inactiveClasses} w-full opacity-45 hover:opacity-100 cursor-pointer py-0.5 px-1 rounded-full hover:bg-[var(--bg-hover)] transition text-center`;
 }
 
 function renderTimelineScrubberDOM() {
@@ -897,9 +1158,16 @@ function renderTimelineScrubberDOM() {
     if (!scrubber || !container) return;
 
     if (!cachedTimelineData.length) {
-        container.innerHTML = `<span class="text-[9px] opacity-40 pr-2">—</span>`;
+        container.classList.remove('justify-between');
+        container.classList.add('justify-center');
+        container.innerHTML = `<span class="text-[9px] opacity-40">—</span>`;
         return;
     }
+
+    const spreadYears = cachedTimelineData.length > 3;
+    container.classList.remove('justify-center');
+    container.classList.toggle('justify-between', spreadYears);
+    container.classList.toggle('justify-start', !spreadYears);
 
     const selectedYear = document.getElementById('gal-year')?.value || '';
     const selectedMonth = document.getElementById('gal-month')?.value || '';
@@ -909,18 +1177,18 @@ function renderTimelineScrubberDOM() {
     container.innerHTML = cachedTimelineData.map(yObj => {
         const isYearActive = String(yObj.year) === String(expandedYear);
         const isYearFiltered = String(yObj.year) === String(selectedYear);
-        const yearBtnClass = _timelineItemClass(isYearFiltered, isYearActive, 'text-[11px]', 'text-[11px] font-extrabold');
+        const yearBtnClass = _timelineItemClass(isYearFiltered, isYearActive, 'text-[10px]', 'text-[10px] font-extrabold');
 
         let monthsHtml = '';
         if (isYearActive && yObj.months && yObj.months.length) {
-            monthsHtml = `<div class="flex flex-col items-end space-y-0.5 py-1 w-full">` +
+            monthsHtml = `<div class="w-full flex flex-col items-center gap-0.5 py-1 px-0.5 mt-0.5 rounded-2xl bg-[var(--bg-pill)]">` +
                 yObj.months.map(mObj => {
                     const mCode = String(mObj.month).padStart(2, '0');
                     const mNum = parseInt(mObj.month, 10);
-                    const mName = SHORT_MONTHS_FR[mNum] || mCode;
+                    const mName = TIMELINE_MONTHS_FR[mNum] || mCode;
                     const isMonthFiltered = isYearFiltered && String(selectedMonth) === mCode;
                     const isMonthVisible = String(activeMonth) === mCode;
-                    const mClass = _timelineItemClass(isMonthFiltered, isMonthVisible, 'text-[9px]', 'text-[8px] font-bold');
+                    const mClass = _timelineItemClass(isMonthFiltered, isMonthVisible, 'text-[9px]', 'text-[9px] font-bold');
                     return `<div onclick="event.stopPropagation(); selectTimelineMonth('${yObj.year}', '${mCode}')"
                                  title="${FULL_MONTHS_FR[mNum]} ${yObj.year} (${mObj.count})"
                                  class="${mClass}">${mName}</div>`;
@@ -929,7 +1197,7 @@ function renderTimelineScrubberDOM() {
         }
 
         return `
-            <div ${isYearActive ? 'id="tl-active-year"' : ''} class="w-full flex flex-col items-end">
+            <div ${isYearActive ? 'id="tl-active-year"' : ''} class="w-full flex flex-col items-center">
                 <div onclick="event.stopPropagation(); selectTimelineYear('${yObj.year}')"
                      title="${yObj.year} (${yObj.count} médias)"
                      class="${yearBtnClass}">
@@ -1366,9 +1634,9 @@ function renderAlbumsOverviewFromCache() {
     const innerGridCls = getAlbumGridClass();
     grid.className = 'space-y-6';
     grid.innerHTML = groups.map(g => `
-        <section class="space-y-3">
+        <section class="space-y-3 group-section">
             <div class="flex items-center justify-between">
-                <h3 class="text-sm font-extrabold tracking-tight">${g.label}</h3>
+                <h3 class="group-section-title text-sm font-extrabold tracking-tight">${g.label}</h3>
                 <span class="text-[11px] font-bold opacity-55">${g.items.length} album${g.items.length > 1 ? 's' : ''}</span>
             </div>
             <div class="${innerGridCls}">
@@ -1376,6 +1644,7 @@ function renderAlbumsOverviewFromCache() {
             </div>
         </section>
     `).join('');
+    updateFloatingGroupPill();
 }
 
 async function loadAlbumsView() {
@@ -1573,6 +1842,7 @@ async function openSingleAlbumView(albumName) {
     updateGalleryBatchBar();
     document.getElementById('albums-overview-panel').classList.add('hidden');
     document.getElementById('album-single-panel').classList.remove('hidden');
+    if (typeof _syncTopbarOptionsButton === 'function') _syncTopbarOptionsButton();
     document.getElementById('single-album-title').textContent = openedAlbumObj ? openedAlbumObj.name : albumName;
     renderAlbumBreadcrumbs(albumName);
 
@@ -1619,6 +1889,7 @@ function closeSingleAlbumView() {
     updateGalleryBatchBar();
     document.getElementById('album-single-panel').classList.add('hidden');
     document.getElementById('albums-overview-panel').classList.remove('hidden');
+    if (typeof _syncTopbarOptionsButton === 'function') _syncTopbarOptionsButton();
     loadAlbumsView();
 }
 
@@ -2335,8 +2606,29 @@ function navigateLightbox(delta) {
 }
 
 window.addEventListener('keydown', e => {
+    const delConfirm = document.getElementById('lb-delete-confirm');
+    if (delConfirm && !delConfirm.classList.contains('hidden')) {
+        if (e.key === 'Escape') {
+            cancelLightboxDelete();
+        }
+        return;
+    }
     const lbOpen = !document.getElementById('lightbox-modal').classList.contains('hidden');
-    if (!lbOpen) return;
+    if (!lbOpen) {
+        if (e.key === 'Escape') {
+            const analyzeModal = document.getElementById('lb-analyze-modal');
+            if (analyzeModal && !analyzeModal.classList.contains('hidden')) {
+                closeLightboxAnalyzeModal();
+                return;
+            }
+            const albumsEditModal = document.getElementById('lb-albums-edit-modal');
+            if (albumsEditModal && !albumsEditModal.classList.contains('hidden')) {
+                closeLightboxAlbumsEditor();
+                return;
+            }
+        }
+        return;
+    }
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     if (e.key === 'Escape') {
         const locEditModal = document.getElementById('lb-location-edit-modal');
@@ -2382,8 +2674,8 @@ function updateLightboxFavButton(isFav) {
     const btn = document.getElementById('lb-btn-fav');
     if (!icon || !btn) return;
     if (isFav) {
-        icon.setAttribute('fill', '#f9a8d4');
-        icon.setAttribute('stroke', '#f9a8d4');
+        icon.setAttribute('fill', '#fb7185');
+        icon.setAttribute('stroke', '#fb7185');
     } else {
         icon.setAttribute('fill', 'none');
         icon.setAttribute('stroke', 'currentColor');
@@ -2496,37 +2788,83 @@ async function lightboxAddToAlbum() {
     await openLightboxAlbumsEditor();
 }
 
-async function lightboxShareMedia() {
-    const item = currentGalleryItems[currentLightboxIndex];
-    if (!item) return;
-    const fullUrl = `${window.location.origin}/media?path=${encodeURIComponent(item.dest_path)}`;
-    const fileName = item.dest_path.split(/[\\/]/).pop();
-    if (navigator.share) {
-        try {
-            await navigator.share({ title: fileName, url: fullUrl });
-            return;
-        } catch (e) {}
-    }
-    try {
-        await navigator.clipboard.writeText(item.dest_path.replace(/\\/g, '/'));
-        alert(`Chemin copié dans le presse-papiers :\n${item.dest_path.replace(/\\/g, '/')}`);
-    } catch (e) {}
-}
-
-function lightboxDownloadMedia() {
-    const item = currentGalleryItems[currentLightboxIndex];
-    if (!item) return;
+function _triggerDownloadHref(href, fileName) {
     const a = document.createElement('a');
-    a.href = `/media?path=${encodeURIComponent(item.dest_path)}`;
-    a.download = item.dest_path.split(/[\\/]/).pop() || 'media';
+    a.href = href;
+    a.download = fileName || 'media';
     document.body.appendChild(a);
     a.click();
     a.remove();
 }
 
+async function _shareMediaItems(items) {
+    if (!items || !items.length) return;
+    if (items.length === 1) {
+        const item = items[0];
+        const rawPath = item.dest_path || item.source_path || '';
+        const fullUrl = `${window.location.origin}/media?path=${encodeURIComponent(rawPath)}`;
+        const fileName = rawPath.split(/[\\/]/).pop() || 'media';
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: fileName, url: fullUrl });
+                return;
+            } catch (e) {}
+        }
+        try {
+            const norm = rawPath.replace(/\\/g, '/');
+            await navigator.clipboard.writeText(norm);
+            alert(`Chemin copié dans le presse-papiers :\n${norm}`);
+        } catch (e) {}
+        return;
+    }
+
+    const displayPaths = items.map(it => (it.dest_path || it.source_path || '').replace(/\\/g, '/')).filter(Boolean);
+    if (!displayPaths.length) return;
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: `${displayPaths.length} médias Phototo`,
+                text: displayPaths.join('\n')
+            });
+            return;
+        } catch (e) {}
+    }
+    try {
+        await navigator.clipboard.writeText(displayPaths.join('\n'));
+        alert(`${displayPaths.length} chemins copiés dans le presse-papiers.`);
+    } catch (e) {}
+}
+
+async function lightboxShareMedia() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    await _shareMediaItems([item]);
+}
+
+function lightboxDownloadMedia() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    _triggerDownloadHref(`/media?path=${encodeURIComponent(item.dest_path)}`, item.dest_path.split(/[\\/]/).pop() || 'media');
+}
+
+let _deleteConfirmMode = null;
+
+function openBatchTrashConfirm() {
+    const count = selectedGalleryPaths.size;
+    if (!count) return;
+    _deleteConfirmMode = 'batch';
+    const modal = document.getElementById('lb-delete-confirm');
+    const nameEl = document.getElementById('lb-delete-filename');
+    if (nameEl) {
+        nameEl.textContent = `${count} média${count > 1 ? 's' : ''} sélectionné${count > 1 ? 's' : ''}`;
+    }
+    if (modal) modal.classList.remove('hidden');
+}
+
 function lightboxDeleteMedia() {
     const item = currentGalleryItems[currentLightboxIndex];
     if (!item) return;
+    _deleteConfirmMode = 'lightbox';
     const modal = document.getElementById('lb-delete-confirm');
     const nameEl = document.getElementById('lb-delete-filename');
     if (nameEl) {
@@ -2537,13 +2875,19 @@ function lightboxDeleteMedia() {
 }
 
 function cancelLightboxDelete() {
+    _deleteConfirmMode = null;
     const modal = document.getElementById('lb-delete-confirm');
     if (modal) modal.classList.add('hidden');
 }
 
 async function confirmLightboxDelete() {
+    const mode = _deleteConfirmMode;
     const item = currentGalleryItems[currentLightboxIndex];
     cancelLightboxDelete();
+    if (mode === 'batch') {
+        await runGalleryBatch('TRASH', true);
+        return;
+    }
     if (!item) return;
     await fetch('/api/trash/action', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -3123,10 +3467,46 @@ async function loadLightboxMetadataInfo() {
 
 let lbAnalyzeVisualCandidates = [];
 let lbAnalyzeSelectedSet = new Set();
+let lbAnalyzeBatchItems = null;
+
+function _syncAnalyzeModalControlsVisibility(isMultiBatch) {
+    const validateBtn = document.getElementById('lb-analyze-validate-btn');
+    const redoBtn = document.getElementById('lb-analyze-redo-visual-btn');
+    const customRow = document.getElementById('lb-analyze-custom-cat-row');
+    if (validateBtn) validateBtn.classList.toggle('hidden', !!isMultiBatch);
+    if (redoBtn) redoBtn.classList.toggle('hidden', !!isMultiBatch);
+    if (customRow) customRow.classList.toggle('hidden', !!isMultiBatch);
+}
+
+function openBatchAnalyzeModal() {
+    const items = getSelectedGalleryItems();
+    if (!items.length) return;
+    lbAnalyzeBatchItems = items;
+    const isMulti = items.length > 1;
+    const titleEl = document.getElementById('lb-analyze-title');
+    const subEl = document.getElementById('lb-analyze-subtitle');
+    if (titleEl) titleEl.textContent = isMulti ? `Analyser la sélection (${items.length})` : 'Analyser le média';
+    if (subEl) {
+        subEl.textContent = isMulti
+            ? `Choisissez le type d'analyse à exécuter sur les ${items.length} médias sélectionnés :`
+            : "Choisissez le type d'analyse à exécuter uniquement sur ce média :";
+    }
+    _syncAnalyzeModalControlsVisibility(isMulti);
+    document.getElementById('lb-analyze-choice')?.classList.remove('hidden');
+    document.getElementById('lb-analyze-loading')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.add('hidden');
+    document.getElementById('lb-analyze-modal')?.classList.remove('hidden');
+}
 
 function openLightboxAnalyzeModal() {
     const modal = document.getElementById('lb-analyze-modal');
     if (!modal) return;
+    lbAnalyzeBatchItems = null;
+    const titleEl = document.getElementById('lb-analyze-title');
+    const subEl = document.getElementById('lb-analyze-subtitle');
+    if (titleEl) titleEl.textContent = 'Analyser le média';
+    if (subEl) subEl.textContent = "Choisissez le type d'analyse à exécuter uniquement sur ce média :";
+    _syncAnalyzeModalControlsVisibility(false);
     document.getElementById('lb-analyze-choice')?.classList.remove('hidden');
     document.getElementById('lb-analyze-loading')?.classList.add('hidden');
     document.getElementById('lb-analyze-results')?.classList.add('hidden');
@@ -3134,6 +3514,7 @@ function openLightboxAnalyzeModal() {
 }
 
 function closeLightboxAnalyzeModal() {
+    lbAnalyzeBatchItems = null;
     document.getElementById('lb-analyze-modal')?.classList.add('hidden');
 }
 
@@ -3178,9 +3559,104 @@ function addCustomAnalyzeCategory() {
     _renderAnalyzeVisualChips();
 }
 
+function _getAnalyzeTargetItem() {
+    if (Array.isArray(lbAnalyzeBatchItems) && lbAnalyzeBatchItems.length === 1) {
+        return lbAnalyzeBatchItems[0];
+    }
+    return currentGalleryItems[currentLightboxIndex] || null;
+}
+
+async function _runBatchMediaAnalysis(items, runFaces, runVisual, forceFaces = false) {
+    document.getElementById('lb-analyze-modal')?.classList.remove('hidden');
+    document.getElementById('lb-analyze-choice')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.add('hidden');
+    document.getElementById('lb-analyze-loading')?.classList.remove('hidden');
+    _syncAnalyzeModalControlsVisibility(true);
+
+    const loadTxt = document.getElementById('lb-analyze-loading-text');
+    let okCount = 0;
+    let totalFaces = 0;
+    let totalCatsApplied = 0;
+    let errCount = 0;
+
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (loadTxt) loadTxt.textContent = `Analyse en cours : ${i + 1} / ${items.length}...`;
+        try {
+            const res = await fetch('/api/media/analyze_single', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    source_path: it.source_path,
+                    run_faces: runFaces,
+                    run_visual: runVisual,
+                    force_faces: !!forceFaces
+                })
+            });
+            if (!res.ok) {
+                errCount++;
+                continue;
+            }
+            const d = await res.json();
+            okCount++;
+            if (runFaces) {
+                totalFaces += (d.faces || []).length;
+            }
+            if (runVisual && !d.visual_error) {
+                const cands = d.visual_candidates || [];
+                const chosen = cands.filter((c, idx) => c.already_assigned || (c.confident !== false && idx < 3));
+                if (chosen.length > 0) {
+                    await fetch('/api/media/apply_categories', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ source_path: it.source_path, categories: chosen })
+                    });
+                    totalCatsApplied++;
+                }
+            }
+        } catch (e) {
+            errCount++;
+        }
+    }
+
+    if (loadTxt) loadTxt.textContent = 'Analyse du média en cours...';
+    document.getElementById('lb-analyze-loading')?.classList.add('hidden');
+    document.getElementById('lb-analyze-results')?.classList.remove('hidden');
+
+    const facesSec = document.getElementById('lb-analyze-faces-section');
+    const facesBody = document.getElementById('lb-analyze-faces-body');
+    if (runFaces && facesSec && facesBody) {
+        facesSec.classList.remove('hidden');
+        facesBody.innerHTML = `<div class="text-xs text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-2 w-full">✓ ${okCount}/${items.length} média(s) analysé(s) — <span class="font-bold text-white">${totalFaces}</span> visage(s) détecté(s).</div>`;
+    } else if (facesSec) {
+        facesSec.classList.add('hidden');
+    }
+
+    const visSec = document.getElementById('lb-analyze-visual-section');
+    const visBody = document.getElementById('lb-analyze-visual-body');
+    if (runVisual && visSec && visBody) {
+        visSec.classList.remove('hidden');
+        visBody.innerHTML = `<div class="text-xs text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-2 w-full">✓ Catégories visuelles appliquées sur <span class="font-bold text-white">${totalCatsApplied}</span> / ${items.length} média(s).${errCount ? ` <span class="text-rose-300">(${errCount} erreur(s))</span>` : ''}</div>`;
+    } else if (visSec) {
+        visSec.classList.add('hidden');
+    }
+
+    await loadGalleryFilters();
+    refreshActiveMediaView();
+    loadStats();
+}
+
 async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
-    const item = currentGalleryItems[currentLightboxIndex];
+    if (Array.isArray(lbAnalyzeBatchItems) && lbAnalyzeBatchItems.length > 1) {
+        await _runBatchMediaAnalysis(lbAnalyzeBatchItems, runFaces, runVisual, forceFaces);
+        return;
+    }
+    const item = _getAnalyzeTargetItem();
     if (!item) return;
+
+    _syncAnalyzeModalControlsVisibility(false);
+    const loadTxt = document.getElementById('lb-analyze-loading-text');
+    if (loadTxt) loadTxt.textContent = 'Analyse du média en cours...';
 
     document.getElementById('lb-analyze-modal')?.classList.remove('hidden');
     document.getElementById('lb-analyze-choice')?.classList.add('hidden');
@@ -3208,6 +3684,7 @@ async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
     }
     const d = await res.json();
 
+    const encDest = encodeURIComponent(item.dest_path || item.source_path || '');
     const facesSec = document.getElementById('lb-analyze-faces-section');
     const facesBody = document.getElementById('lb-analyze-faces-body');
     if (runFaces && facesSec && facesBody) {
@@ -3217,7 +3694,7 @@ async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
             facesBody.innerHTML = `<div class="text-[11px] text-red-300">Erreur détection : ${d.faces_error}</div>`;
         } else if (fList.length > 0) {
             facesBody.innerHTML = fList.map(f => `
-                <div onclick="closeLightboxAnalyzeModal(); lightboxOpenFaceTagger();" class="flex flex-col items-center cursor-pointer group">
+                <div onclick="closeLightboxAnalyzeModal(); openManualFaceModal('${encDest}');" class="flex flex-col items-center cursor-pointer group">
                     <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}" class="w-11 h-11 rounded-full object-cover bg-black/30 group-hover:scale-105 transition"/>
                     <span class="text-[10px] font-semibold mt-1 max-w-[60px] truncate">${f.name}</span>
                 </div>
@@ -3226,7 +3703,7 @@ async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
             facesBody.innerHTML = `
                 <div class="w-full flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
                     <span class="text-[11px] text-white/65">Aucun visage détecté</span>
-                    <button type="button" onclick="closeLightboxAnalyzeModal(); lightboxOpenFaceTagger();"
+                    <button type="button" onclick="closeLightboxAnalyzeModal(); openManualFaceModal('${encDest}');"
                             class="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-bold transition">
                         Sélectionner manuellement
                     </button>
@@ -3255,11 +3732,17 @@ async function runSingleMediaAnalysis(runFaces, runVisual, forceFaces = false) {
         lbAnalyzeSelectedSet = new Set();
     }
 
-    await loadLightboxMetadataInfo();
+    const lbOpen = !document.getElementById('lightbox-modal')?.classList.contains('hidden');
+    if (lbOpen) {
+        await loadLightboxMetadataInfo();
+    } else {
+        await loadGalleryFilters();
+        loadStats();
+    }
 }
 
 async function confirmLightboxAnalyzeResults() {
-    const item = currentGalleryItems[currentLightboxIndex];
+    const item = _getAnalyzeTargetItem();
     if (!item) { closeLightboxAnalyzeModal(); return; }
     const visSec = document.getElementById('lb-analyze-visual-section');
     if (visSec && !visSec.classList.contains('hidden')) {
@@ -3273,7 +3756,14 @@ async function confirmLightboxAnalyzeResults() {
         });
     }
     closeLightboxAnalyzeModal();
-    await loadLightboxMetadataInfo();
+    const lbOpen = !document.getElementById('lightbox-modal')?.classList.contains('hidden');
+    if (lbOpen) {
+        await loadLightboxMetadataInfo();
+    } else {
+        await loadGalleryFilters();
+        refreshActiveMediaView();
+        loadStats();
+    }
 }
 
 function openLightboxSmartCategory(categoryId) {
@@ -3286,6 +3776,10 @@ function openLightboxSmartCategory(categoryId) {
 function openLightboxCategoriesEditor() {
     const modal = document.getElementById('lb-analyze-modal');
     if (!modal) return;
+    lbAnalyzeBatchItems = null;
+    _syncAnalyzeModalControlsVisibility(false);
+    const titleEl = document.getElementById('lb-analyze-title');
+    if (titleEl) titleEl.textContent = 'Analyser le média';
     const d = window._lbCurrentInspectData || {};
     const suggestions = Array.isArray(d.visual_suggestions) ? d.visual_suggestions : [];
     const assigned = Array.isArray(d.smart_categories) ? d.smart_categories : [];
@@ -3737,9 +4231,18 @@ function onInputLightboxAlbumSearch(val) {
     renderLightboxAlbumsEditor();
 }
 
-async function openLightboxAlbumsEditor() {
+let _albumsEditorBatchPaths = null;
+
+function openBatchAlbumsEditor() {
+    const paths = Array.from(selectedGalleryPaths);
+    if (!paths.length) return;
+    openLightboxAlbumsEditor(paths);
+}
+
+async function openLightboxAlbumsEditor(batchPaths = null) {
     const modal = document.getElementById('lb-albums-edit-modal');
     if (!modal) return;
+    _albumsEditorBatchPaths = (Array.isArray(batchPaths) && batchPaths.length > 0) ? batchPaths.slice() : null;
     lbAlbumsEditorExpanded = new Set();
     lbAlbumsEditorCreatingParentId = null;
     lbAlbumsEditorQuery = '';
@@ -3749,9 +4252,12 @@ async function openLightboxAlbumsEditor() {
     if (inp) inp.value = '';
     modal.classList.remove('hidden');
 
+    const curLbl = document.getElementById('lb-albums-edit-current-label');
+    if (curLbl) curLbl.textContent = _albumsEditorBatchPaths ? 'Sélection' : 'Albums actuels';
+
     const curEl = document.getElementById('lb-albums-edit-current');
     if (curEl) curEl.innerHTML = `<div class="text-xs text-white/60 py-2 text-center">Chargement...</div>`;
-    const curItem = currentGalleryItems[currentLightboxIndex];
+    const curItem = _albumsEditorBatchPaths ? null : currentGalleryItems[currentLightboxIndex];
     const needsInspect = !!(curItem && (!window._lbCurrentInspectData || window._lbCurrentInspectData.source_path !== curItem.source_path));
     try {
         const [albRes, libRes, inspRes] = await Promise.all([
@@ -3783,6 +4289,7 @@ async function openLightboxAlbumsEditor() {
 }
 
 function closeLightboxAlbumsEditor() {
+    _albumsEditorBatchPaths = null;
     document.getElementById('lb-albums-edit-modal')?.classList.add('hidden');
 }
 
@@ -3791,8 +4298,9 @@ function renderLightboxAlbumsEditor() {
     const availEl = document.getElementById('lb-albums-edit-available');
     if (!curEl || !availEl) return;
 
+    const isBatch = !!(_albumsEditorBatchPaths && _albumsEditorBatchPaths.length > 0);
     const d = window._lbCurrentInspectData || {};
-    const assigned = (Array.isArray(d.albums) && d.albums.length > 0)
+    const assigned = isBatch ? [] : ((Array.isArray(d.albums) && d.albums.length > 0)
         ? d.albums
         : (d.album_name
             ? d.album_name.split(',').map(s => s.trim()).filter(Boolean).map(name => ({
@@ -3800,7 +4308,7 @@ function renderLightboxAlbumsEditor() {
                 cover_path: d.dest_path || '',
                 count: d.album_count || 1
             }))
-            : []);
+            : []));
     const assignedNames = new Set(assigned.map(a => a.name));
 
     const escHtml = s => String(s || '')
@@ -3809,7 +4317,10 @@ function renderLightboxAlbumsEditor() {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    if (assigned.length === 0) {
+    if (isBatch) {
+        const n = _albumsEditorBatchPaths.length;
+        curEl.innerHTML = `<div class="text-[11px] text-white/75 py-1">${n} média${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''} — choisissez un album ci-dessous.</div>`;
+    } else if (assigned.length === 0) {
         curEl.innerHTML = `<div class="text-[11px] text-white/55 py-1">Ce média n'est dans aucun album.</div>`;
     } else {
         curEl.innerHTML = assigned.map((a, idx) => {
@@ -4074,11 +4585,35 @@ async function _refreshAfterLightboxAlbumChange() {
 }
 
 async function addLightboxMediaToAlbum(albumName) {
+    if (!albumName) return;
+    if (_albumsEditorBatchPaths && _albumsEditorBatchPaths.length > 0) {
+        const res = await fetch('/api/gallery/batch_action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                source_paths: _albumsEditorBatchPaths,
+                action: 'ALBUM_ADD',
+                album_name: albumName
+            })
+        });
+        if (!res.ok) {
+            alert("Impossible d'ajouter la sélection à cet album.");
+            return;
+        }
+        closeLightboxAlbumsEditor();
+        selectedGalleryPaths.clear();
+        updateGalleryBatchBar();
+        await loadGalleryFilters();
+        refreshActiveMediaView();
+        loadStats();
+        return;
+    }
+
     const item = currentGalleryItems[currentLightboxIndex];
-    if (!item || !albumName) return;
+    if (!item) return;
     const res = await fetch('/api/gallery/batch_action', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
             source_paths: [item.source_path],
             action: 'ALBUM_ADD',

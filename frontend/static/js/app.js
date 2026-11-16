@@ -44,29 +44,12 @@ function toggleSidebarMini() {
     if (!sb) return;
     sb.classList.toggle('sidebar-mini');
     const isMini = sb.classList.contains('sidebar-mini');
+    document.body.classList.toggle('sidebar-mini', isMini);
 
     const lbl = document.getElementById('import-btn-label');
     const btn = document.getElementById('btn-top-import');
-    const logoBox = document.getElementById('topbar-logo-box');
-    const logoTxt = document.getElementById('topbar-logo-text');
-
-    if (isMini) {
-        if (lbl) lbl.classList.add('hidden');
-        if (btn) btn.classList.replace('px-5', 'px-3');
-        if (logoTxt) logoTxt.classList.add('hidden');
-        if (logoBox) {
-            logoBox.classList.replace('w-48', 'w-14');
-            logoBox.classList.add('justify-center');
-        }
-    } else {
-        if (lbl) lbl.classList.remove('hidden');
-        if (btn) btn.classList.replace('px-3', 'px-5');
-        if (logoTxt) logoTxt.classList.remove('hidden');
-        if (logoBox) {
-            logoBox.classList.replace('w-14', 'w-48');
-            logoBox.classList.remove('justify-center');
-        }
-    }
+    if (lbl) lbl.classList.toggle('hidden', isMini);
+    if (btn) btn.classList.replace(isMini ? 'px-5' : 'px-3', isMini ? 'px-3' : 'px-5');
 }
 
 function selectGpuPill(mode) {
@@ -140,19 +123,17 @@ let _stickyScrollDownDist = 0;
 
 function syncTimelineWrapperBounds() {
     const wrapper = document.getElementById('gallery-timeline-wrapper');
-    const header = document.getElementById('gallery-sticky-header');
+    const topbarEl = document.getElementById('floating-topbar');
+    const mediaCol = document.getElementById('gallery-media-col');
     if (!wrapper) return;
 
-    if (!header || !header.classList.contains('is-stuck') || header.classList.contains('is-scroll-hidden')) {
-        wrapper.style.top = '0.5rem';
-        wrapper.style.height = 'calc(100vh - 135px)';
-        return;
-    }
-
-    const headerH = Math.ceil(header.getBoundingClientRect().height || 0);
-    const topPx = headerH + 10;
+    const minTop = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().height + 8) : 88;
+    const mediaTop = mediaCol ? Math.ceil(mediaCol.getBoundingClientRect().top) : minTop;
+    const topPx = Math.max(minTop, Math.min(mediaTop, Math.max(minTop, window.innerHeight - 140)));
     wrapper.style.top = `${topPx}px`;
-    wrapper.style.height = `calc(100vh - ${topPx + 105}px)`;
+    wrapper.style.bottom = '8px';
+    wrapper.style.height = 'auto';
+    if (typeof syncBatchBarBounds === 'function') syncBatchBarBounds();
 }
 
 function _syncScrollAfterLayoutToggle() {
@@ -168,6 +149,40 @@ function _syncScrollAfterLayoutToggle() {
     });
 }
 
+function _getActiveOptionsContext() {
+    const albumsOverview = document.getElementById('albums-overview-panel');
+    if (currentTab === 'albums' && albumsOverview && !albumsOverview.classList.contains('hidden')) {
+        return { headerId: 'albums-sticky-header', drawerId: 'albums-options-drawer', btnId: 'alb-options-btn' };
+    }
+    if (currentTab === 'gallery' || currentTab === 'favorites') {
+        return { headerId: 'gallery-sticky-header', drawerId: 'filter-drawer', btnId: 'gal-options-btn' };
+    }
+    return null;
+}
+
+function _syncTopbarOptionsButton() {
+    const topBtn = document.getElementById('topbar-options-btn');
+    if (!topBtn) return;
+    const ctx = _getActiveOptionsContext();
+    const header = ctx ? document.getElementById(ctx.headerId) : null;
+    const show = !!(ctx && header && header.classList.contains('is-stuck'));
+    topBtn.classList.toggle('hidden', !show);
+    topBtn.classList.toggle('flex', show);
+    if (show) {
+        const drawer = document.getElementById(ctx.drawerId);
+        const open = !!(drawer && !drawer.classList.contains('hidden'));
+        topBtn.classList.toggle('nav-item-active', open);
+        topBtn.classList.toggle('ui-card', !open);
+    }
+}
+
+function toggleActiveOptionsBar() {
+    const ctx = _getActiveOptionsContext();
+    if (!ctx) return;
+    if (ctx.drawerId === 'albums-options-drawer') toggleAlbumsOptionsBar();
+    else toggleFilterBar();
+}
+
 function _setOptionsDrawerState(drawerId, btnId, visible) {
     const drawer = document.getElementById(drawerId);
     if (drawer) drawer.classList.toggle('hidden', !visible);
@@ -176,6 +191,19 @@ function _setOptionsDrawerState(drawerId, btnId, visible) {
         btn.classList.toggle('nav-item-active', visible);
         btn.classList.toggle('ui-card', !visible);
     }
+    _syncTopbarOptionsButton();
+    syncTimelineWrapperBounds();
+    if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+}
+
+function _setHeaderStuckState(h, stuck, hidden) {
+    if (!h) return;
+    const isOpt = h.classList.contains('sticky-options-header');
+    h.classList.toggle('is-stuck', !!stuck);
+    h.classList.toggle('is-scroll-hidden', !isOpt && !!hidden);
+    if (isOpt && h.parentElement) {
+        h.parentElement.classList.toggle('has-stuck-header', !!stuck);
+    }
 }
 
 function _openDrawerSafelyIfNearTop(headerId) {
@@ -183,7 +211,7 @@ function _openDrawerSafelyIfNearTop(headerId) {
     const header = document.getElementById(headerId);
     if (scroller && scroller.scrollTop > 0 && scroller.scrollTop <= 220) {
         scroller.scrollTop = 0;
-        if (header) header.classList.remove('is-stuck', 'is-scroll-hidden');
+        _setHeaderStuckState(header, false, false);
     }
 }
 
@@ -218,9 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
         const headers = document.querySelectorAll('.sticky-view-header');
 
-        if (maxScroll < 180 || curTop <= 16) {
+        if (maxScroll < 180 || curTop <= 64) {
             _stickyScrollDownDist = 0;
-            headers.forEach(h => h.classList.remove('is-stuck', 'is-scroll-hidden'));
+            headers.forEach(h => _setHeaderStuckState(h, false, false));
+            _syncTopbarOptionsButton();
             _stickyScrollLastTop = curTop;
             syncTimelineWrapperBounds();
             return;
@@ -229,29 +258,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Date.now() < _ignoreScrollUntil) {
             _stickyScrollLastTop = curTop;
             _stickyScrollDownDist = 0;
+            syncTimelineWrapperBounds();
             return;
         }
         const delta = curTop - _stickyScrollLastTop;
 
         if (delta < 0) {
             _stickyScrollDownDist = 0;
-            headers.forEach(h => {
-                h.classList.add('is-stuck');
-                h.classList.remove('is-scroll-hidden');
-            });
+            headers.forEach(h => _setHeaderStuckState(h, true, false));
         } else if (delta > 0) {
             _stickyScrollDownDist += delta;
-            headers.forEach(h => {
-                h.classList.add('is-stuck');
-                if (curTop > 60 && _stickyScrollDownDist > 12) {
-                    h.classList.add('is-scroll-hidden');
-                }
-            });
+            const shouldHide = _stickyScrollDownDist > 12;
+            headers.forEach(h => _setHeaderStuckState(h, true, shouldHide));
+            if (curTop > 140 && _stickyScrollDownDist > 24) {
+                _setOptionsDrawerState('filter-drawer', 'gal-options-btn', false);
+                _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', false);
+            }
         }
+        _syncTopbarOptionsButton();
         _stickyScrollLastTop = curTop;
         syncTimelineWrapperBounds();
     }, { passive: true });
-    window.addEventListener('resize', syncTimelineWrapperBounds, { passive: true });
+    window.addEventListener('resize', () => {
+        syncTimelineWrapperBounds();
+        if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+    }, { passive: true });
     syncTimelineWrapperBounds();
 });
 
@@ -337,6 +368,10 @@ function switchTab(tab) {
     } else if (tab === 'settings') {
         loadAppSettings();
     }
+    _syncTopbarOptionsButton();
+    syncTimelineWrapperBounds();
+    if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+    if (typeof updateGalleryBatchBar === 'function') updateGalleryBatchBar();
 }
 
 function setGalleryViewMode(mode) {

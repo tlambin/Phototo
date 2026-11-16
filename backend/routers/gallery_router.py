@@ -2,13 +2,17 @@ import os
 import time
 import shutil
 import sqlite3
+import tempfile
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import cv2
 import imagehash
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from database import RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path
 from library_manager import load_libraries
@@ -34,6 +38,10 @@ class GalleryBatchActionPayload(BaseModel):
     source_paths: list[str]
     action: str
     album_name: str | None = None
+
+
+class GalleryBatchDownloadPayload(BaseModel):
+    source_paths: list[str]
 
 
 class AutoResolveDuplicatesPayload(BaseModel):
@@ -1178,6 +1186,59 @@ def api_gallery_batch_action(payload: GalleryBatchActionPayload):
     conn.commit()
     conn.close()
     return {"status": "ok"}
+
+
+@router.post("/api/gallery/batch_download")
+def api_gallery_batch_download(payload: GalleryBatchDownloadPayload):
+    """Télécharge un média unique directement ou une archive ZIP pour plusieurs médias sélectionnés."""
+    if not payload.source_paths:
+        raise HTTPException(status_code=400, detail="Aucun média sélectionné.")
+
+    conn = get_db()
+    placeholders = ",".join("?" for _ in payload.source_paths)
+    rows = conn.execute(
+        f"SELECT source_path, dest_path FROM processed_files WHERE source_path IN ({placeholders})",
+        payload.source_paths,
+    ).fetchall()
+    conn.close()
+
+    by_src = {r["source_path"]: r["dest_path"] for r in rows}
+    files: list[Path] = []
+    seen_real: set[Path] = set()
+    for src in payload.source_paths:
+        raw_dest = by_src.get(src) or src
+        actual = resolve_actual_path(raw_dest)
+        if actual and actual.is_file() and actual not in seen_real:
+            seen_real.add(actual)
+            files.append(actual)
+
+    if not files:
+        raise HTTPException(status_code=404, detail="Fichier(s) introuvable(s).")
+
+    if len(files) == 1:
+        return FileResponse(files[0], filename=files[0].name)
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+
+    used_names: dict[str, int] = {}
+    with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_STORED) as zf:
+        for file_path in files:
+            arcname = file_path.name
+            if arcname in used_names:
+                used_names[arcname] += 1
+                arcname = f"{file_path.stem} ({used_names[arcname]}){file_path.suffix}"
+            else:
+                used_names[arcname] = 0
+            zf.write(file_path, arcname=arcname)
+
+    return FileResponse(
+        tmp_path,
+        media_type="application/zip",
+        filename="phototo_selection.zip",
+        background=BackgroundTask(os.unlink, str(tmp_path)),
+    )
 
 
 @router.get("/api/duplicates")

@@ -10,15 +10,18 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="/static/css/theme.css" />
 </head>
-<body class="h-screen flex flex-col overflow-hidden select-none">
+<body class="h-screen flex overflow-hidden select-none">
 
-    <!-- Barre supérieure & Popovers (Bibliothèque / Tâche) -->
-    {% include "components/topbar.html" %}
-
-    <!-- Corps principal : Barre latérale + 10 Vues -->
-    <div class="flex-1 flex overflow-hidden pl-4 pr-0 pb-4 gap-6">
+    <!-- Barre latérale pleine hauteur avec panneau verre miroir de la navbar -->
+    <div class="h-full flex shrink-0">
         {% include "components/sidebar.html" %}
+    </div>
+
+    <!-- Corps principal : Topbar flottante à fond verre dépoli au-dessus du conteneur défilant -->
+    <div class="flex-1 relative h-full overflow-hidden">
+        {% include "components/topbar.html" %}
         {% include "components/views.html" %}
+        <div class="scroll-fade-bottom"></div>
     </div>
 
     <!-- Fenêtres modales (Lightbox, Assistant Import, Studio, EXIF, Visages) -->
