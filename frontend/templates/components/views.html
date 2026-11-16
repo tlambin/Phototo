@@ -752,112 +752,260 @@
     </div>
 
     <!-- ==================== VUE 10 : PARAMÈTRES ==================== -->
-    <div id="tab-settings" class="hidden max-w-5xl pb-10 space-y-6">
-        <div class="sticky-view-header flex items-center justify-between mb-2">
+    <div id="tab-settings" class="hidden max-w-4xl pb-12 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4 min-h-[44px] mb-1">
             <h1 class="text-4xl font-extrabold tracking-tight leading-none">Paramètres</h1>
-            <div class="flex items-center gap-3">
-                <button onclick="restartApplication()" title="Redémarrer le logiciel"
-                        class="w-11 h-11 rounded-2xl bg-[#E5C168] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <div id="settings-power-bar" class="ui-card rounded-full p-1 flex items-center gap-1 shadow-sm shrink-0">
+                <button type="button" onclick="restartApplication()" title="Redémarrer le logiciel"
+                        class="ui-pill hover:bg-amber-500/20 hover:text-amber-400 rounded-full px-3.5 py-1.5 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Redémarrer</span>
                 </button>
-                <button onclick="shutdownApplication()" title="Arrêter le logiciel"
-                        class="w-11 h-11 rounded-2xl bg-[#DC6B6B] hover:brightness-105 text-white flex items-center justify-center shadow-md transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                <button type="button" onclick="shutdownApplication()" title="Arrêter le logiciel"
+                        class="ui-pill hover:bg-rose-500/20 hover:text-rose-400 rounded-full px-3.5 py-1.5 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                    <span>Arrêter</span>
                 </button>
             </div>
         </div>
 
-        <!-- SECTION 1 : APPARENCE & LANGUE -->
-        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-5">
-            <div>
-                <h2 class="text-base font-extrabold">Apparence & Langue</h2>
-                <p class="text-xs opacity-65 mt-0.5">Personnalisez le thème visuel, la langue de l'interface et le fuseau horaire.</p>
+        <!-- SECTION 1 : APPARENCE & RÉGION -->
+        <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                </div>
+                <div>
+                    <h2 class="text-sm font-extrabold leading-tight">Apparence & Région</h2>
+                    <p class="text-[11px] opacity-60">Thème de l'interface, langue et fuseau horaire par défaut.</p>
+                </div>
             </div>
 
-            <div class="space-y-4">
-                <div class="flex flex-wrap items-center gap-3">
-                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
-                        <span>🌡️</span> <span>Thème</span>
+            <div class="space-y-2">
+                <!-- Thème (contrôle segmenté) -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                    <span class="text-xs font-bold">Thème</span>
+                    <div class="flex items-center gap-1 p-1 rounded-full ui-card">
+                        <button id="theme-btn-light" onclick="setAppTheme('light')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"/></svg>
+                            <span>Clair</span>
+                        </button>
+                        <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            <span>Sombre</span>
+                        </button>
+                        <button id="theme-btn-system" onclick="setAppTheme('system')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            <span>Système</span>
+                        </button>
                     </div>
-                    <button id="theme-btn-light" onclick="setAppTheme('light')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
-                        <span>☀️</span> <span>Clair</span>
-                    </button>
-                    <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
-                        <span>🌙</span> <span>Sombre</span>
-                    </button>
-                    <button id="theme-btn-system" onclick="setAppTheme('system')" class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition">
-                        <span>🖥️</span> <span>Système</span>
-                    </button>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-3">
-                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
-                        <span>🌐</span> <span>Langue</span>
-                    </div>
-                    <div class="ui-pill rounded-2xl px-4 py-2">
-                        <select id="settings-lang" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
-                            <option value="fr">Français</option>
-                            <option value="en">English</option>
-                        </select>
+                <!-- Langue & Fuseau horaire en 2 colonnes propres -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold shrink-0">Langue</span>
+                        <div class="relative flex items-center">
+                            <select id="settings-lang" onchange="saveAppSettingsQuiet()"
+                                    class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right">
+                                <option value="fr">Français</option>
+                                <option value="en">English</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
                     </div>
 
-                    <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2 sm:ml-2">
-                        <span>🕒</span> <span>Fuseau horaire</span>
-                    </div>
-                    <div class="ui-pill rounded-2xl px-4 py-2">
-                        <select id="settings-timezone" onchange="saveAppSettingsQuiet()" class="bg-transparent text-xs font-bold outline-none cursor-pointer">
-                            <option value="Europe/Paris">Paris/France</option>
-                            <option value="Europe/London">London/UK</option>
-                            <option value="America/New_York">New York/USA</option>
-                            <option value="America/Montreal">Montréal/Canada</option>
-                            <option value="UTC">UTC</option>
-                        </select>
+                    <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold shrink-0">Fuseau horaire</span>
+                        <div class="relative flex items-center">
+                            <select id="settings-timezone" onchange="saveAppSettingsQuiet()"
+                                    class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right">
+                                <option value="Europe/Paris">Paris / France</option>
+                                <option value="Europe/London">London / UK</option>
+                                <option value="America/New_York">New York / USA</option>
+                                <option value="America/Montreal">Montréal / Canada</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 2 : PERFORMANCE & MATÉRIEL -->
-        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h2 class="text-base font-extrabold">Performance & Matériel</h2>
-                    <p class="text-xs opacity-65 mt-0.5">Détection automatique de la puissance système et sélection du moteur d'accélération.</p>
+        <!-- SECTION 2 : GOOGLE TAKEOUT (PRÉFÉRENCES PAR DÉFAUT) -->
+        <section id="settings-takeout-section" class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M21.35 11.1H12v3.2h5.35c-.25 1.4-1.05 2.6-2.25 3.4v2.8h3.6c2.1-1.95 3.35-4.8 3.35-8.2 0-.65-.05-1.25-.15-1.8z"/>
+                        <path d="M12 22c3.05 0 5.6-1 7.45-2.75l-3.6-2.8c-1 .68-2.3 1.08-3.85 1.08-2.95 0-5.45-2-6.35-4.68H1.95v2.9C3.8 19.45 7.6 22 12 22z"/>
+                        <path d="M5.65 12.85c-.23-.68-.36-1.4-.36-2.15s.13-1.47.36-2.15v-2.9H1.95C1.2 7.15.75 8.85.75 10.7s.45 3.55 1.2 5.05l3.7-2.9z"/>
+                        <path d="M12 5.47c1.66 0 3.15.57 4.32 1.69l3.24-3.24C17.6 2.1 15.05 1.2 12 1.2 7.6 1.2 3.8 3.75 1.95 7.45l3.7 2.9C6.55 7.47 9.05 5.47 12 5.47z"/>
+                    </svg>
                 </div>
-                <button type="button" onclick="loadHardwareInfo(true)" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">↻ Re-détecter</button>
+                <div>
+                    <h2 class="text-sm font-extrabold leading-tight">Google Takeout</h2>
+                    <p class="text-[11px] opacity-60">Préférences par défaut appliquées lors des imports et décompressions Takeout.</p>
+                </div>
             </div>
-            <div id="hardware-specs-box" class="ui-pill rounded-2xl p-4 text-xs opacity-70">
+
+            <div class="space-y-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold shrink-0">Architecture</span>
+                        <div class="relative flex items-center min-w-0">
+                            <select id="settings-takeout-arch" onchange="saveAppSettingsQuiet()"
+                                    class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right truncate max-w-[210px]">
+                                <option value="KEEP_ORIGINAL">Conserver albums, favoris et corbeille</option>
+                                <option value="GOOGLE_ALBUM">Album « Google Photos » complet</option>
+                                <option value="NONE">Ne rien garder (sans album)</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+
+                    <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold shrink-0">Fuseau horaire</span>
+                        <div class="relative flex items-center min-w-0">
+                            <select id="settings-takeout-gps-tz" onchange="saveAppSettingsQuiet()"
+                                    class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right truncate max-w-[210px]">
+                                <option value="GPS_OR_SETTINGS">Selon GPS, sinon paramètres</option>
+                                <option value="SETTINGS_ONLY">Paramètres uniquement</option>
+                                <option value="UTC">Garder l'heure UTC</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition">
+                        <span class="text-xs font-bold">Corriger les métadonnées par défaut</span>
+                        <input id="settings-takeout-fix-meta" type="checkbox" checked onchange="saveAppSettingsQuiet()"
+                               class="w-3.5 h-3.5 accent-[var(--accent)] shrink-0 cursor-pointer"/>
+                    </label>
+
+                    <label class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition">
+                        <span class="text-xs font-bold">Supprimer les .zip après extraction</span>
+                        <input id="settings-takeout-del-zips" type="checkbox" onchange="saveAppSettingsQuiet()"
+                               class="w-3.5 h-3.5 accent-[var(--accent)] shrink-0 cursor-pointer"/>
+                    </label>
+                </div>
+
+                <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                    <label for="settings-takeout-dir" class="text-xs font-bold shrink-0">Dossier tampon .zip</label>
+                    <div class="flex items-center gap-1.5 flex-1 min-w-[220px]">
+                        <input id="settings-takeout-dir" type="text" onchange="saveAppSettingsQuiet()"
+                               placeholder="Par défaut (_Temp_Takeout_Buffer)"
+                               class="ui-card flex-1 min-w-0 rounded-full px-3 py-1 text-[11px] font-semibold outline-none"/>
+                        <button type="button" onclick="browseTakeoutExtractDir()"
+                                class="ui-card hover:bg-[var(--bg-hover)] rounded-full px-3 py-1 text-[11px] font-bold shrink-0 cursor-pointer transition">
+                            Parcourir
+                        </button>
+                        <button type="button" onclick="clearTakeoutExtractDir()" title="Réinitialiser par défaut"
+                                class="ui-card hover:bg-rose-500/20 hover:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-[10px] font-extrabold shrink-0 cursor-pointer transition">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Moteur ExifTool (vérification + installation) -->
+                <div id="settings-exiftool-row" class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-xs font-bold shrink-0">Moteur ExifTool</span>
+                        <span id="settings-exiftool-badge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-white/10 shrink-0">Vérification…</span>
+                        <span id="settings-exiftool-detail" class="text-[11px] opacity-60 truncate"></span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="loadExifToolStatus(true)"
+                                class="ui-card hover:bg-[var(--bg-hover)] rounded-full px-3 py-1 text-[11px] font-bold cursor-pointer transition">
+                            Vérifier
+                        </button>
+                        <button id="settings-exiftool-install-btn" type="button" onclick="installExifToolNow(false)"
+                                class="hidden plum-btn rounded-full px-3.5 py-1 text-[11px] font-bold shadow-sm cursor-pointer transition">
+                            Installer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3 : PERFORMANCE & MATÉRIEL -->
+        <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-extrabold leading-tight">Performance & Matériel</h2>
+                        <p class="text-[11px] opacity-60">Configuration détectée et moteur d'accélération matérielle.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="loadHardwareInfo(true)" class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    <span>Re-détecter</span>
+                </button>
+            </div>
+
+            <div id="hardware-specs-box" class="ui-pill rounded-2xl p-3.5 text-xs opacity-75">
                 Analyse de la configuration matérielle...
             </div>
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="ui-pill rounded-2xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-2">
-                    <span>🔲</span> <span>Accélération Matérielle</span>
+
+            <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                <span class="text-xs font-bold">Accélération matérielle</span>
+                <div class="flex flex-wrap items-center gap-1 p-1 rounded-full ui-card">
+                    <button id="gpu-btn-auto" onclick="selectGpuPill('auto')" class="rounded-full px-3 py-1 text-[11px] font-bold transition cursor-pointer">Auto</button>
+                    <button id="gpu-btn-cuda" onclick="selectGpuPill('cuda')" class="rounded-full px-3 py-1 text-[11px] font-bold transition cursor-pointer">NVIDIA (CUDA)</button>
+                    <button id="gpu-btn-directml" onclick="selectGpuPill('directml')" class="rounded-full px-3 py-1 text-[11px] font-bold transition cursor-pointer">AMD (DirectML)</button>
+                    <button id="gpu-btn-cpu" onclick="selectGpuPill('cpu')" class="rounded-full px-3 py-1 text-[11px] font-bold transition cursor-pointer">CPU</button>
                 </div>
-                <button id="gpu-btn-auto" onclick="selectGpuPill('auto')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">✨ Auto (Recommandé)</button>
-                <button id="gpu-btn-cuda" onclick="selectGpuPill('cuda')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">NVIDIA (CUDA)</button>
-                <button id="gpu-btn-directml" onclick="selectGpuPill('directml')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">AMD (DirectML)</button>
-                <button id="gpu-btn-cpu" onclick="selectGpuPill('cpu')" class="ui-pill rounded-2xl px-5 py-2.5 text-xs font-extrabold transition">INTEL / CPU</button>
+            </div>
+
+            <!-- Moteur FFmpeg (édition / découpe vidéo) -->
+            <div id="settings-ffmpeg-row" class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-xs font-bold shrink-0">Moteur FFmpeg (vidéo)</span>
+                    <span id="settings-ffmpeg-badge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-white/10 shrink-0">Vérification…</span>
+                    <span id="settings-ffmpeg-detail" class="text-[11px] opacity-60 truncate"></span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" onclick="loadFFmpegStatus(true)"
+                            class="ui-card hover:bg-[var(--bg-hover)] rounded-full px-3 py-1 text-[11px] font-bold cursor-pointer transition">
+                        Vérifier
+                    </button>
+                    <button id="settings-ffmpeg-install-btn" type="button" onclick="installFFmpegNow(false)"
+                            class="hidden plum-btn rounded-full px-3.5 py-1 text-[11px] font-bold shadow-sm cursor-pointer transition">
+                        Installer FFmpeg
+                    </button>
+                </div>
             </div>
         </section>
 
-        <!-- SECTION 3 : INTELLIGENCE ARTIFICIELLE LOCALE -->
-        <section id="settings-ai-section" class="ui-card rounded-3xl p-6 shadow-sm space-y-5">
+        <!-- SECTION 4 : INTELLIGENCE ARTIFICIELLE LOCALE -->
+        <section id="settings-ai-section" class="ui-card rounded-3xl p-5 shadow-sm space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h2 class="text-base font-extrabold">Intelligence Artificielle Locale</h2>
-                    <p class="text-xs opacity-65 mt-0.5">Installez, vérifiez, mettez à jour ou désinstallez les modèles IA exécutés 100 % en local.</p>
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 10v1a6 6 0 0 0 12 0v-1"/><path d="M12 17v5"/><path d="M8 22h8"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-extrabold leading-tight">Intelligence Artificielle Locale</h2>
+                        <p class="text-[11px] opacity-60">Installez, vérifiez ou mettez à jour les modèles exécutés 100 % en local.</p>
+                    </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" onclick="loadAiModulesStatus()" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">↻ Actualiser</button>
-                    <button id="ai-check-updates-btn" type="button" onclick="checkAiUpdates()" class="ui-pill px-3.5 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">🔍 Rechercher des MÀJ</button>
-                    <button type="button" onclick="runAiModuleAction('all', 'verify')" class="ui-pill px-4 py-2 rounded-full text-xs font-bold hover:opacity-85 transition">Tout vérifier</button>
-                    <button type="button" onclick="runAiModuleAction('all', 'install')" class="plum-btn px-4 py-2 rounded-full text-xs font-bold shadow-sm transition">Tout installer</button>
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onclick="loadAiModulesStatus()" class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition">Actualiser</button>
+                    <button id="ai-check-updates-btn" type="button" onclick="checkAiUpdates()" class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition">Vérifier MÀJ</button>
+                    <button type="button" onclick="runAiModuleAction('all', 'verify')" class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition">Tout vérifier</button>
+                    <button type="button" onclick="runAiModuleAction('all', 'install')" class="plum-btn px-3.5 py-1.5 rounded-full text-[11px] font-bold shadow-sm cursor-pointer transition">Tout installer</button>
                 </div>
             </div>
 
-            <div id="ai-summary-bar" class="hidden rounded-2xl ui-pill px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs"></div>
+            <div id="ai-summary-bar" class="hidden rounded-2xl ui-pill px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs"></div>
 
-            <div id="ai-modules-list" class="grid grid-cols-1 gap-4">
+            <div id="ai-modules-list" class="grid grid-cols-1 gap-3">
                 <div class="ui-pill rounded-2xl p-4 text-xs opacity-60">Chargement de l'état des modules IA...</div>
             </div>
 
@@ -865,31 +1013,37 @@
             <div id="ai-task-log-box" class="hidden rounded-2xl bg-black/80 text-emerald-300 p-4 space-y-2">
                 <div class="flex items-center justify-between text-xs font-bold">
                     <span id="ai-task-status-label">Opération en cours...</span>
-                    <button type="button" onclick="document.getElementById('ai-task-log-box').classList.add('hidden')" class="opacity-70 hover:opacity-100">✕</button>
+                    <button type="button" onclick="document.getElementById('ai-task-log-box').classList.add('hidden')" class="opacity-70 hover:opacity-100 cursor-pointer">✕</button>
                 </div>
                 <pre id="ai-task-log-content" class="text-[11px] font-mono max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed opacity-90"></pre>
             </div>
         </section>
 
-        <!-- SECTION 4 : MAINTENANCE & SAUVEGARDE -->
-        <section class="ui-card rounded-3xl p-6 shadow-sm space-y-4">
-            <div>
-                <h2 class="text-base font-extrabold">Maintenance & Sauvegarde</h2>
-                <p class="text-xs opacity-65 mt-0.5">Nettoyez les entrées orphelines et sauvegardez la base de données de votre bibliothèque.</p>
+        <!-- SECTION 5 : MAINTENANCE & SAUVEGARDE -->
+        <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                </div>
+                <div>
+                    <h2 class="text-sm font-extrabold leading-tight">Maintenance & Sauvegarde</h2>
+                    <p class="text-[11px] opacity-60">Nettoyage des entrées orphelines et sauvegarde de la base SQLite.</p>
+                </div>
             </div>
-            <div class="flex flex-wrap items-center gap-3">
-                <button onclick="pruneMissingFiles()" class="ui-pill hover:brightness-95 rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 transition">
-                    <span>🪶</span> <span>Nettoyage du système</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button onclick="pruneMissingFiles()" class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition">
+                    <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                    <span>Nettoyer les entrées absentes</span>
                 </button>
-                <button onclick="backupDatabaseNow()" class="ui-pill hover:brightness-95 rounded-2xl px-5 py-3 text-xs font-extrabold flex items-center gap-2.5 transition">
-                    <span>💾</span> <span>Sauvegarde de la base de données</span>
+                <button onclick="backupDatabaseNow()" class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition">
+                    <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span>Sauvegarder la base de données</span>
                 </button>
             </div>
             <div id="backup-result-msg" class="text-xs font-mono opacity-80 hidden"></div>
         </section>
 
         <textarea id="settings-scanned-folders" class="hidden"></textarea>
-        <input id="settings-takeout-dir" type="hidden"/>
     </div>
 
     <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES) ==================== -->

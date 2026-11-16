@@ -20,6 +20,11 @@ existing_py_path = os.environ.get("PYTHONPATH", "")
 os.environ["PYTHONPATH"] = os.pathsep.join(
     MODULE_DIRS + ([existing_py_path] if existing_py_path else [])
 )
+if str(BASE_DIR) not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = str(BASE_DIR) + os.pathsep + os.environ.get("PATH", "")
+tools_dir = BASE_DIR / "tools"
+if str(tools_dir) not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = str(tools_dir) + os.pathsep + os.environ.get("PATH", "")
 
 import uvicorn
 from fastapi import Request

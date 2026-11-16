@@ -405,9 +405,205 @@ class TestApiRoutes(unittest.TestCase):
         self.assertEqual(by_mod_asc, ["src_b", "src_c", "src_a"])
 
     def test_settings_sections_and_ai_status_endpoint(self):
+        import settings_manager
+        import fusion_takeout_complet as fusion
+
         html = main.templates.get_template("index.html").render()
-        for token in ("settings-ai-section", "ai-modules-list", "ai-task-log-box", "hardware-specs-box", "gpu-btn-auto", "ai-check-updates-btn"):
+        for token in (
+            "settings-ai-section", "ai-modules-list", "ai-task-log-box",
+            "hardware-specs-box", "gpu-btn-auto", "ai-check-updates-btn",
+            "settings-takeout-section", "settings-takeout-arch",
+            "settings-takeout-gps-tz", "settings-takeout-fix-meta",
+            "settings-takeout-del-zips", "settings-takeout-dir",
+            "settings-exiftool-row", "settings-exiftool-badge", "settings-exiftool-install-btn",
+            "loadExifToolStatus(true)", "installExifToolNow(false)",
+            "settings-ffmpeg-row", "settings-ffmpeg-badge", "settings-ffmpeg-install-btn",
+            "loadFFmpegStatus(true)", "installFFmpegNow(false)",
+            "browseTakeoutExtractDir()", "clearTakeoutExtractDir()",
+            "settings-power-bar", "restartApplication()", "shutdownApplication()",
+        ):
             self.assertIn(token, html)
+
+        tab_settings_html = html[html.index('id="tab-settings"'):html.index('id="tab-activities"')]
+        self.assertNotIn("sticky-view-header", tab_settings_html)
+        self.assertIn("settings-power-bar", tab_settings_html)
+        theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
+        self.assertIn("#settings-power-bar.is-floating", theme_css)
+
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        for tok in ("window.appSettings", "browseTakeoutExtractDir", "clearTakeoutExtractDir", "takeout_default_architecture", "_syncSettingsPowerBar"):
+            self.assertIn(tok, app_js)
+
+        tmp_settings = self.tmp_path / "app_settings.json"
+        with patch.object(settings_manager, "SETTINGS_FILE", tmp_settings), \
+             patch.object(settings_manager, "LEGACY_SETTINGS_FILE", self.tmp_path / "legacy_settings.json"):
+            save_res = system_router.api_save_settings_route(system_router.SettingsPayload(
+                scanned_folders=[],
+                takeout_extract_dir="D:/FastBuffer",
+                takeout_default_architecture="GOOGLE_ALBUM",
+                takeout_default_fix_metadata=False,
+                takeout_default_delete_zips=True,
+                takeout_timezone_mode="SETTINGS_ONLY",
+                takeout_use_gps_timezone=False,
+                timezone="Europe/Paris",
+                language="fr",
+                gpu_mode="auto",
+            ))
+            saved = save_res["settings"]
+            self.assertEqual(saved["takeout_default_architecture"], "GOOGLE_ALBUM")
+            self.assertFalse(saved["takeout_default_fix_metadata"])
+            self.assertTrue(saved["takeout_default_delete_zips"])
+            self.assertEqual(saved["takeout_timezone_mode"], "SETTINGS_ONLY")
+            self.assertFalse(saved["takeout_use_gps_timezone"])
+            self.assertEqual(saved["takeout_extract_dir"], "D:/FastBuffer")
+
+            # Mode SETTINGS_ONLY avec GPS à Tokyo (35.6762, 139.6503) -> force Europe/Paris (+01:00)
+            res_forced = fusion.resolve_datetime_with_dst(1705320000, 35.6762, 139.6503)
+            self.assertEqual(res_forced["offset_str"], "+01:00")
+
+            # Mode UTC -> garde l'heure UTC (+00:00) même avec GPS à Tokyo
+            system_router.api_save_settings_route(system_router.SettingsPayload(
+                scanned_folders=[],
+                takeout_extract_dir="",
+                takeout_timezone_mode="UTC",
+                timezone="Europe/Paris",
+                language="fr",
+                gpu_mode="auto",
+            ))
+            res_utc = fusion.resolve_datetime_with_dst(1705320000, 35.6762, 139.6503)
+            self.assertEqual(res_utc["offset_str"], "+00:00")
+            self.assertEqual(res_utc["exif_local_str"], "2024:01:15 12:00:00")
+
+            # Mode GPS_OR_SETTINGS -> utilise le GPS si présent, sinon le fuseau des paramètres
+            system_router.api_save_settings_route(system_router.SettingsPayload(
+                scanned_folders=[],
+                takeout_extract_dir="",
+                takeout_timezone_mode="GPS_OR_SETTINGS",
+                timezone="Europe/Paris",
+                language="fr",
+                gpu_mode="auto",
+            ))
+            res_gps = fusion.resolve_datetime_with_dst(1705320000, 35.6762, 139.6503)
+            self.assertEqual(res_gps["offset_str"], "+09:00")
+            res_no_gps = fusion.resolve_datetime_with_dst(1705320000, None, None)
+            self.assertEqual(res_no_gps["offset_str"], "+01:00")
+
+        exif_st = system_router.api_exiftool_status()
+        self.assertIn("installed", exif_st)
+        self.assertIn("pyexiftool_installed", exif_st)
+        self.assertIn("version", exif_st)
+        self.assertIn("path", exif_st)
+        if exif_st["installed"]:
+            self.assertTrue(exif_st["version"])
+
+        # _copy_exiftool_tree_to_root refuse un shim WinGet sans dossier exiftool_files
+        shim_dir = self.tmp_path / "shim"
+        shim_dir.mkdir(parents=True, exist_ok=True)
+        shim_exe = shim_dir / "exiftool.exe"
+        shim_exe.write_bytes(b"stub" * 100)
+        root_out = self.tmp_path / "root_et"
+        root_out.mkdir(parents=True, exist_ok=True)
+        self.assertFalse(system_router._copy_exiftool_tree_to_root(shim_exe, root_out))
+
+        # Mais accepte un vrai arbre ExifTool avec dossier exiftool_files
+        (shim_dir / "exiftool_files").mkdir()
+        (shim_dir / "exiftool_files" / "perl.exe").write_bytes(b"perl")
+        self.assertTrue(system_router._copy_exiftool_tree_to_root(shim_exe, root_out))
+        self.assertTrue((root_out / "exiftool.exe").exists())
+        self.assertTrue((root_out / "exiftool_files" / "perl.exe").exists())
+
+        # _find_exiftool_executable privilégie le binaire qui répond à -ver (et rejette une erreur texte)
+        bad_exe = self.tmp_path / "bad_et.exe"
+        good_exe = self.tmp_path / "good_et.exe"
+        bad_exe.write_bytes(b"x")
+        good_exe.write_bytes(b"x")
+        with patch.object(system_router, "_exiftool_candidate_paths", return_value=[bad_exe, good_exe]), \
+             patch.object(system_router, "_probe_exiftool_version", side_effect=[(None, "Application version 13.61 does not match Image::ExifTool library version 13.59"), ("13.64", None)]):
+            found_p, found_v, found_err = system_router._find_exiftool_executable()
+            self.assertEqual(found_p, good_exe)
+            self.assertEqual(found_v, "13.64")
+            self.assertIsNone(found_err)
+
+        # Un message texte sur -ver ne doit pas être pris pour un numéro de version valide
+        with patch.object(system_router.subprocess, "check_output", return_value="Application version 13.61 does not match Image::ExifTool library version 13.59"):
+            ver_bad, err_bad = system_router._probe_exiftool_version(bad_exe)
+            self.assertIsNone(ver_bad)
+            self.assertIn("does not match", err_bad)
+
+        # Vérification des mises à jour ExifTool (13.61 -> 13.64)
+        with patch.object(system_router, "_find_exiftool_executable", return_value=(good_exe, "13.61", None)), \
+             patch.object(system_router, "_fetch_exiftool_latest_version", return_value="13.64"):
+            upd_st = system_router.api_exiftool_status(check_update=True)
+            self.assertTrue(upd_st["installed"])
+            self.assertEqual(upd_st["latest_version"], "13.64")
+            self.assertTrue(upd_st["update_available"])
+
+        with patch.object(system_router, "_find_exiftool_executable", return_value=(good_exe, "13.64", None)), \
+             patch.object(system_router, "_fetch_exiftool_latest_version", return_value="13.64"):
+            ok_st = system_router.api_exiftool_status(check_update=True)
+            self.assertFalse(ok_st["update_available"])
+
+        # _scrape_exiftool_page_zips résout les liens relatifs vers les archives 64-bit
+        class _FakeResp:
+            def __init__(self, body: bytes):
+                self._b = body
+            def read(self):
+                return self._b
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        with patch.object(system_router.urllib.request, "urlopen", return_value=_FakeResp(b'<a href="exiftool-13.64_64.zip">DL</a>')):
+            scraped = system_router._scrape_exiftool_page_zips("https://exiftool.org/")
+            self.assertEqual(scraped, ["https://exiftool.org/exiftool-13.64_64.zip"])
+
+        # RapidOCR et Faces préservent onnxruntime-gpu (utilisation de --no-deps sans écraser la DLL chargée)
+        cmds_seen = []
+
+        def _fake_cmd(cmd):
+            cmds_seen.append(cmd)
+            return 0
+
+        def _fake_pkg_ver(name):
+            return {"onnxruntime-gpu": "1.20.0", "rapidocr-onnxruntime": None}.get(name)
+
+        with patch.object(system_router, "_active_ocr_engine", return_value="rapidocr"), \
+             patch.object(system_router, "_pkg_version", side_effect=_fake_pkg_ver), \
+             patch.object(system_router, "_install_missing_pip_deps", return_value=True), \
+             patch.object(system_router, "detect_system_hardware", return_value={"gpu_vendor": "nvidia", "recommended_mode": "cuda"}), \
+             patch.object(system_router, "_run_cmd_logged", side_effect=_fake_cmd):
+            ok_rapid = system_router._install_or_update_single_module("ocr", upgrade=False, gpu_mode="auto")
+            self.assertTrue(ok_rapid)
+            pip_cmds = [c for c in cmds_seen if len(c) >= 4 and c[1:4] == ["-m", "pip", "install"]]
+            self.assertEqual(len(pip_cmds), 1)
+            self.assertIn("--no-deps", pip_cmds[0])
+            self.assertIn("rapidocr-onnxruntime", pip_cmds[0])
+
+        # FFmpeg status / probe / update check
+        ff_st = system_router.api_ffmpeg_status()
+        self.assertIn("installed", ff_st)
+        self.assertIn("version", ff_st)
+        self.assertIn("path", ff_st)
+
+        fake_ff = self.tmp_path / "ffmpeg.exe"
+        fake_ff.write_bytes(b"ff")
+        with patch.object(system_router.subprocess, "check_output", return_value="ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024"):
+            ff_ver, ff_err = system_router._probe_ffmpeg_version(fake_ff)
+            self.assertEqual(ff_ver, "7.1")
+            self.assertIsNone(ff_err)
+
+        with patch.object(system_router, "_find_ffmpeg_executable", return_value=(fake_ff, "7.1", None)), \
+             patch.object(system_router, "_fetch_ffmpeg_latest_version", return_value="8.0"):
+            ff_upd = system_router.api_ffmpeg_status(check_update=True)
+            self.assertTrue(ff_upd["update_available"])
+            self.assertEqual(ff_upd["latest_version"], "8.0")
+
+        # Priorité au sous-dossier tools/ dans les candidats
+        et_cands = system_router._exiftool_candidate_paths()
+        ff_cands = system_router._ffmpeg_candidate_paths()
+        self.assertEqual(et_cands[0], system_router._get_tools_dir() / "exiftool.exe")
+        self.assertEqual(ff_cands[0], system_router._get_tools_dir() / "ffmpeg.exe")
 
         hw = system_router.api_get_hardware()
         self.assertIn("hardware", hw)
@@ -1415,10 +1611,14 @@ class TestApiRoutes(unittest.TestCase):
         self.assertNotIn("Pas d'activité en cours", top_html)
         self.assertIn('id="lib-edit-avatar-letter"', html)
         self.assertIn('id="lib-edit-avatar-img"', html)
+        self.assertIn('id="lib-edit-name-display"', html)
+        self.assertIn('id="lib-edit-name-btn"', html)
+        self.assertIn('id="lib-edit-name-editor"', html)
 
         libraries_js = (ROOT_DIR / "frontend" / "static" / "js" / "libraries.js").read_text(encoding="utf-8")
         app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function syncActiveLibraryAvatars(", libraries_js)
+        self.assertIn("function toggleEditLibraryNameInput(", libraries_js)
         self.assertIn("async function uploadActiveLibraryIcon(", libraries_js)
         self.assertIn("hasActivityBanner", app_js)
 
@@ -1468,6 +1668,189 @@ class TestApiRoutes(unittest.TestCase):
             self.assertEqual(del_res["status"], "ok")
             listed_after = libraries_router.api_get_libraries()
             self.assertEqual(listed_after["libraries"]["Test"]["icon_url"], "")
+
+    def test_library_multisource_create_and_update(self):
+        import library_manager
+        import libraries_router
+
+        html = main.templates.get_template("index.html").render()
+        for snippet in (
+            'id="lib-create-sources-list"',
+            'id="lib-create-sources-count"',
+            'id="lib-edit-sources-list"',
+            'id="lib-edit-sources-count"',
+            'id="lib-view-remove-source"',
+            'id="lib-remove-transfer-chk"',
+            'id="lib-remove-transfer-dst"',
+            "Ajouter un dossier",
+            "Créer un dossier",
+            "hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400",
+            "Valider",
+            "bg-rose-600 hover:bg-rose-500",
+            "border border-current/20 rounded-full",
+            "M21.35 11.1H12v3.2",
+        ):
+            self.assertIn(snippet, html)
+        self.assertNotIn('id="lib-edit-move-radio"', html)
+        self.assertNotIn('id="lib-create-takeout-btn"', html)
+        self.assertNotIn('id="lib-edit-takeout-btn"', html)
+        import_start = html.index('id="import-wizard-modal"')
+        import_end = html.index('id="library-modal"', import_start)
+        import_html = html[import_start:import_end]
+        step1_html = import_html[import_html.index('id="import-step-1"'):import_html.index('id="import-step-2"')]
+        step2_html = import_html[import_html.index('id="import-step-2"'):import_html.index('id="import-step-3"')]
+        for snippet in (
+            "Sélectionner un dossier",
+            "Sélectionner des fichiers",
+            "Google Takeout",
+            "M21.35 11.1H12v3.2",
+        ):
+            self.assertIn(snippet, step1_html)
+        self.assertLess(step1_html.index("Sélectionner un dossier"), step1_html.index("Google Takeout"))
+        self.assertLess(step1_html.index("Sélectionner des fichiers"), step1_html.index("Google Takeout"))
+        for snippet in (
+            "Dossier décompressé",
+            "Fichiers ZIP",
+            "grid grid-cols-2 gap-2",
+            '<path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/>',
+        ):
+            self.assertIn(snippet, step2_html)
+        self.assertIn('<div class="ui-card rounded-3xl max-w-md w-full p-6 shadow-2xl">', import_html)
+        step3_html = import_html[import_html.index('id="import-step-3"'):]
+        for snippet in (
+            'id="import-step3-count"',
+            'id="import-step3-add-btn"',
+            'id="import-step3-add-label"',
+            'id="row-opt-takeout-architecture"',
+            'id="wiz-takeout-arch-select"',
+            'id="wiz-takeout-arch-desc"',
+            'value="KEEP_ORIGINAL"',
+            'value="GOOGLE_ALBUM"',
+            'value="NONE"',
+            "addMoreStep3Paths()",
+            "ui-pill rounded-xl",
+            "flex justify-center pt-1",
+        ):
+            self.assertIn(snippet, step3_html)
+        import_js = (ROOT_DIR / "frontend" / "static" / "js" / "import_wizard.js").read_text(encoding="utf-8")
+        for fn in (
+            "function pickTakeoutSource(",
+            "function renderStep3PathsList(",
+            "async function addMoreStep3Paths(",
+            "async function removeStep3Path(",
+            "function _syncWizardCheckPill(",
+            "function setTakeoutArchitecture(",
+            "wizardTakeoutArchitecture",
+            "TAKEOUT_ARCH_DESCRIPTIONS",
+            "rowAlb.classList.toggle('hidden', !isStandard)",
+            "rowFix.classList.toggle('hidden', isStandard)",
+        ):
+            self.assertIn(fn, import_js)
+        lib_modal_start = html.index('id="library-modal"')
+        lib_modal_end = html.index('id="manual-face-modal"', lib_modal_start)
+        self.assertNotIn("ui-divider", html[lib_modal_start:lib_modal_end])
+
+        libraries_js = (ROOT_DIR / "frontend" / "static" / "js" / "libraries.js").read_text(encoding="utf-8")
+        for fn in (
+            "function _renderLibrarySourcesList(",
+            "function setPrimaryLibrarySource(",
+            "function removeLibrarySourceFolder(",
+            "async function confirmRemoveLibrarySource(",
+            "function cancelRemoveLibrarySource(",
+            "new_sources: pendingEditLibFolders.slice()",
+        ):
+            self.assertIn(fn, libraries_js)
+
+        cfg_dir = self.tmp_path / "cfg_multi"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        cfg_file = cfg_dir / "libraries_config.json"
+        legacy_cfg = self.tmp_path / "legacy_multi_libraries_config.json"
+        src1 = self.tmp_path / "src1"
+        src2 = self.tmp_path / "src2"
+        src3 = self.tmp_path / "src3"
+        src1.mkdir()
+        src2.mkdir()
+        src3.mkdir()
+
+        with (
+            patch.object(library_manager, "CONFIG_DIR", cfg_dir),
+            patch.object(library_manager, "CONFIG_FILE", cfg_file),
+            patch.object(library_manager, "LEGACY_CONFIG_FILE", legacy_cfg),
+        ):
+            created = libraries_router.api_create_library(
+                libraries_router.CreateLibraryPayload(
+                    name="MultiLib",
+                    source_type="STANDARD_FOLDER",
+                    source_paths_raw=f"{src1}\n{src2}\n{src1}",
+                    dest_dir=str(src1),
+                )
+            )
+            self.assertEqual(created["status"], "created")
+            self.assertEqual(created["library"]["source_paths"], [str(src1), str(src2)])
+            self.assertEqual(created["library"]["dest_dir"], str(src1))
+
+            updated = libraries_router.api_update_library({
+                "original_name": "MultiLib",
+                "new_name": "MultiLib2",
+                "new_sources": [str(src2), str(src3)],
+                "move_existing_content": False,
+            })
+            self.assertEqual(updated["status"], "updated")
+            self.assertEqual(updated["active_library"], "MultiLib2")
+            cfg = library_manager.load_libraries()
+            lib2 = cfg["libraries"]["MultiLib2"]
+            self.assertEqual(lib2["source_paths"], [str(src2), str(src3)])
+            self.assertEqual(lib2["dest_dir"], str(src2))
+
+            (src3 / "stay.jpg").write_bytes(b"keep-on-disk")
+            (src2 / "2024").mkdir(exist_ok=True)
+            moved_photo = src2 / "2024" / "moved.jpg"
+            moved_photo.write_bytes(b"moved-bytes")
+            (src1 / "2024").mkdir(exist_ok=True)
+            (src1 / "2024" / "existing.jpg").write_bytes(b"existing-bytes")
+
+            conn = database.get_db()
+            try:
+                conn.execute(
+                    "INSERT INTO processed_files (source_path, dest_path, status, is_duplicate, is_trashed) VALUES (?, ?, 'ok', 0, 0)",
+                    (str(moved_photo), str(moved_photo)),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            lib2["db_path"] = str(self.db_path)
+            cfg["libraries"]["MultiLib2"] = lib2
+            library_manager.save_libraries(cfg)
+
+            rem_no_transfer = libraries_router.api_remove_library_source(
+                libraries_router.RemoveLibrarySourcePayload(
+                    library_name="MultiLib2",
+                    remove_source=str(src3),
+                    transfer_content=False,
+                )
+            )
+            self.assertEqual(rem_no_transfer["source_paths"], [str(src2)])
+            self.assertTrue((src3 / "stay.jpg").is_file())
+
+            rem_transfer = libraries_router.api_remove_library_source(
+                libraries_router.RemoveLibrarySourcePayload(
+                    library_name="MultiLib2",
+                    remove_source=str(src2),
+                    transfer_content=True,
+                    target_source=str(src1),
+                )
+            )
+            self.assertEqual(rem_transfer["source_paths"], [str(src1)])
+            self.assertEqual(rem_transfer["dest_dir"], str(src1))
+            self.assertTrue((src1 / "2024" / "existing.jpg").is_file())
+            self.assertTrue((src1 / "2024" / "moved.jpg").is_file())
+            self.assertFalse(moved_photo.exists())
+            conn = database.get_db()
+            try:
+                row = conn.execute("SELECT dest_path FROM processed_files").fetchone()
+                self.assertEqual(row["dest_path"], str(src1 / "2024" / "moved.jpg"))
+            finally:
+                conn.close()
 
 
 if __name__ == "__main__":

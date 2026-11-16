@@ -141,24 +141,253 @@ function openMergeLibrariesModal() {
 }
 
 function showLibraryModalView(viewId) {
-    ['lib-view-create', 'lib-view-edit', 'lib-view-delete'].forEach(id => {
+    ['lib-view-create', 'lib-view-edit', 'lib-view-delete', 'lib-view-remove-source'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden', id !== viewId);
     });
     document.getElementById('library-modal').classList.remove('hidden');
 }
 
+function _normalizeLibFolderKey(pathStr) {
+    return String(pathStr || '').trim().replace(/[\\/]+$/, '').toLowerCase();
+}
+
+function _appendUniqueLibFolder(folders, chosenPath) {
+    const clean = String(chosenPath || '').trim();
+    if (!clean) return false;
+    const key = _normalizeLibFolderKey(clean);
+    if (folders.some(f => _normalizeLibFolderKey(f) === key)) return false;
+    folders.push(clean);
+    return true;
+}
+
+function _renderLibrarySourcesList(mode) {
+    const isCreate = mode === 'create';
+    const folders = isCreate ? pendingCreateLibFolders : pendingEditLibFolders;
+    const listEl = document.getElementById(isCreate ? 'lib-create-sources-list' : 'lib-edit-sources-list');
+    const countEl = document.getElementById(isCreate ? 'lib-create-sources-count' : 'lib-edit-sources-count');
+
+    if (countEl) {
+        countEl.textContent = String(folders.length);
+        if (isCreate) countEl.classList.toggle('hidden', folders.length === 0);
+    }
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+    if (isCreate) listEl.classList.toggle('hidden', folders.length === 0);
+    if (!folders.length) {
+        if (!isCreate) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'text-[11px] font-semibold opacity-55 px-2 py-1';
+            emptyDiv.textContent = 'Aucune source sélectionnée.';
+            listEl.appendChild(emptyDiv);
+        }
+        return;
+    }
+
+    folders.forEach((folderPath, idx) => {
+        const displayPath = folderPath.replace(/\\/g, '/');
+        const row = document.createElement('div');
+        row.className = 'ui-pill rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] font-bold';
+
+        const left = document.createElement('div');
+        left.className = 'min-w-0 flex items-center gap-1.5 flex-1';
+
+        if (idx === 0 && folders.length > 1) {
+            const badge = document.createElement('span');
+            badge.className = 'plum-btn px-1.5 py-0.5 rounded-full text-[9px] font-extrabold shrink-0';
+            badge.textContent = 'Principale';
+            left.appendChild(badge);
+        }
+
+        const txt = document.createElement('span');
+        txt.className = 'truncate';
+        txt.title = displayPath;
+        txt.textContent = displayPath;
+        left.appendChild(txt);
+
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-1 shrink-0';
+
+        if (idx > 0) {
+            const starBtn = document.createElement('button');
+            starBtn.type = 'button';
+            starBtn.title = 'Définir comme source principale';
+            starBtn.className = 'w-5 h-5 rounded-full hover:bg-amber-500/20 hover:text-amber-300 opacity-75 hover:opacity-100 flex items-center justify-center transition cursor-pointer';
+            starBtn.innerHTML = `<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+            starBtn.onclick = () => setPrimaryLibrarySource(mode, idx);
+            actions.appendChild(starBtn);
+        }
+
+        const remBtn = document.createElement('button');
+        remBtn.type = 'button';
+        remBtn.title = 'Retirer ce dossier';
+        remBtn.className = 'w-5 h-5 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer';
+        remBtn.textContent = '✕';
+        remBtn.onclick = () => removeLibrarySourceFolder(mode, idx);
+        actions.appendChild(remBtn);
+
+        row.appendChild(left);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+    });
+}
+
+function setPrimaryLibrarySource(mode, idx) {
+    const folders = mode === 'create' ? pendingCreateLibFolders : pendingEditLibFolders;
+    if (idx <= 0 || idx >= folders.length) return;
+    const [chosen] = folders.splice(idx, 1);
+    folders.unshift(chosen);
+    _renderLibrarySourcesList(mode);
+}
+
+let _savedEditLibFolders = new Set();
+let _pendingRemoveSource = null;
+
+function removeLibrarySourceFolder(mode, idx) {
+    const folders = mode === 'create' ? pendingCreateLibFolders : pendingEditLibFolders;
+    if (idx < 0 || idx >= folders.length) return;
+    if (mode === 'edit' && folders.length <= 1) {
+        alert("La bibliothèque doit conserver au moins une source. Ajoutez d'abord un autre dossier.");
+        return;
+    }
+
+    const path = folders[idx];
+    const otherFolders = folders.filter((_, i) => i !== idx);
+    const wasSaved = mode === 'edit' && _savedEditLibFolders.has(_normalizeLibFolderKey(path));
+    _pendingRemoveSource = { mode, idx, path, wasSaved };
+
+    const pathEl = document.getElementById('lib-remove-src-path');
+    if (pathEl) {
+        pathEl.textContent = path.replace(/\\/g, '/');
+        pathEl.title = path.replace(/\\/g, '/');
+    }
+
+    const transferBox = document.getElementById('lib-remove-transfer-box');
+    const transferChk = document.getElementById('lib-remove-transfer-chk');
+    const dstSel = document.getElementById('lib-remove-transfer-dst');
+    const canTransfer = mode === 'edit' && wasSaved && otherFolders.length > 0;
+    if (transferBox) transferBox.classList.toggle('hidden', !canTransfer);
+    if (transferChk) transferChk.checked = false;
+    if (dstSel) {
+        dstSel.classList.add('hidden');
+        dstSel.innerHTML = '';
+        otherFolders.forEach(dstPath => {
+            const opt = document.createElement('option');
+            opt.value = dstPath;
+            opt.textContent = dstPath.replace(/\\/g, '/');
+            dstSel.appendChild(opt);
+        });
+    }
+
+    showLibraryModalView('lib-view-remove-source');
+}
+
+function toggleRemoveSourceTransferSelect() {
+    const chk = document.getElementById('lib-remove-transfer-chk');
+    const dstSel = document.getElementById('lib-remove-transfer-dst');
+    if (dstSel && chk) {
+        dstSel.classList.toggle('hidden', !chk.checked);
+    }
+}
+
+function cancelRemoveLibrarySource() {
+    const mode = _pendingRemoveSource?.mode || 'edit';
+    _pendingRemoveSource = null;
+    showLibraryModalView(mode === 'create' ? 'lib-view-create' : 'lib-view-edit');
+}
+
+async function confirmRemoveLibrarySource() {
+    if (!_pendingRemoveSource) return;
+    const { mode, idx, path, wasSaved } = _pendingRemoveSource;
+    const folders = mode === 'create' ? pendingCreateLibFolders : pendingEditLibFolders;
+
+    if (mode === 'edit' && wasSaved) {
+        const active = librariesConfig?.active_library;
+        if (!active) return;
+        const transferChk = document.getElementById('lib-remove-transfer-chk');
+        const dstSel = document.getElementById('lib-remove-transfer-dst');
+        const transferContent = Boolean(transferChk && transferChk.checked);
+        const targetSource = transferContent ? (dstSel?.value || '') : '';
+
+        const res = await fetch('/api/libraries/remove_source', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                library_name: active,
+                remove_source: path,
+                transfer_content: transferContent,
+                target_source: targetSource
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Impossible de retirer cette source.");
+            return;
+        }
+        _savedEditLibFolders.delete(_normalizeLibFolderKey(path));
+        if (transferContent && targetSource) {
+            _savedEditLibFolders.add(_normalizeLibFolderKey(targetSource));
+        }
+        await loadLibrariesDropdown();
+        if (transferContent) {
+            await loadGalleryFilters();
+            refreshActiveMediaView();
+            loadStats();
+        }
+    }
+
+    if (idx >= 0 && idx < folders.length && folders[idx] === path) {
+        folders.splice(idx, 1);
+    } else {
+        const key = _normalizeLibFolderKey(path);
+        const foundIdx = folders.findIndex(f => _normalizeLibFolderKey(f) === key);
+        if (foundIdx >= 0) folders.splice(foundIdx, 1);
+    }
+
+    _pendingRemoveSource = null;
+    _renderLibrarySourcesList(mode);
+    showLibraryModalView(mode === 'create' ? 'lib-view-create' : 'lib-view-edit');
+}
+
 function openCreateLibraryModal() {
     hideAllTopPopovers();
-    pendingCreateLibFolder = '';
+    pendingCreateLibFolders = [];
     const nameInput = document.getElementById('lib-create-name');
     if (nameInput) nameInput.value = '';
-    const pathLbl = document.getElementById('lib-create-selected-path');
-    if (pathLbl) {
-        pathLbl.textContent = '';
-        pathLbl.classList.add('hidden');
-    }
+    _renderLibrarySourcesList('create');
     showLibraryModalView('lib-view-create');
+}
+
+function toggleEditLibraryNameInput(show, resetInput = false) {
+    const disp = document.getElementById('lib-edit-name-display');
+    const editor = document.getElementById('lib-edit-name-editor');
+    const inp = document.getElementById('lib-edit-new-name');
+    const curEl = document.getElementById('lib-edit-current-name');
+    const active = librariesConfig?.active_library || '';
+
+    if (resetInput && inp) {
+        inp.value = '';
+        if (curEl) curEl.textContent = active;
+    }
+    if (disp) disp.classList.toggle('hidden', !!show);
+    if (editor) editor.classList.toggle('hidden', !show);
+    if (show && inp) {
+        if (!inp.value.trim()) {
+            inp.value = curEl?.textContent?.trim() || active;
+        }
+        setTimeout(() => { inp.focus(); inp.select(); }, 20);
+    }
+}
+
+function applyInlineLibraryNamePreview() {
+    const inp = document.getElementById('lib-edit-new-name');
+    const curEl = document.getElementById('lib-edit-current-name');
+    const val = (inp?.value || '').trim();
+    if (val && curEl) {
+        curEl.textContent = val;
+    }
+    toggleEditLibraryNameInput(false, false);
 }
 
 function openEditLibraryModal() {
@@ -168,14 +397,16 @@ function openEditLibraryModal() {
         return openCreateLibraryModal();
     }
     const lib = librariesConfig.libraries[active];
-    pendingEditLibFolder = '';
-    editMoveExistingContent = false;
+    const existingSources = (Array.isArray(lib.source_paths) && lib.source_paths.length)
+        ? lib.source_paths.filter(Boolean)
+        : (lib.dest_dir ? [lib.dest_dir] : []);
+    pendingEditLibFolders = existingSources.slice();
+    _savedEditLibFolders = new Set(existingSources.map(_normalizeLibFolderKey));
 
     document.getElementById('lib-edit-current-name').textContent = lib.name;
     document.getElementById('lib-edit-new-name').value = '';
-    const curSrc = (lib.source_paths && lib.source_paths[0]) ? lib.source_paths[0] : (lib.dest_dir || '');
-    document.getElementById('lib-edit-current-source').textContent = curSrc.replace(/\\/g, '/');
-    document.getElementById('lib-edit-move-dot').classList.add('hidden');
+    toggleEditLibraryNameInput(false, true);
+    _renderLibrarySourcesList('edit');
     syncActiveLibraryAvatars();
 
     showLibraryModalView('lib-view-edit');
@@ -195,20 +426,16 @@ async function pickLibraryFolder(mode, createNewSubfolder = false) {
     const chosenPath = d.paths[0];
 
     if (mode === 'create') {
-        pendingCreateLibFolder = chosenPath;
-        const pathLbl = document.getElementById('lib-create-selected-path');
-        if (pathLbl) {
-            pathLbl.textContent = chosenPath.replace(/\\/g, '/');
-            pathLbl.classList.remove('hidden');
-        }
-        // Si le champ nom de la bibliothèque est encore vide, le pré-remplir avec le nom du dossier créé
+        _appendUniqueLibFolder(pendingCreateLibFolders, chosenPath);
+        _renderLibrarySourcesList('create');
+        // Si le champ nom de la bibliothèque est encore vide, le pré-remplir avec le nom du premier dossier choisi
         const nameInput = document.getElementById('lib-create-name');
-        if (nameInput && !nameInput.value.trim()) {
-            nameInput.value = chosenPath.split(/[\\/]/).filter(Boolean).pop() || '';
+        if (nameInput && !nameInput.value.trim() && pendingCreateLibFolders.length) {
+            nameInput.value = pendingCreateLibFolders[0].split(/[\\/]/).filter(Boolean).pop() || '';
         }
     } else {
-        pendingEditLibFolder = chosenPath;
-        document.getElementById('lib-edit-current-source').textContent = chosenPath.replace(/\\/g, '/');
+        _appendUniqueLibFolder(pendingEditLibFolders, chosenPath);
+        _renderLibrarySourcesList('edit');
     }
 }
 
@@ -218,8 +445,8 @@ async function submitCreateLibraryModal() {
         alert("Veuillez choisir un nom pour la bibliothèque.");
         return;
     }
-    if (!pendingCreateLibFolder) {
-        alert("Veuillez sélectionner un dossier existant ou créer un nouveau dossier.");
+    if (!pendingCreateLibFolders.length) {
+        alert("Veuillez ajouter au moins un dossier source.");
         return;
     }
 
@@ -229,8 +456,8 @@ async function submitCreateLibraryModal() {
         body: JSON.stringify({
             name: name,
             source_type: 'STANDARD_FOLDER',
-            source_paths_raw: pendingCreateLibFolder,
-            dest_dir: pendingCreateLibFolder,
+            source_paths_raw: pendingCreateLibFolders.join('\n'),
+            dest_dir: pendingCreateLibFolders[0],
             fix_takeout_json_metadata: true,
             delete_zips_progressively: false,
             organize_by_year_month: true
@@ -245,14 +472,13 @@ async function submitCreateLibraryModal() {
     }
 }
 
-function toggleMoveExistingContentOption() {
-    editMoveExistingContent = !editMoveExistingContent;
-    document.getElementById('lib-edit-move-dot').classList.toggle('hidden', !editMoveExistingContent);
-}
-
 async function submitEditLibraryModal() {
     const origName = librariesConfig.active_library;
     if (!origName) return;
+    if (!pendingEditLibFolders.length) {
+        alert("Veuillez conserver ou ajouter au moins un dossier source.");
+        return;
+    }
     const newName = (document.getElementById('lib-edit-new-name').value || '').trim() || origName;
 
     const res = await fetch('/api/libraries/update', {
@@ -261,8 +487,8 @@ async function submitEditLibraryModal() {
         body: JSON.stringify({
             original_name: origName,
             new_name: newName,
-            new_source: pendingEditLibFolder,
-            move_existing_content: editMoveExistingContent
+            new_sources: pendingEditLibFolders.slice(),
+            move_existing_content: false
         })
     });
     if (res.ok) {

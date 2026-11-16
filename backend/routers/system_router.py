@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import shutil
@@ -8,10 +9,11 @@ import threading
 import subprocess
 import importlib.metadata
 import json
+import zipfile
 import urllib.request
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import unquote
+from urllib.parse import unquote, urljoin
 
 import cv2
 from PIL import Image
@@ -42,6 +44,11 @@ class ResetToolPayload(BaseModel):
 class SettingsPayload(BaseModel):
     scanned_folders: list[str]
     takeout_extract_dir: str
+    takeout_default_architecture: str = "KEEP_ORIGINAL"
+    takeout_default_fix_metadata: bool = True
+    takeout_default_delete_zips: bool = False
+    takeout_timezone_mode: str | None = None
+    takeout_use_gps_timezone: bool = True
     timezone: str
     language: str
     gpu_mode: str
@@ -247,9 +254,20 @@ def api_save_settings_route(payload: SettingsPayload):
     prev = load_settings()
     prev_faces = str(prev.get("faces_model", "buffalo_l")).strip()
     prev_clip = str(prev.get("clip_model", "vit-b-32")).strip().lower()
+    arch = str(payload.takeout_default_architecture or "KEEP_ORIGINAL").strip().upper()
+    if arch not in {"KEEP_ORIGINAL", "GOOGLE_ALBUM", "NONE"}:
+        arch = "KEEP_ORIGINAL"
+    tz_mode = str(payload.takeout_timezone_mode or "").strip().upper()
+    if tz_mode not in {"GPS_OR_SETTINGS", "SETTINGS_ONLY", "UTC"}:
+        tz_mode = "GPS_OR_SETTINGS" if payload.takeout_use_gps_timezone else "SETTINGS_ONLY"
     saved = save_settings({
         "scanned_folders": [p.strip() for p in payload.scanned_folders if p.strip()],
         "takeout_extract_dir": payload.takeout_extract_dir.strip(),
+        "takeout_default_architecture": arch,
+        "takeout_default_fix_metadata": bool(payload.takeout_default_fix_metadata),
+        "takeout_default_delete_zips": bool(payload.takeout_default_delete_zips),
+        "takeout_timezone_mode": tz_mode,
+        "takeout_use_gps_timezone": (tz_mode == "GPS_OR_SETTINGS"),
         "timezone": payload.timezone.strip(),
         "language": payload.language.strip(),
         "gpu_mode": payload.gpu_mode.strip(),
@@ -746,6 +764,76 @@ def _run_cmd_logged(cmd: list[str]) -> int:
     return proc.wait()
 
 
+def _has_any_onnxruntime() -> str | None:
+    for cand in ("onnxruntime-gpu", "onnxruntime-directml", "onnxruntime"):
+        if _pkg_version(cand) is not None:
+            return cand
+    return None
+
+
+_PKG_IMPORT_ALIASES = {
+    "opencv-python-headless": ("cv2",),
+    "PyYAML": ("yaml",),
+    "Pillow": ("PIL",),
+    "numpy": ("numpy",),
+    "scikit-image": ("skimage",),
+    "python-bidi": ("bidi",),
+    "Shapely": ("shapely",),
+}
+
+
+def _is_pip_dep_satisfied(pkg_spec: str) -> bool:
+    name = pkg_spec.split(">=")[0].split("<")[0].split("==")[0].strip()
+    if _pkg_version(name) is not None:
+        return True
+    if name == "opencv-python-headless":
+        for alt in ("opencv-python", "opencv-contrib-python", "opencv-contrib-python-headless"):
+            if _pkg_version(alt) is not None:
+                return True
+    for mod in _PKG_IMPORT_ALIASES.get(name, ()):
+        try:
+            __import__(mod)
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def _install_missing_pip_deps(deps: list[str]) -> bool:
+    missing = [d for d in deps if not _is_pip_dep_satisfied(d)]
+    if not missing:
+        return True
+    rc = _run_cmd_logged([sys.executable, "-m", "pip", "install", *missing])
+    return rc == 0
+
+
+def _ensure_onnxruntime_package(effective_mode: str, upgrade: bool, up_flag: list[str]) -> tuple[bool, str]:
+    target_pkg = "onnxruntime-gpu" if effective_mode == "cuda" else ("onnxruntime-directml" if effective_mode == "directml" else "onnxruntime")
+    installed_variant = _has_any_onnxruntime()
+
+    if installed_variant == target_pkg and not upgrade:
+        _append_ai_log(f"✓ {target_pkg} déjà installé (conservé sans réécriture DLL).")
+        return (True, target_pkg)
+
+    # Si onnxruntime-gpu / directml est déjà installé et fonctionnel, le préserver sur un install simple
+    if installed_variant in ("onnxruntime-gpu", "onnxruntime-directml") and not upgrade:
+        _append_ai_log(f"✓ {installed_variant} déjà présent et conservé.")
+        return (True, installed_variant)
+
+    rc = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, target_pkg])
+    if rc != 0 and target_pkg != "onnxruntime" and installed_variant is None:
+        rc = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "onnxruntime"])
+        if rc == 0:
+            return (True, "onnxruntime")
+
+    if rc != 0:
+        if installed_variant is not None:
+            _append_ai_log(f"⚠ {installed_variant} est verrouillé en mémoire par le serveur actif ; version actuelle conservée (redémarrez puis relancez pour mettre à jour).")
+            return (True, installed_variant)
+        return (False, target_pkg)
+    return (True, target_pkg)
+
+
 def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) -> bool:
     up_flag = ["--upgrade"] if upgrade else []
     hw_info = detect_system_hardware()
@@ -754,17 +842,18 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
         effective_mode = "cuda" if hw_info.get("gpu_vendor") == "nvidia" else hw_info.get("recommended_mode", "cpu")
 
     if mod_id == "faces":
-        onnx_pkg = "onnxruntime-gpu" if effective_mode == "cuda" else ("onnxruntime-directml" if effective_mode == "directml" else "onnxruntime")
-        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, onnx_pkg])
-        if rc1 != 0 and onnx_pkg != "onnxruntime":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "onnxruntime"])
-        if onnx_pkg != "onnxruntime":
-            # insightface 2.1 déclare 'onnxruntime' (CPU) dans ses métadonnées ; --no-deps préserve onnxruntime-gpu/directml
-            rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "--no-deps", "insightface>=2.1"])
-        else:
-            rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "insightface>=2.1"])
-        if rc1 != 0 or rc2 != 0:
+        onnx_ok, active_onnx = _ensure_onnxruntime_package(effective_mode, upgrade, up_flag)
+        if not onnx_ok:
             return False
+        if upgrade or _pkg_version("insightface") is None:
+            if active_onnx != "onnxruntime":
+                # insightface 2.1 déclare 'onnxruntime' (CPU) dans ses métadonnées ; --no-deps préserve onnxruntime-gpu/directml
+                _install_missing_pip_deps(["onnx", "easydict", "albumentations", "prettytable", "scikit-image", "matplotlib", "scipy", "scikit-learn"])
+                rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "--no-deps", "insightface>=2.1"])
+            else:
+                rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "insightface>=2.1"])
+            if rc2 != 0:
+                return False
         faces_model = _active_faces_model()
         _append_ai_log(f"Téléchargement / vérification du modèle {faces_model}...")
         rc3 = _run_cmd_logged([
@@ -775,22 +864,30 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
         return rc3 == 0
 
     if mod_id == "clip":
+        torch_ver = _pkg_version("torch") or ""
+        torch_cuda_ready = bool(hw_info.get("torch_cuda_available") and "+cpu" not in torch_ver)
         if effective_mode == "cuda":
-            torch_ver = _pkg_version("torch") or ""
-            cuda_tag = hw_info.get("cuda_index") or "cu128"
-            cuda_flags = ["--force-reinstall"] if (not hw_info.get("torch_cuda_available") or "+cpu" in torch_ver) else up_flag
-            _append_ai_log(f"Installation de PyTorch avec support NVIDIA CUDA ({cuda_tag})...")
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", f"https://download.pytorch.org/whl/{cuda_tag}"])
-            if rc1 != 0 and cuda_tag != "cu124":
-                _append_ai_log("Repli sur l'index CUDA compatible cu124...")
-                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu124"])
-            if rc1 != 0:
-                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision"])
-        else:
+            if not torch_cuda_ready or upgrade:
+                cuda_tag = hw_info.get("cuda_index") or "cu128"
+                cuda_flags = ["--force-reinstall"] if (not hw_info.get("torch_cuda_available") or "+cpu" in torch_ver) else up_flag
+                _append_ai_log(f"Installation de PyTorch avec support NVIDIA CUDA ({cuda_tag})...")
+                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", f"https://download.pytorch.org/whl/{cuda_tag}"])
+                if rc1 != 0 and cuda_tag != "cu124":
+                    _append_ai_log("Repli sur l'index CUDA compatible cu124...")
+                    rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *cuda_flags, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu124"])
+                if rc1 != 0:
+                    rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision"])
+                if rc1 != 0 and not torch_ver:
+                    return False
+        elif upgrade or not torch_ver:
             rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "torch", "torchvision"])
-        rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "sentence-transformers>=3.0.0"])
-        if rc1 != 0 or rc2 != 0:
-            return False
+            if rc1 != 0 and not torch_ver:
+                return False
+
+        if upgrade or _pkg_version("sentence-transformers") is None:
+            rc2 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "sentence-transformers>=3.0.0"])
+            if rc2 != 0:
+                return False
         clip_key = _active_clip_model()
         spec = CLIP_MODEL_SPECS[clip_key]
         _append_ai_log(f"Téléchargement / vérification des modèles {spec['label']}...")
@@ -807,17 +904,33 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
     if mod_id == "ocr":
         ocr_eng = _active_ocr_engine()
         if ocr_eng == "rapidocr":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "rapidocr-onnxruntime"])
-            if rc1 != 0:
+            # rapidocr-onnxruntime déclare 'onnxruntime' (CPU) : on garantit d'abord onnxruntime-gpu/directml/cpu sans réécrire la DLL chargée, puis --no-deps
+            onnx_ok, _ = _ensure_onnxruntime_package(effective_mode, upgrade=False, up_flag=[])
+            if not onnx_ok:
                 return False
+            if not _install_missing_pip_deps(["pyclipper", "PyYAML", "Shapely", "six", "tqdm", "Pillow", "opencv-python-headless", "numpy"]):
+                return False
+            if upgrade or _pkg_version("rapidocr-onnxruntime") is None:
+                rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "--no-deps", "rapidocr-onnxruntime"])
+                if rc1 != 0:
+                    return False
             _append_ai_log("Vérification de RapidOCR (ONNX)...")
             rc2 = _run_cmd_logged([sys.executable, "-c", "from rapidocr_onnxruntime import RapidOCR; RapidOCR(); print('RapidOCR OK')"])
             return rc2 == 0
 
         if ocr_eng == "easyocr":
-            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "easyocr"])
-            if rc1 != 0:
-                return False
+            torch_ver = _pkg_version("torch") or ""
+            torch_cuda_ready = bool(hw_info.get("torch_cuda_available") and "+cpu" not in torch_ver)
+            if upgrade or _pkg_version("easyocr") is None:
+                if torch_cuda_ready:
+                    # Préserve PyTorch CUDA contre un remplacement CPU ou un verrou DLL Windows
+                    if not _install_missing_pip_deps(["python-bidi", "scikit-image", "pyclipper", "Shapely", "PyYAML", "scipy", "ninja", "Pillow", "opencv-python-headless", "numpy"]):
+                        return False
+                    rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "--no-deps", "easyocr"])
+                else:
+                    rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "easyocr"])
+                if rc1 != 0:
+                    return False
             _append_ai_log("Téléchargement / vérification des modèles EasyOCR...")
             use_gpu_py = "True" if (effective_mode == "cuda" and hw_info.get("torch_cuda_available")) else "False"
             rc2 = _run_cmd_logged([
@@ -826,9 +939,10 @@ def _install_or_update_single_module(mod_id: str, upgrade: bool, gpu_mode: str) 
             ])
             return rc2 == 0
 
-        rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "paddlepaddle>=3.0.0", "paddleocr>=2.7.3"])
-        if rc1 != 0:
-            return False
+        if upgrade or _pkg_version("paddlepaddle") is None or _pkg_version("paddleocr") is None:
+            rc1 = _run_cmd_logged([sys.executable, "-m", "pip", "install", *up_flag, "paddlepaddle>=3.0.0", "paddleocr>=2.7.3"])
+            if rc1 != 0:
+                return False
         _append_ai_log("Téléchargement / vérification des modèles PaddleOCR...")
         init_ocr_script = (
             "import sys; sys.path.insert(0, 'backend/engines')\n"
@@ -1070,3 +1184,685 @@ def api_ai_reindex_model(payload: ReindexModelPayload):
         raise HTTPException(400, str(e))
     finally:
         conn.close()
+
+
+_EXIFTOOL_TASK_LOCK = threading.Lock()
+_EXIFTOOL_TASK_STATE: dict = {
+    "running": False,
+    "last_error": None,
+    "logs": [],
+}
+_EXIFTOOL_PROBE_CACHE: dict[tuple[str, int, int], tuple[str | None, str | None]] = {}
+
+
+def _probe_exiftool_version(exe_path: Path) -> tuple[str | None, str | None]:
+    try:
+        st = exe_path.stat()
+        cache_key = (os.path.normcase(str(exe_path)), st.st_mtime_ns, st.st_size)
+        cached = _EXIFTOOL_PROBE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        cache_key = None
+
+    try:
+        kwargs = {
+            "stderr": subprocess.STDOUT,
+            "stdin": subprocess.DEVNULL,
+            "text": True,
+            "timeout": 4,
+        }
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        out = subprocess.check_output([str(exe_path), "-ver"], **kwargs)
+        lines = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
+        first_line = lines[0] if lines else ""
+        if re.fullmatch(r'\d+\.\d+(?:\.\d+)?', first_line):
+            res = (first_line, None)
+        else:
+            res = (None, first_line or "Sortie -ver invalide")
+    except subprocess.CalledProcessError as e:
+        msg = (e.output or str(e) or "").strip().splitlines()[0] if (e.output or str(e)) else str(e)
+        res = (None, msg)
+    except Exception as e:
+        res = (None, str(e))
+
+    if cache_key is not None:
+        if len(_EXIFTOOL_PROBE_CACHE) > 32:
+            _EXIFTOOL_PROBE_CACHE.clear()
+        _EXIFTOOL_PROBE_CACHE[cache_key] = res
+    return res
+
+
+def _get_tools_dir(root_dir: Path | None = None) -> Path:
+    base = root_dir or Path(__file__).resolve().parents[2]
+    return base / "tools"
+
+
+def _exiftool_candidate_paths() -> list[Path]:
+    root_dir = Path(__file__).resolve().parents[2]
+    tools_dir = _get_tools_dir(root_dir)
+    local_appdata = Path(os.environ.get("LOCALAPPDATA", "")) if os.environ.get("LOCALAPPDATA") else None
+    prog_files = Path(os.environ.get("ProgramFiles", "")) if os.environ.get("ProgramFiles") else None
+    candidates: list[Path] = [
+        tools_dir / "exiftool.exe",
+        tools_dir / "exiftool",
+        root_dir / "exiftool.exe",
+        root_dir / "exiftool",
+    ]
+    which_path = shutil.which("exiftool")
+    if which_path:
+        candidates.append(Path(which_path))
+    if local_appdata:
+        candidates.extend([
+            local_appdata / "Programs" / "ExifTool" / "ExifTool.exe",
+            local_appdata / "Programs" / "ExifTool" / "exiftool.exe",
+            local_appdata / "Microsoft" / "WinGet" / "Links" / "exiftool.exe",
+        ])
+    if prog_files:
+        candidates.extend([
+            prog_files / "ExifTool" / "ExifTool.exe",
+            prog_files / "ExifTool" / "exiftool.exe",
+        ])
+    return candidates
+
+
+def _find_exiftool_executable() -> tuple[Path | None, str | None, str | None]:
+    first_existing: Path | None = None
+    first_err: str | None = None
+    seen: set[str] = set()
+    for cand in _exiftool_candidate_paths():
+        if not cand:
+            continue
+        key = os.path.normcase(str(cand))
+        if key in seen:
+            continue
+        seen.add(key)
+        if cand.exists() and cand.is_file():
+            ver, err = _probe_exiftool_version(cand)
+            if first_existing is None:
+                first_existing = cand
+                first_err = err
+            if ver:
+                parent_str = str(cand.parent)
+                if parent_str not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = parent_str + os.pathsep + os.environ.get("PATH", "")
+                return (cand, ver, None)
+    return (first_existing, None, first_err)
+
+
+def _inspect_exiftool() -> dict:
+    exe_path, version, broken_reason = _find_exiftool_executable()
+
+    py_ok = False
+    try:
+        importlib.metadata.version("PyExifTool")
+        py_ok = True
+    except Exception:
+        try:
+            import exiftool as _et  # noqa: F401
+            py_ok = True
+        except Exception:
+            py_ok = False
+
+    return {
+        "installed": bool(exe_path and version),
+        "binary_present": bool(exe_path),
+        "broken_reason": broken_reason if (exe_path and not version) else None,
+        "pyexiftool_installed": py_ok,
+        "version": version,
+        "path": str(exe_path) if exe_path else None,
+        "installing": bool(_EXIFTOOL_TASK_STATE["running"]),
+        "last_error": _EXIFTOOL_TASK_STATE["last_error"],
+        "logs": list(_EXIFTOOL_TASK_STATE["logs"][-20:]),
+    }
+
+
+def _copy_exiftool_tree_to_root(exe_cand: Path, target_dir: Path) -> bool:
+    try:
+        real_exe = exe_cand.resolve()
+    except Exception:
+        real_exe = exe_cand
+    if not real_exe.exists() or not real_exe.is_file():
+        return False
+
+    files_dir = real_exe.parent / "exiftool_files"
+    # Évite de copier un shim WinGet sans dossier exiftool_files
+    if not files_dir.is_dir() and real_exe.stat().st_size < 1_000_000:
+        return False
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_exe = target_dir / "exiftool.exe"
+    target_files = target_dir / "exiftool_files"
+    if files_dir.is_dir():
+        try:
+            if real_exe.parent.resolve() != target_dir.resolve():
+                if target_files.exists():
+                    shutil.rmtree(target_files, ignore_errors=True)
+                shutil.copytree(files_dir, target_files, dirs_exist_ok=True)
+        except Exception:
+            return False
+
+    try:
+        if real_exe.resolve() != target_exe.resolve():
+            shutil.copy2(real_exe, target_exe)
+    except PermissionError:
+        if not target_exe.exists():
+            return False
+    except Exception:
+        return False
+    return target_exe.exists()
+
+
+def _fetch_exiftool_latest_version(timeout_s: float = 4.0) -> str | None:
+    req = urllib.request.Request("https://exiftool.org/ver.txt", headers={"User-Agent": "Phototo-Setup/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as r:
+            raw = r.read().decode("utf-8", errors="ignore").strip().splitlines()
+            ver = raw[0].strip() if raw else ""
+            if re.fullmatch(r'\d+\.\d+(?:\.\d+)?', ver):
+                return ver
+    except Exception:
+        pass
+    return None
+
+
+def _scrape_exiftool_page_zips(page_url: str, timeout_s: float = 6.0) -> list[str]:
+    found: list[str] = []
+    try:
+        req = urllib.request.Request(page_url, headers={"User-Agent": "curl/8.5.0"})
+        with urllib.request.urlopen(req, timeout=timeout_s) as r:
+            html_txt = r.read().decode("utf-8", errors="ignore")
+        for m in re.findall(r'href=["\']([^"\']*exiftool[^"\']*\.zip[^"\']*)["\']', html_txt, flags=re.IGNORECASE):
+            full = urljoin(page_url, m.strip())
+            if full not in found:
+                found.append(full)
+    except Exception:
+        pass
+    return found
+
+
+def _download_exiftool_fallback(root_dir: Path, err_out: list[str] | None = None, target_dir: Path | None = None) -> bool:
+    dest_dir = target_dir or _get_tools_dir(root_dir)
+    ver_str = _fetch_exiftool_latest_version(timeout_s=10.0)
+    zip_urls: list[str] = []
+    if ver_str:
+        zip_urls.extend([
+            f"https://exiftool.org/exiftool-{ver_str}_64.zip",
+            f"https://sourceforge.net/projects/exiftool/files/exiftool-{ver_str}_64.zip/download",
+            f"https://exiftool.org/exiftool-{ver_str}_32.zip",
+            f"https://sourceforge.net/projects/exiftool/files/exiftool-{ver_str}_32.zip/download",
+        ])
+
+    for page_u in ("https://exiftool.org/", "https://oliverbetz.de/pages/Artikel/ExifTool-for-Windows"):
+        for scraped in _scrape_exiftool_page_zips(page_u):
+            if scraped not in zip_urls:
+                zip_urls.append(scraped)
+
+    # Privilégier les archives 64-bit
+    zip_urls.sort(key=lambda u: (0 if "_64" in u.lower() else 1))
+    if not zip_urls:
+        if err_out is not None:
+            err_out.append("Aucune URL ExifTool joignable")
+        return False
+
+    tmp_dir = root_dir / "config" / "_tmp_exiftool"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        for idx, zip_url in enumerate(zip_urls):
+            zip_path = tmp_dir / f"exiftool_{idx}.zip"
+            try:
+                req_zip = urllib.request.Request(zip_url, headers={"User-Agent": "curl/8.5.0", "Accept": "*/*"})
+                with urllib.request.urlopen(req_zip, timeout=45) as resp, open(zip_path, "wb") as out_f:
+                    shutil.copyfileobj(resp, out_f)
+                if not zipfile.is_zipfile(zip_path):
+                    if err_out is not None:
+                        err_out.append(f"{zip_url}: réponse non-ZIP")
+                    continue
+                extract_sub = tmp_dir / f"ext_{idx}"
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    zf.extractall(extract_sub)
+                cands = list(extract_sub.rglob("exiftool(-k).exe")) + list(extract_sub.rglob("exiftool.exe"))
+                cands.sort(key=lambda p: (0 if (p.parent / "exiftool_files").is_dir() else 1, len(str(p))))
+                for cand in cands:
+                    if _copy_exiftool_tree_to_root(cand, dest_dir):
+                        ver_chk, ver_err = _probe_exiftool_version(dest_dir / "exiftool.exe")
+                        if ver_chk:
+                            return True
+                        if err_out is not None and ver_err:
+                            err_out.append(f"Exécution post-copie échouée: {ver_err}")
+            except Exception as exc:
+                if err_out is not None:
+                    err_out.append(f"{zip_url}: {exc}")
+                continue
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return False
+
+
+@router.get("/api/tools/exiftool/status")
+def api_exiftool_status(check_update: bool = False):
+    if _EXIFTOOL_TASK_STATE["running"]:
+        return {
+            "installed": False,
+            "binary_present": False,
+            "broken_reason": None,
+            "pyexiftool_installed": False,
+            "version": None,
+            "path": None,
+            "installing": True,
+            "last_error": _EXIFTOOL_TASK_STATE["last_error"],
+            "logs": list(_EXIFTOOL_TASK_STATE["logs"][-20:]),
+            "latest_version": None,
+            "update_available": False,
+            "update_checked": False,
+            "network_ok": None,
+        }
+    st = _inspect_exiftool()
+    latest = _fetch_exiftool_latest_version() if check_update else None
+    upd_avail = bool(
+        check_update
+        and st["installed"]
+        and st["version"]
+        and latest
+        and _parse_ver_tuple(latest) > _parse_ver_tuple(st["version"])
+    )
+    st["latest_version"] = latest
+    st["update_available"] = upd_avail
+    st["update_checked"] = bool(check_update)
+    st["network_ok"] = bool(latest) if check_update else None
+    return st
+
+
+@router.post("/api/tools/exiftool/install")
+def api_exiftool_install(force: bool = False):
+    with _EXIFTOOL_TASK_LOCK:
+        if _EXIFTOOL_TASK_STATE["running"]:
+            raise HTTPException(status_code=409, detail="Installation d'ExifTool déjà en cours.")
+        _EXIFTOOL_TASK_STATE.update({
+            "running": True,
+            "last_error": None,
+            "logs": ["Démarrage de la mise à jour d'ExifTool..." if force else "Démarrage de la vérification / installation d'ExifTool..."],
+        })
+
+    root_dir = Path(__file__).resolve().parents[2]
+    tools_dir = _get_tools_dir(root_dir)
+
+    def _worker():
+        try:
+            st = _inspect_exiftool()
+            if not st["pyexiftool_installed"] or force:
+                _EXIFTOOL_TASK_STATE["logs"].append("Installation / mise à jour de PyExifTool...")
+                subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "PyExifTool>=0.5.6"], check=True)
+
+            if not st["installed"] or force:
+                installed_ok = False
+                local_appdata = Path(os.environ.get("LOCALAPPDATA", "")) if os.environ.get("LOCALAPPDATA") else None
+
+                # 1. Vérifier si un binaire complet (avec exiftool_files) existe déjà (sauf si mise à jour forcée depuis exiftool.org)
+                def _find_existing_copy_candidates() -> list[Path]:
+                    out: list[Path] = []
+                    if local_appdata:
+                        out.extend([
+                            local_appdata / "Programs" / "ExifTool" / "ExifTool.exe",
+                            local_appdata / "Programs" / "ExifTool" / "exiftool.exe",
+                        ])
+                        winget_pkgs = local_appdata / "Microsoft" / "WinGet" / "Packages"
+                        if winget_pkgs.exists():
+                            out.extend(winget_pkgs.rglob("exiftool.exe"))
+                            out.extend(winget_pkgs.rglob("exiftool(-k).exe"))
+                    return out
+
+                if not force:
+                    for c in _find_existing_copy_candidates():
+                        if c.exists():
+                            cand_ver, _ = _probe_exiftool_version(c)
+                            if cand_ver and _copy_exiftool_tree_to_root(c, tools_dir):
+                                ver_copied, _ = _probe_exiftool_version(tools_dir / "exiftool.exe")
+                                if ver_copied:
+                                    installed_ok = True
+                                    break
+
+                # 2. Téléchargement portable officiel depuis exiftool.org / SourceForge / OliverBetz (sans UAC)
+                dl_errs: list[str] = []
+                if not installed_ok and os.name == "nt":
+                    _EXIFTOOL_TASK_STATE["logs"].append("Téléchargement officiel depuis exiftool.org...")
+                    installed_ok = _download_exiftool_fallback(root_dir, err_out=dl_errs, target_dir=tools_dir)
+
+                # 3. Repli WinGet silencieux (--force si une version cassée est déjà présente)
+                if not installed_ok and os.name == "nt" and shutil.which("winget"):
+                    _EXIFTOOL_TASK_STATE["logs"].append("Installation / réparation d'ExifTool via WinGet...")
+                    cmd = [
+                        "winget", "upgrade" if force else "install", "-e", "--id", "OliverBetz.ExifTool",
+                        "--force", "--silent", "--disable-interactivity",
+                        "--accept-package-agreements", "--accept-source-agreements",
+                    ]
+                    wg_res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
+                    if wg_res.returncode != 0 and wg_res.stdout:
+                        dl_errs.append(f"winget({wg_res.returncode}): {wg_res.stdout.strip().splitlines()[-1]}")
+                    for c in _find_existing_copy_candidates():
+                        if c.exists():
+                            cand_ver, _ = _probe_exiftool_version(c)
+                            if cand_ver and _copy_exiftool_tree_to_root(c, tools_dir):
+                                ver_copied, _ = _probe_exiftool_version(tools_dir / "exiftool.exe")
+                                if ver_copied:
+                                    installed_ok = True
+                                    break
+
+                if not installed_ok:
+                    _, found_ver, found_err = _find_exiftool_executable()
+                    if not found_ver:
+                        detail = "; ".join(dl_errs[-2:]) if dl_errs else (found_err or "réseau/WinGet indisponible")
+                        raise RuntimeError(f"Échec installation ExifTool ({detail[:180]})")
+
+            _EXIFTOOL_PROBE_CACHE.clear()
+            after = _inspect_exiftool()
+            if not after["installed"]:
+                raise RuntimeError("ExifTool reste introuvable ou bloqué après l'installation.")
+            _EXIFTOOL_TASK_STATE["logs"].append(f"✓ ExifTool v{after['version']} prêt.")
+        except Exception as e:
+            _EXIFTOOL_TASK_STATE["last_error"] = str(e)
+            _EXIFTOOL_TASK_STATE["logs"].append(f"✗ Erreur : {e}")
+        finally:
+            _EXIFTOOL_TASK_STATE["running"] = False
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started"}
+
+
+_FFMPEG_TASK_LOCK = threading.Lock()
+_FFMPEG_TASK_STATE: dict = {
+    "running": False,
+    "last_error": None,
+    "logs": [],
+}
+_FFMPEG_PROBE_CACHE: dict[tuple[str, int, int], tuple[str | None, str | None]] = {}
+
+
+def _probe_ffmpeg_version(exe_path: Path) -> tuple[str | None, str | None]:
+    try:
+        st = exe_path.stat()
+        cache_key = (os.path.normcase(str(exe_path)), st.st_mtime_ns, st.st_size)
+        cached = _FFMPEG_PROBE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        cache_key = None
+
+    try:
+        kwargs = {
+            "stderr": subprocess.STDOUT,
+            "stdin": subprocess.DEVNULL,
+            "text": True,
+            "timeout": 4,
+        }
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        out = subprocess.check_output([str(exe_path), "-version"], **kwargs)
+        first_line = next((ln.strip() for ln in (out or "").splitlines() if ln.strip()), "")
+        m = re.search(r'ffmpeg version\s+([^\s]+)', first_line, re.IGNORECASE)
+        if m:
+            raw_v = m.group(1)
+            m_num = re.search(r'(\d+\.\d+(?:\.\d+)?)', raw_v)
+            ver = m_num.group(1) if m_num else raw_v.split("-", 1)[0]
+            res = (ver, None)
+        else:
+            res = (None, first_line or "Sortie -version invalide")
+    except subprocess.CalledProcessError as e:
+        msg = (e.output or str(e) or "").strip().splitlines()[0] if (e.output or str(e)) else str(e)
+        res = (None, msg)
+    except Exception as e:
+        res = (None, str(e))
+
+    if cache_key is not None:
+        if len(_FFMPEG_PROBE_CACHE) > 32:
+            _FFMPEG_PROBE_CACHE.clear()
+        _FFMPEG_PROBE_CACHE[cache_key] = res
+    return res
+
+
+def _ffmpeg_candidate_paths() -> list[Path]:
+    root_dir = Path(__file__).resolve().parents[2]
+    tools_dir = _get_tools_dir(root_dir)
+    local_appdata = Path(os.environ.get("LOCALAPPDATA", "")) if os.environ.get("LOCALAPPDATA") else None
+    prog_files = Path(os.environ.get("ProgramFiles", "")) if os.environ.get("ProgramFiles") else None
+    candidates: list[Path] = [
+        tools_dir / "ffmpeg.exe",
+        tools_dir / "ffmpeg",
+        root_dir / "ffmpeg.exe",
+        root_dir / "ffmpeg",
+    ]
+    which_path = shutil.which("ffmpeg")
+    if which_path:
+        candidates.append(Path(which_path))
+    if local_appdata:
+        candidates.extend([
+            local_appdata / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe",
+            local_appdata / "Programs" / "ffmpeg" / "bin" / "ffmpeg.exe",
+        ])
+        winget_pkgs = local_appdata / "Microsoft" / "WinGet" / "Packages"
+        if winget_pkgs.exists():
+            for pkg_d in winget_pkgs.glob("Gyan.FFmpeg*"):
+                candidates.extend(pkg_d.rglob("ffmpeg.exe"))
+    if prog_files:
+        candidates.append(prog_files / "ffmpeg" / "bin" / "ffmpeg.exe")
+    if os.name == "nt":
+        candidates.append(Path("C:/ffmpeg/bin/ffmpeg.exe"))
+    return candidates
+
+
+def _find_ffmpeg_executable() -> tuple[Path | None, str | None, str | None]:
+    first_existing: Path | None = None
+    first_err: str | None = None
+    seen: set[str] = set()
+    for cand in _ffmpeg_candidate_paths():
+        if not cand:
+            continue
+        key = os.path.normcase(str(cand))
+        if key in seen:
+            continue
+        seen.add(key)
+        if cand.exists() and cand.is_file():
+            ver, err = _probe_ffmpeg_version(cand)
+            if first_existing is None:
+                first_existing = cand
+                first_err = err
+            if ver:
+                parent_str = str(cand.parent)
+                if parent_str not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = parent_str + os.pathsep + os.environ.get("PATH", "")
+                return (cand, ver, None)
+    return (first_existing, None, first_err)
+
+
+def _inspect_ffmpeg() -> dict:
+    exe_path, version, broken_reason = _find_ffmpeg_executable()
+    return {
+        "installed": bool(exe_path and version),
+        "binary_present": bool(exe_path),
+        "broken_reason": broken_reason if (exe_path and not version) else None,
+        "version": version,
+        "path": str(exe_path) if exe_path else None,
+        "installing": bool(_FFMPEG_TASK_STATE["running"]),
+        "last_error": _FFMPEG_TASK_STATE["last_error"],
+        "logs": list(_FFMPEG_TASK_STATE["logs"][-20:]),
+    }
+
+
+def _fetch_ffmpeg_latest_version(timeout_s: float = 4.0) -> str | None:
+    req = urllib.request.Request("https://www.gyan.dev/ffmpeg/builds/release-version", headers={"User-Agent": "curl/8.5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as r:
+            raw = r.read().decode("utf-8", errors="ignore").strip().splitlines()
+            ver = raw[0].strip() if raw else ""
+            if re.fullmatch(r'\d+\.\d+(?:\.\d+)?', ver):
+                return ver
+    except Exception:
+        pass
+    return None
+
+
+def _copy_ffmpeg_bin_to_root(ffmpeg_cand: Path, target_dir: Path) -> bool:
+    try:
+        real_exe = ffmpeg_cand.resolve()
+    except Exception:
+        real_exe = ffmpeg_cand
+    if not real_exe.exists() or not real_exe.is_file():
+        return False
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_exe = target_dir / "ffmpeg.exe"
+    try:
+        if real_exe.resolve() != target_exe.resolve():
+            shutil.copy2(real_exe, target_exe)
+        ffprobe_cand = real_exe.parent / "ffprobe.exe"
+        if ffprobe_cand.exists() and ffprobe_cand.is_file():
+            target_probe = target_dir / "ffprobe.exe"
+            if ffprobe_cand.resolve() != target_probe.resolve():
+                shutil.copy2(ffprobe_cand, target_probe)
+    except PermissionError:
+        if not target_exe.exists():
+            return False
+    except Exception:
+        return False
+    return target_exe.exists()
+
+
+def _download_ffmpeg_fallback(root_dir: Path, err_out: list[str] | None = None, target_dir: Path | None = None) -> bool:
+    dest_dir = target_dir or _get_tools_dir(root_dir)
+    zip_urls = [
+        "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+    ]
+    tmp_dir = root_dir / "config" / "_tmp_ffmpeg"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        for idx, zip_url in enumerate(zip_urls):
+            zip_path = tmp_dir / f"ffmpeg_{idx}.zip"
+            try:
+                req = urllib.request.Request(zip_url, headers={"User-Agent": "curl/8.5.0", "Accept": "*/*"})
+                with urllib.request.urlopen(req, timeout=180) as resp, open(zip_path, "wb") as out_f:
+                    shutil.copyfileobj(resp, out_f)
+                if not zipfile.is_zipfile(zip_path):
+                    if err_out is not None:
+                        err_out.append(f"{zip_url}: réponse non-ZIP")
+                    continue
+                extract_sub = tmp_dir / f"ext_{idx}"
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    for member in zf.infolist():
+                        if member.filename.lower().endswith(("/bin/ffmpeg.exe", "/bin/ffprobe.exe")):
+                            zf.extract(member, extract_sub)
+                for cand in extract_sub.rglob("ffmpeg.exe"):
+                    if _copy_ffmpeg_bin_to_root(cand, dest_dir):
+                        ver_chk, ver_err = _probe_ffmpeg_version(dest_dir / "ffmpeg.exe")
+                        if ver_chk:
+                            return True
+                        if err_out is not None and ver_err:
+                            err_out.append(f"Exécution post-copie échouée: {ver_err}")
+            except Exception as exc:
+                if err_out is not None:
+                    err_out.append(f"{zip_url}: {exc}")
+                continue
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return False
+
+
+@router.get("/api/tools/ffmpeg/status")
+def api_ffmpeg_status(check_update: bool = False):
+    if _FFMPEG_TASK_STATE["running"]:
+        return {
+            "installed": False,
+            "binary_present": False,
+            "broken_reason": None,
+            "version": None,
+            "path": None,
+            "installing": True,
+            "last_error": _FFMPEG_TASK_STATE["last_error"],
+            "logs": list(_FFMPEG_TASK_STATE["logs"][-20:]),
+            "latest_version": None,
+            "update_available": False,
+            "update_checked": False,
+            "network_ok": None,
+        }
+    st = _inspect_ffmpeg()
+    latest = _fetch_ffmpeg_latest_version() if check_update else None
+    upd_avail = bool(
+        check_update
+        and st["installed"]
+        and st["version"]
+        and latest
+        and _parse_ver_tuple(latest) > _parse_ver_tuple(st["version"])
+    )
+    st["latest_version"] = latest
+    st["update_available"] = upd_avail
+    st["update_checked"] = bool(check_update)
+    st["network_ok"] = bool(latest) if check_update else None
+    return st
+
+
+@router.post("/api/tools/ffmpeg/install")
+def api_ffmpeg_install(force: bool = False):
+    with _FFMPEG_TASK_LOCK:
+        if _FFMPEG_TASK_STATE["running"]:
+            raise HTTPException(status_code=409, detail="Installation de FFmpeg déjà en cours.")
+        _FFMPEG_TASK_STATE.update({
+            "running": True,
+            "last_error": None,
+            "logs": ["Démarrage de la mise à jour de FFmpeg..." if force else "Démarrage de l'installation de FFmpeg..."],
+        })
+
+    root_dir = Path(__file__).resolve().parents[2]
+    tools_dir = _get_tools_dir(root_dir)
+
+    def _worker():
+        try:
+            st = _inspect_ffmpeg()
+            if not st["installed"] or force:
+                installed_ok = False
+                dl_errs: list[str] = []
+
+                if not force:
+                    for cand in _ffmpeg_candidate_paths():
+                        if cand.exists() and _probe_ffmpeg_version(cand)[0]:
+                            if _copy_ffmpeg_bin_to_root(cand, tools_dir):
+                                installed_ok = True
+                                break
+
+                if not installed_ok and os.name == "nt":
+                    _FFMPEG_TASK_STATE["logs"].append("Téléchargement officiel depuis gyan.dev...")
+                    installed_ok = _download_ffmpeg_fallback(root_dir, err_out=dl_errs, target_dir=tools_dir)
+
+                if not installed_ok and os.name == "nt" and shutil.which("winget"):
+                    _FFMPEG_TASK_STATE["logs"].append("Installation / réparation de FFmpeg via WinGet...")
+                    cmd = [
+                        "winget", "upgrade" if force else "install", "-e", "--id", "Gyan.FFmpeg",
+                        "--force", "--silent", "--disable-interactivity",
+                        "--accept-package-agreements", "--accept-source-agreements",
+                    ]
+                    wg_res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
+                    if wg_res.returncode != 0 and wg_res.stdout:
+                        dl_errs.append(f"winget({wg_res.returncode}): {wg_res.stdout.strip().splitlines()[-1]}")
+                    for cand in _ffmpeg_candidate_paths():
+                        if cand.exists() and _probe_ffmpeg_version(cand)[0]:
+                            if _copy_ffmpeg_bin_to_root(cand, tools_dir):
+                                installed_ok = True
+                                break
+
+                if not installed_ok:
+                    _, found_ver, found_err = _find_ffmpeg_executable()
+                    if not found_ver:
+                        detail = "; ".join(dl_errs[-2:]) if dl_errs else (found_err or "réseau/WinGet indisponible")
+                        raise RuntimeError(f"Échec installation FFmpeg ({detail[:180]})")
+
+            _FFMPEG_PROBE_CACHE.clear()
+            after = _inspect_ffmpeg()
+            if not after["installed"]:
+                raise RuntimeError("FFmpeg reste introuvable après l'installation.")
+            _FFMPEG_TASK_STATE["logs"].append(f"✓ FFmpeg v{after['version']} prêt.")
+        except Exception as e:
+            _FFMPEG_TASK_STATE["last_error"] = str(e)
+            _FFMPEG_TASK_STATE["logs"].append(f"✗ Erreur : {e}")
+        finally:
+            _FFMPEG_TASK_STATE["running"] = False
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started"}

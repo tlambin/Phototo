@@ -291,6 +291,12 @@ aside.sidebar-mini #topbar-logo-box {
   padding: 0;
   z-index: 28;
 }
+#settings-power-bar.is-floating {
+  position: fixed;
+  top: 5.5rem;
+  right: 1.25rem;
+  z-index: 28;
+}
 .has-stuck-header {
   padding-top: 2.5rem;
 }

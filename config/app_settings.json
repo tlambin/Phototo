@@ -1,10 +1,15 @@
 {
     "scanned_folders": [],
     "takeout_extract_dir": "",
+    "takeout_default_architecture": "KEEP_ORIGINAL",
+    "takeout_default_fix_metadata": true,
+    "takeout_default_delete_zips": false,
+    "takeout_timezone_mode": "GPS_OR_SETTINGS",
+    "takeout_use_gps_timezone": true,
     "timezone": "Europe/Paris",
     "language": "fr",
     "gpu_mode": "auto",
-    "ocr_engine": "paddleocr",
+    "ocr_engine": "rapidocr",
     "faces_model": "antelopev2",
     "clip_model": "vit-l-14"
 }

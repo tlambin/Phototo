@@ -18,9 +18,8 @@ let openedAlbumName = null;
 let singleAlbumPage = 1;
 let singleAlbumTotalPages = 1;
 
-let pendingCreateLibFolder = '';
-let pendingEditLibFolder = '';
-let editMoveExistingContent = false;
+let pendingCreateLibFolders = [];
+let pendingEditLibFolders = [];
 let autoDupMode = 'KEEP_ONE';
 let autoDupPriority = 'BEST_QUALITY';
 
@@ -235,6 +234,14 @@ function toggleAlbumsOptionsBar() {
     _syncScrollAfterLayoutToggle();
 }
 
+function _syncSettingsPowerBar(scrollTop) {
+    const bar = document.getElementById('settings-power-bar');
+    const tabSettings = document.getElementById('tab-settings');
+    if (!bar) return;
+    const active = Boolean(tabSettings && !tabSettings.classList.contains('hidden') && scrollTop > 40);
+    bar.classList.toggle('is-floating', active);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const scroller = document.getElementById('main-scroll-container');
     if (!scroller) return;
@@ -245,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const curTop = scroller.scrollTop || 0;
         const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
         const headers = document.querySelectorAll('.sticky-view-header');
+        _syncSettingsPowerBar(curTop);
 
         if (maxScroll < 180 || curTop <= 64) {
             _stickyScrollDownDist = 0;
@@ -570,8 +578,20 @@ async function loadAppSettings() {
     const res = await fetch('/api/settings');
     if (!res.ok) return;
     const d = await res.json();
+    window.appSettings = d;
     document.getElementById('settings-scanned-folders').value = (d.scanned_folders||[]).join('\n');
     document.getElementById('settings-takeout-dir').value = d.takeout_extract_dir || '';
+    const tArch = document.getElementById('settings-takeout-arch');
+    if (tArch) tArch.value = d.takeout_default_architecture || 'KEEP_ORIGINAL';
+    const tGps = document.getElementById('settings-takeout-gps-tz');
+    if (tGps) {
+        const tzMode = d.takeout_timezone_mode || (d.takeout_use_gps_timezone === false ? 'SETTINGS_ONLY' : 'GPS_OR_SETTINGS');
+        tGps.value = ['GPS_OR_SETTINGS', 'SETTINGS_ONLY', 'UTC'].includes(tzMode) ? tzMode : 'GPS_OR_SETTINGS';
+    }
+    const tFix = document.getElementById('settings-takeout-fix-meta');
+    if (tFix) tFix.checked = (d.takeout_default_fix_metadata !== false);
+    const tDel = document.getElementById('settings-takeout-del-zips');
+    if (tDel) tDel.checked = Boolean(d.takeout_default_delete_zips);
     document.getElementById('settings-timezone').value = d.timezone || 'Europe/Paris';
     document.getElementById('settings-lang').value = d.language || 'fr';
     currentGpuMode = d.gpu_mode || 'auto';
@@ -584,6 +604,8 @@ async function loadAppSettings() {
     });
     loadHardwareInfo(false);
     loadAiModulesStatus();
+    loadExifToolStatus(false);
+    loadFFmpegStatus(false);
 }
 
 function escapeHtml(str) {
@@ -683,7 +705,7 @@ async function checkAiUpdates() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '🔍 Rechercher des MÀJ';
+            btn.textContent = 'Vérifier MÀJ';
         }
     }
 }
@@ -943,19 +965,182 @@ async function selectAiModuleModel(moduleId, modelId) {
     }
 }
 
+const _toolPollTimers = {};
+
+function _renderExternalToolStatus(cfg, d) {
+    const badge = document.getElementById(cfg.badgeId);
+    const detail = document.getElementById(cfg.detailId);
+    const btn = document.getElementById(cfg.btnId);
+    if (!badge) return;
+
+    badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0';
+    if (d.installing) {
+        badge.classList.add('bg-sky-500/20', 'text-sky-400');
+        badge.textContent = 'Installation…';
+        if (detail) {
+            const logs = d.logs || [];
+            detail.textContent = logs.length ? logs[logs.length - 1] : 'Téléchargement en cours…';
+        }
+        if (btn) btn.classList.add('hidden');
+        return;
+    }
+
+    const pyReady = (cfg.requirePyExifTool ? Boolean(d.pyexiftool_installed) : true);
+    const fullyReady = Boolean(d.installed && pyReady);
+    if (fullyReady) {
+        if (d.update_available && d.latest_version) {
+            badge.classList.add('bg-sky-500/20', 'text-sky-400');
+            badge.textContent = `v${d.version} → MÀJ v${d.latest_version}`;
+            if (detail) detail.textContent = d.path || '';
+            if (btn) {
+                btn.classList.remove('hidden');
+                btn.textContent = `Mettre à jour (v${d.latest_version})`;
+                btn.setAttribute('onclick', `${cfg.installFn}(true)`);
+            }
+        } else {
+            badge.classList.add('bg-emerald-500/20', 'text-emerald-400');
+            const upToDateTag = (d.update_checked && d.latest_version) ? ' · À jour' : '';
+            badge.textContent = `✓ Installé${d.version ? ' (v' + d.version + ')' : ''}${upToDateTag}`;
+            if (detail) {
+                detail.textContent = (d.update_checked && d.network_ok === false)
+                    ? `${d.path || ''} · Hors-ligne`
+                    : (d.path || '');
+            }
+            if (btn) btn.classList.add('hidden');
+        }
+        return;
+    }
+
+    badge.classList.add('bg-rose-500/20', 'text-rose-400');
+    if (d.installed && cfg.requirePyExifTool && !d.pyexiftool_installed) {
+        badge.textContent = 'PyExifTool manquant';
+    } else if (d.binary_present && d.broken_reason) {
+        badge.textContent = 'Installation corrompue';
+    } else {
+        badge.textContent = 'Non installé';
+    }
+    if (detail) {
+        detail.textContent = d.last_error
+            ? `Erreur : ${d.last_error}`
+            : (d.broken_reason || cfg.missingHint);
+    }
+    if (btn) {
+        btn.classList.remove('hidden');
+        btn.textContent = !d.installed
+            ? (d.binary_present ? 'Réparer / Installer' : `Installer ${cfg.label}`)
+            : 'Installer PyExifTool';
+        btn.setAttribute('onclick', `${cfg.installFn}(false)`);
+    }
+}
+
+async function _loadExternalToolStatus(cfg, checkUpdate = false) {
+    try {
+        const res = await fetch(`${cfg.statusUrl}?check_update=${checkUpdate ? 'true' : 'false'}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        _renderExternalToolStatus(cfg, d);
+        if (d.installing) {
+            if (!_toolPollTimers[cfg.key]) {
+                _toolPollTimers[cfg.key] = setInterval(() => _loadExternalToolStatus(cfg, false), 1500);
+            }
+        } else if (_toolPollTimers[cfg.key]) {
+            clearInterval(_toolPollTimers[cfg.key]);
+            delete _toolPollTimers[cfg.key];
+        }
+    } catch (e) {}
+}
+
+async function _installExternalToolNow(cfg, forceUpdate = false) {
+    const btn = document.getElementById(cfg.btnId);
+    if (btn) btn.classList.add('hidden');
+    try {
+        const res = await fetch(`${cfg.installUrl}?force=${forceUpdate ? 'true' : 'false'}`, { method: 'POST' });
+        if (!res.ok && res.status !== 409) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || `Impossible de lancer l'installation de ${cfg.label}.`);
+            await _loadExternalToolStatus(cfg, false);
+            return;
+        }
+        await _loadExternalToolStatus(cfg, false);
+    } catch (e) {
+        await _loadExternalToolStatus(cfg, false);
+    }
+}
+
+const _EXIFTOOL_CFG = {
+    key: 'exiftool',
+    label: 'ExifTool',
+    badgeId: 'settings-exiftool-badge',
+    detailId: 'settings-exiftool-detail',
+    btnId: 'settings-exiftool-install-btn',
+    statusUrl: '/api/tools/exiftool/status',
+    installUrl: '/api/tools/exiftool/install',
+    installFn: 'installExifToolNow',
+    requirePyExifTool: true,
+    missingHint: 'Requis pour corriger les dates EXIF/GPS Google Takeout.'
+};
+
+const _FFMPEG_CFG = {
+    key: 'ffmpeg',
+    label: 'FFmpeg',
+    badgeId: 'settings-ffmpeg-badge',
+    detailId: 'settings-ffmpeg-detail',
+    btnId: 'settings-ffmpeg-install-btn',
+    statusUrl: '/api/tools/ffmpeg/status',
+    installUrl: '/api/tools/ffmpeg/install',
+    installFn: 'installFFmpegNow',
+    requirePyExifTool: false,
+    missingHint: 'Requis pour découper et exporter les vidéos dans le Studio.'
+};
+
+function renderExifToolStatus(d) { _renderExternalToolStatus(_EXIFTOOL_CFG, d); }
+async function loadExifToolStatus(checkUpdate = false) { return _loadExternalToolStatus(_EXIFTOOL_CFG, checkUpdate); }
+async function installExifToolNow(forceUpdate = false) { return _installExternalToolNow(_EXIFTOOL_CFG, forceUpdate); }
+
+function renderFFmpegStatus(d) { _renderExternalToolStatus(_FFMPEG_CFG, d); }
+async function loadFFmpegStatus(checkUpdate = false) { return _loadExternalToolStatus(_FFMPEG_CFG, checkUpdate); }
+async function installFFmpegNow(forceUpdate = false) { return _installExternalToolNow(_FFMPEG_CFG, forceUpdate); }
+
+async function browseTakeoutExtractDir() {
+    const res = await fetch('/api/dialog/browse?mode=folder');
+    if (!res.ok) return;
+    const d = await res.json();
+    if (!d.paths || !d.paths.length) return;
+    const inp = document.getElementById('settings-takeout-dir');
+    if (inp) {
+        inp.value = d.paths[0];
+        await saveAppSettingsQuiet();
+    }
+}
+
+async function clearTakeoutExtractDir() {
+    const inp = document.getElementById('settings-takeout-dir');
+    if (inp) {
+        inp.value = '';
+        await saveAppSettingsQuiet();
+    }
+}
+
 async function saveAppSettingsQuiet() {
+    const payload = {
+        scanned_folders: document.getElementById('settings-scanned-folders').value.split('\n'),
+        takeout_extract_dir: document.getElementById('settings-takeout-dir').value,
+        takeout_default_architecture: document.getElementById('settings-takeout-arch')?.value || 'KEEP_ORIGINAL',
+        takeout_default_fix_metadata: document.getElementById('settings-takeout-fix-meta')?.checked !== false,
+        takeout_default_delete_zips: Boolean(document.getElementById('settings-takeout-del-zips')?.checked),
+        takeout_timezone_mode: document.getElementById('settings-takeout-gps-tz')?.value || 'GPS_OR_SETTINGS',
+        takeout_use_gps_timezone: (document.getElementById('settings-takeout-gps-tz')?.value || 'GPS_OR_SETTINGS') === 'GPS_OR_SETTINGS',
+        timezone: document.getElementById('settings-timezone').value,
+        language: document.getElementById('settings-lang').value || 'fr',
+        gpu_mode: currentGpuMode,
+        ocr_engine: currentOcrEngine,
+        faces_model: currentFacesModel,
+        clip_model: currentClipModel
+    };
+    window.appSettings = { ...(window.appSettings || {}), ...payload };
     await fetch('/api/settings/save', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            scanned_folders: document.getElementById('settings-scanned-folders').value.split('\n'),
-            takeout_extract_dir: document.getElementById('settings-takeout-dir').value,
-            timezone: document.getElementById('settings-timezone').value,
-            language: document.getElementById('settings-lang').value || 'fr',
-            gpu_mode: currentGpuMode,
-            ocr_engine: currentOcrEngine,
-            faces_model: currentFacesModel,
-            clip_model: currentClipModel
-        })
+        body:JSON.stringify(payload)
     });
 }
 

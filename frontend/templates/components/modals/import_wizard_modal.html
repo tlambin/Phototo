@@ -1,12 +1,12 @@
 <!-- ==================== FENÊTRE D'IMPORTATION EN 3 ÉTAPES ==================== -->
 <div id="import-wizard-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeImportWizard()">
-    <div class="ui-card rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+    <div class="ui-card rounded-3xl max-w-md w-full p-6 shadow-2xl">
 
-        <!-- ÉTAPE 1 : Importer des fichiers (Glisser-déposer, Dossier ou Google Photos) -->
+        <!-- ÉTAPE 1 : Importer des fichiers (Glisser-déposer, Dossier, Fichiers ou Google Takeout) -->
         <div id="import-step-1" class="space-y-4">
             <div class="flex justify-between items-center">
                 <h2 class="text-base font-extrabold">Importer des fichiers</h2>
-                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+                <button onclick="closeImportWizard()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer">✕</button>
             </div>
 
             <div id="drop-zone"
@@ -22,94 +22,140 @@
                 <input id="hidden-file-input" type="file" multiple class="hidden" onchange="handleSelectedFilesInput(this.files)"/>
             </div>
 
-            <button onclick="pickStandardFolderForImport()" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
-                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <span class="text-sm font-extrabold">Sélectionner un dossier</span>
-            </button>
-
-            <button onclick="showImportStep(2)" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
-                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="pickStandardFolderForImport()" title="Sélectionner un dossier"
+                        class="ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3 py-2 flex items-center justify-center gap-1.5 text-[11px] font-bold transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
-                </div>
-                <span class="text-sm font-extrabold">Google Photos</span>
-            </button>
+                    <span class="truncate">Sélectionner un dossier</span>
+                </button>
+
+                <button type="button" onclick="document.getElementById('hidden-file-input').click()" title="Sélectionner des fichiers"
+                        class="ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3 py-2 flex items-center justify-center gap-1.5 text-[11px] font-bold transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span class="truncate">Sélectionner des fichiers</span>
+                </button>
+
+                <button type="button" onclick="showImportStep(2)" title="Importer depuis Google Takeout"
+                        class="col-span-2 ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3.5 py-2 flex items-center justify-between gap-2 text-xs font-extrabold transition cursor-pointer">
+                    <span class="flex items-center gap-2 min-w-0">
+                        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M21.35 11.1H12v3.2h5.35c-.25 1.4-1.05 2.6-2.25 3.4v2.8h3.6c2.1-1.95 3.35-4.8 3.35-8.2 0-.65-.05-1.25-.15-1.8z"/>
+                            <path d="M12 22c3.05 0 5.6-1 7.45-2.75l-3.6-2.8c-1 .68-2.3 1.08-3.85 1.08-2.95 0-5.45-2-6.35-4.68H1.95v2.9C3.8 19.45 7.6 22 12 22z"/>
+                            <path d="M5.65 12.85c-.23-.68-.36-1.4-.36-2.15s.13-1.47.36-2.15v-2.9H1.95C1.2 7.15.75 8.85.75 10.7s.45 3.55 1.2 5.05l3.7-2.9z"/>
+                            <path d="M12 5.47c1.66 0 3.15.57 4.32 1.69l3.24-3.24C17.6 2.1 15.05 1.2 12 1.2 7.6 1.2 3.8 3.75 1.95 7.45l3.7 2.9C6.55 7.47 9.05 5.47 12 5.47z"/>
+                        </svg>
+                        <span class="truncate">Google Takeout</span>
+                    </span>
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-60" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <polyline points="9 6 15 12 9 18"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <!-- ÉTAPE 2 : Importer depuis Google (Dossier décompressé ou Fichiers ZIP) -->
-        <div id="import-step-2" class="hidden space-y-4">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <button onclick="showImportStep(1)" class="text-lg font-bold hover:scale-110 transition">←</button>
-                    <h2 class="text-base font-extrabold">Importer depuis Google</h2>
+        <div id="import-step-2" class="hidden space-y-3.5">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <button type="button" onclick="showImportStep(1)" title="Retour"
+                            class="w-7 h-7 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center transition cursor-pointer shrink-0">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                            <path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                    </button>
+                    <h2 class="text-base font-extrabold leading-tight truncate">Google Takeout</h2>
                 </div>
-                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+                <button onclick="closeImportWizard()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer shrink-0">✕</button>
             </div>
 
-            <button onclick="pickTakeoutSource('TAKEOUT_FOLDER')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
-                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <span class="text-sm font-extrabold">Dossier décompressé</span>
-            </button>
+            <p class="text-[11px] font-semibold opacity-65">Sélectionnez le format de votre export Google Takeout :</p>
 
-            <button onclick="pickTakeoutSource('TAKEOUT_ZIPS')" class="w-full flex items-center gap-4 p-1.5 rounded-2xl ui-hover transition text-left">
-                <div class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="pickTakeoutSource('TAKEOUT_FOLDER')" title="Dossier décompressé"
+                        class="ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3 py-2 flex items-center justify-center gap-1.5 text-[11px] font-bold transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="truncate">Dossier décompressé</span>
+                </button>
+
+                <button type="button" onclick="pickTakeoutSource('TAKEOUT_ZIPS')" title="Fichiers ZIP"
+                        class="ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3 py-2 flex items-center justify-center gap-1.5 text-[11px] font-bold transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                         <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
                     </svg>
-                </div>
-                <span class="text-sm font-extrabold">Fichiers ZIP</span>
-            </button>
+                    <span class="truncate">Fichiers ZIP</span>
+                </button>
+            </div>
         </div>
 
         <!-- ÉTAPE 3 : Confirmation & Options (Albums, Sous-dossiers, Métadonnées, ZIP) -->
         <div id="import-step-3" class="hidden space-y-4">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <button id="import-step3-back-btn" onclick="showImportStep(2)" class="text-lg font-bold hover:scale-110 transition">←</button>
-                    <h2 id="import-step3-header" class="text-base font-extrabold">Importer un dossier</h2>
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <button type="button" id="import-step3-back-btn" onclick="showImportStep(2)" title="Retour"
+                            class="w-7 h-7 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center transition cursor-pointer shrink-0">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                            <path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                    </button>
+                    <h2 id="import-step3-header" class="text-base font-extrabold leading-tight truncate">Importer un dossier</h2>
                 </div>
-                <button onclick="closeImportWizard()" class="w-6 h-6 rounded-full border border-current flex items-center justify-center text-xs opacity-70 hover:opacity-100">✕</button>
+                <button onclick="closeImportWizard()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer shrink-0">✕</button>
             </div>
 
-            <div class="flex items-start gap-4">
-                <div onclick="rePickStep3Paths()" class="plum-btn w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow cursor-pointer" title="Changer la sélection">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <!-- Liste multi-sources (Dossiers / ZIP) + Bouton Ajouter -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                    <span id="import-step3-subtitle" class="text-xs font-extrabold">Dossier sélectionné</span>
+                    <span id="import-step3-count" class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-extrabold">0</span>
                 </div>
-                <div class="min-w-0 flex-1">
-                    <div id="import-step3-subtitle" class="text-sm font-extrabold">Dossier sélectionné</div>
-                    <div id="import-step3-paths" class="text-[11px] font-bold opacity-55 space-y-0.5 max-h-16 overflow-y-auto break-all mt-0.5"></div>
-                </div>
+                <div id="import-step3-paths" class="max-h-28 overflow-y-auto no-scrollbar space-y-1.5"></div>
+                <button id="import-step3-add-btn" type="button" onclick="addMoreStep3Paths()"
+                        class="w-full ui-pill hover:bg-[var(--bg-hover)] rounded-full px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] font-bold transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                    <span id="import-step3-add-label">Ajouter un dossier</span>
+                </button>
             </div>
 
-            <div class="space-y-3 pl-1">
-                <!-- Option 1 : Créer des albums -->
-                <div id="row-opt-create-album" class="space-y-2.5">
-                    <div onclick="toggleWizardCheck('album')" class="flex items-center gap-3 cursor-pointer select-none">
-                        <div id="wiz-chk-album" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold">✓</div>
-                        <span class="text-xs font-extrabold">Créer un ou plusieurs albums</span>
+            <!-- Options compactes et facultatives -->
+            <div class="pt-1.5 border-t border-current/10 space-y-1.5">
+                <div class="text-[10px] font-bold uppercase tracking-wider opacity-45 px-1">Options (facultatif)</div>
+
+                <!-- Option 1 : Créer des albums (Dossier standard) -->
+                <div id="row-opt-create-album" class="ui-pill rounded-xl px-2.5 py-1.5 space-y-2">
+                    <div onclick="toggleWizardCheck('album')" class="flex items-center justify-between gap-2.5 cursor-pointer select-none">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <svg class="w-3.5 h-3.5 shrink-0 opacity-75" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <rect x="3" y="6" width="14" height="14" rx="2.5"/>
+                                <path d="M7 3h11a2.5 2.5 0 0 1 2.5 2.5V16"/>
+                            </svg>
+                            <span class="text-[11px] font-bold truncate">Créer un ou plusieurs albums</span>
+                        </div>
+                        <div id="wiz-chk-album" class="w-4 h-4 rounded-full plum-btn flex items-center justify-center text-[9px] font-extrabold shrink-0 transition">✓</div>
                     </div>
 
                     <!-- Panneau de configuration des albums & sous-dossiers -->
-                    <div id="wiz-album-config-panel" class="pl-6 space-y-2.5">
+                    <div id="wiz-album-config-panel" class="space-y-1.5 pt-1.5 border-t border-current/10">
                         <!-- Choix du mode (affiché automatiquement si des sous-dossiers existent) -->
-                        <div id="wiz-subfolder-modes" class="hidden space-y-1.5 text-[11px] font-extrabold">
-                            <label onclick="setWizardSubfolderMode('SINGLE')" class="flex items-center gap-2 cursor-pointer">
-                                <span id="wiz-rad-single" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]"></span>
+                        <div id="wiz-subfolder-modes" class="hidden space-y-1 text-[10px] font-bold">
+                            <label onclick="setWizardSubfolderMode('SINGLE')" class="flex items-center gap-2 cursor-pointer py-0.5">
+                                <span id="wiz-rad-single" class="w-3.5 h-3.5 rounded-full border-[1.6px] border-current/70 flex items-center justify-center text-[8px] shrink-0"></span>
                                 <span>Un seul album global pour tout le dossier</span>
                             </label>
-                            <label onclick="setWizardSubfolderMode('ALL_SUBS')" class="flex items-center gap-2 cursor-pointer">
-                                <span id="wiz-rad-allsubs" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]">✓</span>
+                            <label onclick="setWizardSubfolderMode('ALL_SUBS')" class="flex items-center gap-2 cursor-pointer py-0.5">
+                                <span id="wiz-rad-allsubs" class="w-3.5 h-3.5 rounded-full border-[1.6px] border-current/70 flex items-center justify-center text-[8px] shrink-0">✓</span>
                                 <span>Créer un album pour chaque sous-dossier</span>
                             </label>
-                            <label onclick="setWizardSubfolderMode('CUSTOM_SUBS')" class="flex items-center gap-2 cursor-pointer">
-                                <span id="wiz-rad-custom" class="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[9px]"></span>
+                            <label onclick="setWizardSubfolderMode('CUSTOM_SUBS')" class="flex items-center gap-2 cursor-pointer py-0.5">
+                                <span id="wiz-rad-custom" class="w-3.5 h-3.5 rounded-full border-[1.6px] border-current/70 flex items-center justify-center text-[8px] shrink-0"></span>
                                 <span>Me laisser choisir chaque sous-dossier</span>
                             </label>
                         </div>
@@ -117,7 +163,7 @@
                         <!-- Champ Nom de l'album (Mode SINGLE) -->
                         <div id="wiz-single-album-box">
                             <input id="wiz-album-name-input" type="text" placeholder="Nom de l'album..."
-                                   class="ui-pill w-full rounded-full px-3.5 py-1.5 text-xs font-bold outline-none"/>
+                                   class="ui-card w-full rounded-full px-3 py-1 text-[11px] font-bold outline-none"/>
                         </div>
 
                         <!-- Liste interactive des sous-dossiers (Mode CUSTOM_SUBS) -->
@@ -126,26 +172,68 @@
                                 <span>Cochez les sous-dossiers à importer et leur album :</span>
                                 <button type="button" onclick="toggleAllCustomSubfolders()" class="underline hover:opacity-100">Tout basculer</button>
                             </div>
-                            <div id="wiz-subfolders-list" class="max-h-40 overflow-y-auto space-y-1.5 pr-1"></div>
+                            <div id="wiz-subfolders-list" class="max-h-32 overflow-y-auto space-y-1 pr-1"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Option 2 : Corriger les métadonnées -->
-                <div id="row-opt-fix-meta" onclick="toggleWizardCheck('fix')" class="flex items-center gap-3 cursor-pointer select-none">
-                    <div id="wiz-chk-fix" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold">✓</div>
-                    <span class="text-xs font-extrabold">Corriger les metadonnées</span>
+                <!-- Option Takeout : Architecture compacte avec menu à flèche (3 choix) -->
+                <div id="row-opt-takeout-architecture" class="hidden ui-pill rounded-xl px-2.5 py-1.5 space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 shrink-0 opacity-85">
+                            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M21.35 11.1H12v3.2h5.35c-.25 1.4-1.05 2.6-2.25 3.4v2.8h3.6c2.1-1.95 3.35-4.8 3.35-8.2 0-.65-.05-1.25-.15-1.8z"/>
+                                <path d="M12 22c3.05 0 5.6-1 7.45-2.75l-3.6-2.8c-1 .68-2.3 1.08-3.85 1.08-2.95 0-5.45-2-6.35-4.68H1.95v2.9C3.8 19.45 7.6 22 12 22z"/>
+                                <path d="M5.65 12.85c-.23-.68-.36-1.4-.36-2.15s.13-1.47.36-2.15v-2.9H1.95C1.2 7.15.75 8.85.75 10.7s.45 3.55 1.2 5.05l3.7-2.9z"/>
+                                <path d="M12 5.47c1.66 0 3.15.57 4.32 1.69l3.24-3.24C17.6 2.1 15.05 1.2 12 1.2 7.6 1.2 3.8 3.75 1.95 7.45l3.7 2.9C6.55 7.47 9.05 5.47 12 5.47z"/>
+                            </svg>
+                            <span class="text-[11px] font-bold">Architecture</span>
+                        </div>
+                        <div class="relative flex items-center min-w-0">
+                            <select id="wiz-takeout-arch-select" onchange="setTakeoutArchitecture(this.value)"
+                                    class="appearance-none bg-transparent pr-4 pl-1 py-0.5 text-[11px] font-extrabold outline-none cursor-pointer text-right truncate max-w-[230px]">
+                                <option value="KEEP_ORIGINAL">Conserver albums, favoris et corbeille</option>
+                                <option value="GOOGLE_ALBUM">Album « Google Photos » complet</option>
+                                <option value="NONE">Ne rien garder (sans album)</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-70 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div id="wiz-takeout-arch-desc" class="text-[10px] font-medium opacity-60 leading-snug pl-5">
+                        Par défaut : garde les albums, favoris et la corbeille directement dans la bibliothèque.
+                    </div>
+                </div>
+
+                <!-- Option 2 : Corriger les métadonnées (Google Takeout uniquement) -->
+                <div id="row-opt-fix-meta" onclick="toggleWizardCheck('fix')"
+                     class="hidden ui-pill hover:bg-[var(--bg-hover)] rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2.5 cursor-pointer select-none transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <svg class="w-3.5 h-3.5 shrink-0 opacity-75" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+                        </svg>
+                        <span class="text-[11px] font-bold truncate">Corriger les métadonnées</span>
+                    </div>
+                    <div id="wiz-chk-fix" class="w-4 h-4 rounded-full plum-btn flex items-center justify-center text-[9px] font-extrabold shrink-0 transition">✓</div>
                 </div>
 
                 <!-- Option 3 : Supprimer les ZIP après extraction -->
-                <div id="row-opt-del-zips" onclick="toggleWizardCheck('del')" class="hidden flex items-center gap-3 cursor-pointer select-none">
-                    <div id="wiz-chk-del" class="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-extrabold"></div>
-                    <span class="text-xs font-extrabold">Supprimer les zip apres extraction</span>
+                <div id="row-opt-del-zips" onclick="toggleWizardCheck('del')"
+                     class="hidden ui-pill hover:bg-[var(--bg-hover)] rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2.5 cursor-pointer select-none transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <svg class="w-3.5 h-3.5 shrink-0 opacity-75" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        </svg>
+                        <span class="text-[11px] font-bold truncate">Supprimer les .zip après extraction</span>
+                    </div>
+                    <div id="wiz-chk-del" class="w-4 h-4 rounded-full border-[1.6px] border-current/50 flex items-center justify-center text-[9px] font-extrabold shrink-0 transition"></div>
                 </div>
             </div>
 
-            <div class="flex justify-end pt-1">
-                <button onclick="confirmWizardImport()" class="plum-btn px-8 py-2.5 rounded-full text-xs font-extrabold shadow-md">
+            <div class="flex justify-center pt-1">
+                <button onclick="confirmWizardImport()" class="plum-btn px-8 py-2 rounded-full text-xs font-extrabold shadow-md cursor-pointer">
                     Importer
                 </button>
             </div>

@@ -30,6 +30,15 @@ Phototo_Bibliotheque/
 **/Import_Direct/
 **/_Temp_Takeout_Buffer/
 
+# --- Binaires portables locaux (ExifTool & FFmpeg) ---
+tools/
+exiftool.exe
+exiftool_files/
+ffmpeg.exe
+ffprobe.exe
+config/_tmp_exiftool/
+config/_tmp_ffmpeg/
+
 # --- Système & IDE ---
 .vscode/
 .idea/

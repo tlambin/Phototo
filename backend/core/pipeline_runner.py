@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import shutil
@@ -193,8 +194,14 @@ def extract_zip_interruptible(zpath: Path, buffer_dir: Path, progress_cb) -> tup
                 if STATE.stop_requested:
                     return (zpath, False, extracted_files, "PAUSED")
 
-                clean_rel = member.filename.replace("\xa0", " ")
-                target_path = buffer_dir / clean_rel
+                clean_parts = [
+                    re.sub(r'[<>:"|?*\x00-\x1f]', '_', seg).strip('. ')
+                    for seg in member.filename.replace("\\", "/").replace("\xa0", " ").split("/")
+                    if seg and seg not in (".", "..")
+                ]
+                if not clean_parts:
+                    continue
+                target_path = buffer_dir.joinpath(*clean_parts)
 
                 if target_path.exists() and target_path.stat().st_size == member.file_size:
                     extracted_files += 1
@@ -217,9 +224,11 @@ def run_step_ingestion(lib: dict):
     src_type = lib["source_type"]
     db_path = Path(lib["db_path"])
     dest_dir = Path(lib["dest_dir"])
-    fix_meta = lib["options"].get("fix_takeout_json_metadata", True)
-    is_takeout = lib.get("is_takeout", False) and fix_meta
+    fix_meta = bool(lib["options"].get("fix_takeout_json_metadata", True))
+    is_takeout = bool(lib.get("is_takeout", False))
     organize = lib["options"].get("organize_by_year_month", True)
+    keep_structure = lib["options"].get("takeout_keep_structure", True)
+    wrap_google_album = lib["options"].get("takeout_wrap_google_album", False)
 
     STATE.missing_meta_files.clear()
     conn = fusion.init_db(db_path)
@@ -299,7 +308,7 @@ def run_step_ingestion(lib: dict):
         ]
 
         total_m = len(all_media)
-        STATE.current_step = "Correction des metadonnées..." if is_takeout else "Importation des fichiers..."
+        STATE.current_step = "Correction des metadonnées..." if (is_takeout and fix_meta) else "Importation des fichiers..."
         STATE.log(f"🔧 {total_m} média(s) à traiter...")
         STATE._step_start_ts = time.time()
         STATE.update_progress(0, total_m, unit="fich./s")
@@ -308,7 +317,7 @@ def run_step_ingestion(lib: dict):
         with ProcessPoolExecutor(
             max_workers=fusion.MAX_WORKERS,
             initializer=fusion.init_worker,
-            initargs=(str(dest_dir), is_takeout, organize)
+            initargs=(str(dest_dir), is_takeout, organize, keep_structure, wrap_google_album, fix_meta)
         ) as executor:
             for res in executor.map(fusion.process_single_file, all_media, chunksize=20):
                 if STATE.stop_requested:
@@ -360,7 +369,7 @@ def run_step_ingestion(lib: dict):
                 remaining.append(p)
 
     total = len(remaining)
-    STATE.current_step = "Correction des metadonnées..." if is_takeout else "Importation des fichiers..."
+    STATE.current_step = "Correction des metadonnées..." if (is_takeout and fix_meta) else "Importation des fichiers..."
     STATE._step_start_ts = time.time()
     STATE.update_progress(0, total, unit="fich./s")
     if total == 0:
@@ -368,10 +377,11 @@ def run_step_ingestion(lib: dict):
         return
 
     batch, done = [], 0
+    takeout_roots = list(all_roots) if is_takeout else []
     with ProcessPoolExecutor(
         max_workers=fusion.MAX_WORKERS,
         initializer=fusion.init_worker,
-        initargs=(str(dest_dir), is_takeout, organize)
+        initargs=(str(dest_dir), is_takeout, organize, keep_structure, wrap_google_album, fix_meta, takeout_roots)
     ) as executor:
         for res in executor.map(fusion.process_single_file, remaining, chunksize=20):
             if STATE.stop_requested:

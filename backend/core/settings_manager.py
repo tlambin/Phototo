@@ -15,6 +15,11 @@ LEGACY_SETTINGS_FILE = ROOT_DIR / "app_settings.json"
 DEFAULT_SETTINGS = {
     "scanned_folders": [],
     "takeout_extract_dir": "",
+    "takeout_default_architecture": "KEEP_ORIGINAL",
+    "takeout_default_fix_metadata": True,
+    "takeout_default_delete_zips": False,
+    "takeout_timezone_mode": "GPS_OR_SETTINGS",  # "GPS_OR_SETTINGS" | "SETTINGS_ONLY" | "UTC"
+    "takeout_use_gps_timezone": True,
     "timezone": "Europe/Paris",
     "language": "fr",
     "gpu_mode": "auto",  # "auto", "cuda" (NVIDIA), "directml"/"amd" (AMD Radeon), "intel"/"cpu"

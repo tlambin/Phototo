@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from settings_manager import get_configured_timezone
+from library_manager import load_libraries
 from pipeline_runner import STATE
 from database import MISSING_META_SQL_CONDITION, get_active_db_and_dest, get_db, resolve_actual_path
 from media_editor import process_image_edits, process_video_edits
@@ -102,9 +103,15 @@ def api_retry_metadata_recovery():
     conn = get_db()
     cur = conn.cursor()
     _, active_dest = get_active_db_and_dest()
+    lib_cfg = load_libraries()
+    active_lib = lib_cfg.get("libraries", {}).get(lib_cfg.get("active_library"), {})
+    source_roots = active_lib.get("source_paths") or []
+    fusion._DIR_JSON_CACHE.clear()
+    fusion._MIRROR_DIRS_CACHE.clear()
+    fusion._GLOBAL_JSON_INDEX_CACHE.clear()
 
     cur.execute(f"""
-        SELECT source_path, dest_path, timestamp, status, latitude, longitude
+        SELECT source_path, dest_path, timestamp, status, latitude, longitude, is_favorite, album_name
         FROM processed_files
         WHERE {MISSING_META_SQL_CONDITION}
     """)
@@ -120,28 +127,34 @@ def api_retry_metadata_recovery():
                 continue
 
             new_ts = None
+            new_lat = r["latitude"] if (r["latitude"] and abs(r["latitude"]) > 1e-7) else None
+            new_lon = r["longitude"] if (r["longitude"] and abs(r["longitude"]) > 1e-7) else None
+            new_alt = None
+            new_desc = None
+            new_fav = bool(r.get("is_favorite"))
             new_status = "no_metadata"
             src_p = Path(r["source_path"])
             if src_p.exists():
-                jp = fusion.find_matching_json(src_p)
+                jp = fusion.find_matching_json(src_p, extra_roots=source_roots)
                 if jp:
-                    try:
-                        data = json.loads(jp.read_text(encoding="utf-8"))
-                        ts_s = data.get("photoTakenTime", {}).get("timestamp") or data.get("creationTime", {}).get("timestamp")
-                        if ts_s:
-                            new_ts = int(ts_s)
-                            new_status = "json_matched"
-                    except Exception:
-                        pass
+                    jmeta = fusion.extract_takeout_json_metadata(jp)
+                    if jmeta["timestamp"]:
+                        new_ts = jmeta["timestamp"]
+                        new_status = "json_matched"
+                    if new_lat is None and jmeta["lat"] is not None and jmeta["lon"] is not None:
+                        new_lat, new_lon, new_alt = jmeta["lat"], jmeta["lon"], jmeta["alt"]
+                    new_desc = jmeta["description"]
+                    if jmeta["is_favorite"]:
+                        new_fav = True
 
             if not new_ts:
-                fn_ts = fusion.extract_date_from_filename(curr_p.name)
+                fn_ts = fusion.extract_date_from_filename(curr_p.name) or (fusion.extract_date_from_filename(src_p.name) if src_p.exists() else None)
                 if fn_ts:
                     new_ts = fn_ts
                     new_status = "filename_date"
 
             if new_ts and new_ts > 0:
-                t_info = fusion.resolve_datetime_with_dst(new_ts, r["latitude"], r["longitude"])
+                t_info = fusion.resolve_datetime_with_dst(new_ts, new_lat, new_lon)
                 dt_loc = t_info["dt_local"]
                 clean_orig_stem = re.sub(r'^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_', '', curr_p.stem)
                 new_folder = active_dest / str(dt_loc.year) / fusion.MOIS_FR[dt_loc.month]
@@ -158,15 +171,32 @@ def api_retry_metadata_recovery():
                     if new_dest.resolve() != curr_p.resolve():
                         shutil.move(curr_p, new_dest)
                     is_vid = new_dest.suffix.lower() in VIDEO_EXTS
-                    tags = {"DateTimeOriginal": t_info["exif_local_str"], "CreateDate": t_info["exif_local_str"]} if not is_vid else {"QuickTime:CreateDate": t_info["exif_utc_str"]}
-                    et.set_tags([str(new_dest)], tags=tags, params=["-overwrite_original", "-P", "-q"])
+                    tags = fusion.build_exiftool_tags(
+                        time_info=t_info,
+                        is_video=is_vid,
+                        ext_lower=new_dest.suffix.lower(),
+                        lat=new_lat,
+                        lon=new_lon,
+                        alt=new_alt,
+                        description=new_desc,
+                        is_favorite=new_fav,
+                        album_name=r.get("album_name"),
+                    )
+                    fusion.write_tags_resilient(et, new_dest, tags, is_video=is_vid)
                     os.utime(new_dest, (new_ts, new_ts))
                 except Exception:
                     pass
 
                 cur.execute(
-                    "UPDATE processed_files SET dest_path=?, original_dest_path=?, timestamp=?, status=? WHERE source_path=?",
-                    (str(new_dest), str(new_dest), new_ts, new_status, r["source_path"])
+                    """UPDATE processed_files
+                       SET dest_path=?, original_dest_path=?, timestamp=?, status=?,
+                           latitude=?, longitude=?, is_favorite=?
+                       WHERE source_path=?""",
+                    (
+                        str(new_dest), str(new_dest), new_ts, new_status,
+                        new_lat or 0.0, new_lon or 0.0, 1 if new_fav else 0,
+                        r["source_path"]
+                    )
                 )
                 repaired += 1
             else:

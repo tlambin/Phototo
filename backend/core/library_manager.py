@@ -102,6 +102,20 @@ def save_libraries(data: dict):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
+def resolve_takeout_architecture_flags(options: dict) -> tuple[bool, bool]:
+    arch = str(options.get("takeout_architecture") or "").strip().upper()
+    if arch == "GOOGLE_ALBUM":
+        return (True, True)
+    if arch == "NONE":
+        return (False, False)
+    if arch == "KEEP_ORIGINAL":
+        return (True, False)
+    return (
+        bool(options.get("takeout_keep_structure", True)),
+        bool(options.get("takeout_wrap_google_album", False)),
+    )
+
+
 def register_library(name: str, source_type: str, source_paths: list[str], dest_dir: str, options: dict) -> dict:
     cfg = load_libraries()
     dest_path = Path(dest_dir)
@@ -110,6 +124,7 @@ def register_library(name: str, source_type: str, source_paths: list[str], dest_
     safe_slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_") or "default"
     db_path = str(dest_path / f"library_{safe_slug}.db")
     is_takeout = source_type in ("TAKEOUT_FOLDER", "TAKEOUT_ZIPS")
+    keep_struct, wrap_google = resolve_takeout_architecture_flags(options)
 
     lib_entry = {
         "name": name,
@@ -122,6 +137,8 @@ def register_library(name: str, source_type: str, source_paths: list[str], dest_
         "options": {
             "fix_takeout_json_metadata": options.get("fix_takeout_json_metadata", True) if is_takeout else False,
             "delete_zips_progressively": options.get("delete_zips_progressively", False) if source_type == "TAKEOUT_ZIPS" else False,
+            "takeout_keep_structure": keep_struct if is_takeout else True,
+            "takeout_wrap_google_album": wrap_google if is_takeout else False,
             "organize_by_year_month": options.get("organize_by_year_month", True),
             "run_deduplication": options.get("run_deduplication", True),
             "run_faces_ai": options.get("run_faces_ai", True),

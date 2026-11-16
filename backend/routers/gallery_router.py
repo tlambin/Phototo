@@ -106,18 +106,23 @@ def _ensure_album_path(cur: sqlite3.Cursor, full_path: str, dest_dir: Path | Non
 def _sync_albums_from_files(conn: sqlite3.Connection):
     cur = conn.cursor()
     cur.execute("""
-        SELECT DISTINCT album_name FROM processed_files
-        WHERE is_duplicate = 0 AND is_trashed = 0 AND album_name IS NOT NULL AND album_name != ''
+        SELECT DISTINCT album_name, is_trashed FROM processed_files
+        WHERE is_duplicate = 0 AND album_name IS NOT NULL AND album_name != ''
+          AND (is_trashed = 0 OR (',' || REPLACE(album_name, ', ', ',') || ',') LIKE '%,Google Photos/Corbeille,%')
     """)
     inserted = False
     for r in cur.fetchall():
+        is_tr = bool(r["is_trashed"])
         for tok in r["album_name"].split(","):
             tok = tok.strip()
-            if tok:
-                cur.execute("SELECT 1 FROM albums WHERE full_path = ?", (tok,))
-                if not cur.fetchone():
-                    _ensure_album_path(cur, tok)
-                    inserted = True
+            if not tok:
+                continue
+            if is_tr and tok != "Google Photos/Corbeille":
+                continue
+            cur.execute("SELECT 1 FROM albums WHERE full_path = ?", (tok,))
+            if not cur.fetchone():
+                _ensure_album_path(cur, tok)
+                inserted = True
     if inserted:
         conn.commit()
 
@@ -185,7 +190,10 @@ def _build_gallery_where(
     media_type: str = "", ext_filter: str = "", require_timestamp: bool = False,
     date_from: str = "", date_to: str = "", periods: str = ""
 ) -> tuple[str, list]:
-    where_clauses = ["pf.is_duplicate = 0", "pf.is_trashed = 0", "pf.dest_path IS NOT NULL"]
+    include_google_trash_album = (album.strip() == "Google Photos/Corbeille")
+    where_clauses = ["pf.is_duplicate = 0", "pf.dest_path IS NOT NULL"]
+    if not include_google_trash_album:
+        where_clauses.append("pf.is_trashed = 0")
     params = []
 
     if require_timestamp:
@@ -367,16 +375,20 @@ def api_albums_list(parent_id: int | None = None, flat: bool = False):
     all_rows = [dict(r) for r in cur.fetchall()]
 
     cur.execute("""
-        SELECT album_name, dest_path, timestamp,
+        SELECT album_name, dest_path, timestamp, is_trashed,
                COALESCE(modified_at, CAST(strftime('%s', processed_at) AS INTEGER), timestamp, 0) as mod_ts
         FROM processed_files
-        WHERE is_duplicate = 0 AND is_trashed = 0 AND album_name IS NOT NULL AND album_name != ''
+        WHERE is_duplicate = 0 AND album_name IS NOT NULL AND album_name != ''
+          AND (is_trashed = 0 OR (',' || REPLACE(album_name, ', ', ',') || ',') LIKE '%,Google Photos/Corbeille,%')
     """)
     stats_by_album: dict[str, dict] = {}
     for r in cur.fetchall():
+        is_tr = bool(r["is_trashed"])
         for tok in r["album_name"].split(","):
             tok = tok.strip()
             if not tok:
+                continue
+            if is_tr and tok != "Google Photos/Corbeille":
                 continue
             st = stats_by_album.setdefault(tok, {"count": 0, "cover_path": None, "max_ts": 0, "max_mod_ts": 0})
             st["count"] += 1

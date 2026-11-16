@@ -38,7 +38,8 @@ def has_nvidia_gpu() -> bool:
 
 def ensure_exiftool():
     step_msg("1/6 — Vérification et installation automatique d'ExifTool")
-    os.environ["PATH"] = str(PROJECT_DIR) + os.pathsep + os.environ.get("PATH", "")
+    tools_dir = PROJECT_DIR / "tools"
+    os.environ["PATH"] = str(tools_dir) + os.pathsep + str(PROJECT_DIR) + os.pathsep + os.environ.get("PATH", "")
 
     if shutil.which("exiftool"):
         print(f"  {GREEN}✓ ExifTool est déjà installé et accessible.{RESET}")
@@ -62,12 +63,13 @@ def ensure_exiftool():
 
     for cand in candidates:
         if cand.exists():
-            target_exe = PROJECT_DIR / "exiftool.exe"
+            tools_dir.mkdir(parents=True, exist_ok=True)
+            target_exe = tools_dir / "exiftool.exe"
             try:
                 shutil.copy2(cand, target_exe)
                 files_dir = cand.parent / "exiftool_files"
                 if files_dir.exists():
-                    target_files = PROJECT_DIR / "exiftool_files"
+                    target_files = tools_dir / "exiftool_files"
                     if not target_files.exists():
                         shutil.copytree(files_dir, target_files)
                 print(f"  {GREEN}✓ ExifTool copié localement dans {target_exe}{RESET}")

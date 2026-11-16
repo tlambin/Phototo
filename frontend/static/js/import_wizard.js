@@ -5,16 +5,26 @@ let wizardSelectedPaths = [];
 let wizardOptFixMeta = true;
 let wizardOptDelZips = false;
 let wizardOptCreateAlbum = true;
+let wizardTakeoutArchitecture = 'KEEP_ORIGINAL'; // 'KEEP_ORIGINAL' | 'GOOGLE_ALBUM' | 'NONE'
 let wizardSubfolderMode = 'SINGLE'; // 'SINGLE' | 'ALL_SUBS' | 'CUSTOM_SUBS'
 let wizardDetectedSubfolders = [];
 
+const TAKEOUT_ARCH_DESCRIPTIONS = {
+    KEEP_ORIGINAL: 'Par défaut : garde les albums, favoris et la corbeille directement dans la bibliothèque.',
+    GOOGLE_ALBUM: 'Crée l\'album « Google Photos » avec : sous-albums par année, Favoris, Corbeille et un sous-album « Albums » contenant vos albums.',
+    NONE: 'Importe tous les médias directement dans la galerie sans créer d\'album, favori ni corbeille.'
+};
+
 function openImportWizard() {
     if (typeof hideAllTopPopovers === 'function') hideAllTopPopovers();
+    const cfg = window.appSettings || {};
     wizardSelectedPaths = [];
     wizardDetectedSubfolders = [];
-    wizardOptFixMeta = true;
-    wizardOptDelZips = false;
+    wizardOptFixMeta = (cfg.takeout_default_fix_metadata !== false);
+    wizardOptDelZips = Boolean(cfg.takeout_default_delete_zips);
     wizardOptCreateAlbum = true;
+    const defArch = String(cfg.takeout_default_architecture || 'KEEP_ORIGINAL').toUpperCase();
+    wizardTakeoutArchitecture = ['KEEP_ORIGINAL', 'GOOGLE_ALBUM', 'NONE'].includes(defArch) ? defArch : 'KEEP_ORIGINAL';
     wizardSubfolderMode = 'SINGLE';
     updateWizardCheckDOM();
     showImportStep(1);
@@ -39,15 +49,35 @@ function showImportStep(stepNum) {
     });
 }
 
+function _syncWizardCheckPill(el, checked) {
+    if (!el) return;
+    el.textContent = checked ? '✓' : '';
+    el.classList.toggle('plum-btn', !!checked);
+    el.classList.toggle('border-[1.6px]', !checked);
+    el.classList.toggle('border-current/50', !checked);
+}
+
+function setTakeoutArchitecture(arch) {
+    const valid = ['KEEP_ORIGINAL', 'GOOGLE_ALBUM', 'NONE'];
+    wizardTakeoutArchitecture = valid.includes(arch) ? arch : 'KEEP_ORIGINAL';
+    updateWizardCheckDOM();
+}
+
 function updateWizardCheckDOM() {
     const chkFix = document.getElementById('wiz-chk-fix');
     const chkDel = document.getElementById('wiz-chk-del');
     const chkAlb = document.getElementById('wiz-chk-album');
+    const archSelect = document.getElementById('wiz-takeout-arch-select');
+    const archDesc = document.getElementById('wiz-takeout-arch-desc');
     const cfgPanel = document.getElementById('wiz-album-config-panel');
 
-    if (chkFix) chkFix.textContent = wizardOptFixMeta ? '✓' : '';
-    if (chkDel) chkDel.textContent = wizardOptDelZips ? '✓' : '';
-    if (chkAlb) chkAlb.textContent = wizardOptCreateAlbum ? '✓' : '';
+    _syncWizardCheckPill(chkFix, wizardOptFixMeta);
+    _syncWizardCheckPill(chkDel, wizardOptDelZips);
+    _syncWizardCheckPill(chkAlb, wizardOptCreateAlbum);
+    if (archSelect) archSelect.value = wizardTakeoutArchitecture;
+    if (archDesc) {
+        archDesc.textContent = TAKEOUT_ARCH_DESCRIPTIONS[wizardTakeoutArchitecture] || TAKEOUT_ARCH_DESCRIPTIONS.KEEP_ORIGINAL;
+    }
     if (cfgPanel) cfgPanel.classList.toggle('hidden', !wizardOptCreateAlbum);
 
     const rSingle = document.getElementById('wiz-rad-single');
@@ -109,26 +139,21 @@ function toggleAllCustomSubfolders() {
     renderCustomSubfoldersList();
 }
 
-async function pickStandardFolderForImport() {
-    const res = await fetch('/api/dialog/browse?mode=folder');
-    if (!res.ok) return;
-    const d = await res.json();
-    if (!d.paths || !d.paths.length) return;
-
-    wizardImportSourceType = 'STANDARD_FOLDER';
-    wizardSelectedPaths = d.paths;
-    wizardOptCreateAlbum = true;
-
-    const folderName = d.paths[0].split(/[\\/]/).filter(Boolean).pop() || 'Nouvel Album';
-    const albInput = document.getElementById('wiz-album-name-input');
-    if (albInput) albInput.value = folderName;
+async function _refreshStandardSubfolders(paths) {
+    if (!paths || !paths.length) {
+        wizardDetectedSubfolders = [];
+        document.getElementById('wiz-subfolder-modes')?.classList.add('hidden');
+        wizardSubfolderMode = 'SINGLE';
+        updateWizardCheckDOM();
+        return;
+    }
 
     let subData = {has_subfolders: false, folders: []};
     try {
         const subRes = await fetch('/api/import/inspect_subfolders', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({source_paths: d.paths})
+            body: JSON.stringify({source_paths: paths})
         });
         if (subRes.ok) subData = await subRes.json();
     } catch (e) {}
@@ -151,49 +176,143 @@ async function pickStandardFolderForImport() {
         if (modesBox) modesBox.classList.add('hidden');
         wizardSubfolderMode = 'SINGLE';
     }
-
-    prepareImportStep3('Importer un dossier', 'Dossier sélectionné', false);
+    updateWizardCheckDOM();
 }
 
-async function pickTakeoutSource(sourceType) {
-    const browseMode = (sourceType === 'TAKEOUT_ZIPS') ? 'zips' : 'folder';
-    const res = await fetch(`/api/dialog/browse?mode=${browseMode}`);
+async function pickStandardFolderForImport() {
+    const res = await fetch('/api/dialog/browse?mode=folder');
     if (!res.ok) return;
     const d = await res.json();
     if (!d.paths || !d.paths.length) return;
 
+    wizardImportSourceType = 'STANDARD_FOLDER';
+    wizardSelectedPaths = d.paths.slice();
+    wizardOptCreateAlbum = true;
+
+    const folderName = d.paths[0].split(/[\\/]/).filter(Boolean).pop() || 'Nouvel Album';
+    const albInput = document.getElementById('wiz-album-name-input');
+    if (albInput) albInput.value = folderName;
+
+    await _refreshStandardSubfolders(wizardSelectedPaths);
+    prepareImportStep3('Importer un dossier', 'Dossiers sélectionnés', false);
+}
+
+function pickTakeoutSource(sourceType) {
     wizardImportSourceType = sourceType;
-    wizardSelectedPaths = d.paths;
+    wizardSelectedPaths = [];
     wizardOptCreateAlbum = false;
     wizardSubfolderMode = 'SINGLE';
 
     const modesBox = document.getElementById('wiz-subfolder-modes');
     if (modesBox) modesBox.classList.add('hidden');
 
-    const folderName = d.paths[0].split(/[\\/]/).filter(Boolean).pop()?.replace(/\.zip$/i, '') || 'Import Takeout';
     const albInput = document.getElementById('wiz-album-name-input');
-    if (albInput) albInput.value = folderName;
+    if (albInput) albInput.value = '';
 
-    const subTitle = (sourceType === 'TAKEOUT_ZIPS') ? 'Fichiers ZIP' : 'Dossier décompressé';
-    prepareImportStep3('Importer depuis Google', subTitle, true);
+    const subTitle = (sourceType === 'TAKEOUT_ZIPS') ? 'Archives ZIP sélectionnées' : 'Dossiers décompressés';
+    prepareImportStep3('Google Takeout', subTitle, true);
+}
+
+function renderStep3PathsList() {
+    const listEl = document.getElementById('import-step3-paths');
+    const countEl = document.getElementById('import-step3-count');
+    if (countEl) countEl.textContent = String(wizardSelectedPaths.length);
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+    if (!wizardSelectedPaths.length) {
+        const empty = document.createElement('div');
+        empty.className = 'ui-pill rounded-xl px-3 py-2 text-[11px] font-semibold opacity-60 text-center';
+        empty.textContent = wizardImportSourceType === 'TAKEOUT_ZIPS'
+            ? 'Aucune archive ZIP sélectionnée.'
+            : 'Aucun dossier sélectionné.';
+        listEl.appendChild(empty);
+        return;
+    }
+
+    wizardSelectedPaths.forEach((rawPath, idx) => {
+        const displayPath = rawPath.replace(/\\/g, '/');
+        const row = document.createElement('div');
+        row.className = 'ui-pill rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] font-bold';
+
+        const txt = document.createElement('span');
+        txt.className = 'truncate min-w-0 flex-1';
+        txt.title = displayPath;
+        txt.textContent = displayPath;
+
+        const remBtn = document.createElement('button');
+        remBtn.type = 'button';
+        remBtn.title = 'Retirer';
+        remBtn.className = 'w-5 h-5 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer';
+        remBtn.textContent = '✕';
+        remBtn.onclick = () => removeStep3Path(idx);
+
+        row.appendChild(txt);
+        row.appendChild(remBtn);
+        listEl.appendChild(row);
+    });
+}
+
+async function addMoreStep3Paths() {
+    const browseMode = (wizardImportSourceType === 'TAKEOUT_ZIPS') ? 'zips' : 'folder';
+    const res = await fetch(`/api/dialog/browse?mode=${browseMode}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    if (!d.paths || !d.paths.length) return;
+
+    const existingKeys = new Set(wizardSelectedPaths.map(p => p.trim().replace(/[\\/]+$/, '').toLowerCase()));
+    d.paths.forEach(p => {
+        const clean = String(p || '').trim();
+        const key = clean.replace(/[\\/]+$/, '').toLowerCase();
+        if (clean && !existingKeys.has(key)) {
+            existingKeys.add(key);
+            wizardSelectedPaths.push(clean);
+        }
+    });
+
+    if (wizardImportSourceType === 'STANDARD_FOLDER') {
+        await _refreshStandardSubfolders(wizardSelectedPaths);
+    }
+    renderStep3PathsList();
+}
+
+async function removeStep3Path(idx) {
+    if (idx < 0 || idx >= wizardSelectedPaths.length) return;
+    wizardSelectedPaths.splice(idx, 1);
+    if (wizardImportSourceType === 'STANDARD_FOLDER') {
+        await _refreshStandardSubfolders(wizardSelectedPaths);
+    }
+    renderStep3PathsList();
 }
 
 function prepareImportStep3(headerText, subtitleText, isGoogle) {
     const hEl = document.getElementById('import-step3-header');
     const sEl = document.getElementById('import-step3-subtitle');
-    const pEl = document.getElementById('import-step3-paths');
+    const addLbl = document.getElementById('import-step3-add-label');
     const backBtn = document.getElementById('import-step3-back-btn');
+    const rowAlb = document.getElementById('row-opt-create-album');
+    const rowTakeoutArch = document.getElementById('row-opt-takeout-architecture');
+    const rowFix = document.getElementById('row-opt-fix-meta');
     const rowDel = document.getElementById('row-opt-del-zips');
 
     if (hEl) hEl.textContent = headerText;
     if (sEl) sEl.textContent = subtitleText;
-    if (pEl) {
-        pEl.innerHTML = wizardSelectedPaths
-            .map(p => `<div class="truncate">${p.replace(/\\/g, '/')}</div>`)
-            .join('');
+    if (addLbl) {
+        addLbl.textContent = (wizardImportSourceType === 'TAKEOUT_ZIPS') ? 'Ajouter des ZIP' : 'Ajouter un dossier';
     }
+    renderStep3PathsList();
     if (backBtn) {
         backBtn.setAttribute('onclick', `showImportStep(${isGoogle ? 2 : 1})`);
+    }
+    const isStandard = (wizardImportSourceType === 'STANDARD_FOLDER');
+    if (rowAlb) {
+        rowAlb.classList.toggle('hidden', !isStandard);
+    }
+    if (rowTakeoutArch) {
+        rowTakeoutArch.classList.toggle('hidden', isStandard);
+    }
+    if (rowFix) {
+        rowFix.classList.toggle('hidden', isStandard);
     }
     if (rowDel) {
         rowDel.classList.toggle('hidden', wizardImportSourceType !== 'TAKEOUT_ZIPS');
@@ -204,11 +323,7 @@ function prepareImportStep3(headerText, subtitleText, isGoogle) {
 }
 
 function rePickStep3Paths() {
-    if (wizardImportSourceType === 'STANDARD_FOLDER') {
-        pickStandardFolderForImport();
-    } else {
-        pickTakeoutSource(wizardImportSourceType);
-    }
+    addMoreStep3Paths();
 }
 
 async function handleDroppedFiles(event) {
@@ -240,16 +355,22 @@ async function handleSelectedFilesInput(fileList) {
 
 async function confirmWizardImport() {
     if (!wizardSelectedPaths.length) {
-        alert("Aucun dossier sélectionné.");
+        alert("Veuillez conserver ou ajouter au moins une source à importer.");
         return;
     }
     const customAlbumName = (document.getElementById('wiz-album-name-input')?.value || '').trim();
     closeImportWizard();
 
+    const takeoutKeepStruct = (wizardTakeoutArchitecture !== 'NONE');
+    const takeoutWrapGoogle = (wizardTakeoutArchitecture === 'GOOGLE_ALBUM');
+    const fixTakeoutMeta = (wizardImportSourceType !== 'STANDARD_FOLDER') && Boolean(wizardOptFixMeta);
+
     // 1. Si aucune bibliothèque n'existe, en créer une automatiquement
     const active = librariesConfig?.active_library;
     if (!active || !librariesConfig.libraries || !librariesConfig.libraries[active]) {
-        const folderName = wizardSelectedPaths[0].split(/[\\/]/).filter(Boolean).pop() || 'Ma Bibliothèque';
+        const firstPath = wizardSelectedPaths[0];
+        const folderName = firstPath.split(/[\\/]/).filter(Boolean).pop()?.replace(/\.zip$/i, '') || 'Ma Bibliothèque';
+        const autoDest = /\.zip$/i.test(firstPath) ? (firstPath.replace(/[\\/][^\\/]+$/, '') || firstPath) : firstPath;
         await fetch('/api/libraries/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -257,9 +378,12 @@ async function confirmWizardImport() {
                 name: folderName,
                 source_type: wizardImportSourceType,
                 source_paths_raw: wizardImportSourceType === 'STANDARD_FOLDER' ? '' : wizardSelectedPaths.join('\n'),
-                dest_dir: wizardSelectedPaths[0],
-                fix_takeout_json_metadata: wizardOptFixMeta,
+                dest_dir: autoDest,
+                fix_takeout_json_metadata: fixTakeoutMeta,
                 delete_zips_progressively: wizardOptDelZips,
+                takeout_architecture: wizardTakeoutArchitecture,
+                takeout_keep_structure: takeoutKeepStruct,
+                takeout_wrap_google_album: takeoutWrapGoogle,
                 organize_by_year_month: true
             })
         });
@@ -273,8 +397,11 @@ async function confirmWizardImport() {
         body: JSON.stringify({
             source_type: wizardImportSourceType,
             source_paths: wizardSelectedPaths,
-            fix_takeout_json_metadata: Boolean(wizardOptFixMeta),
+            fix_takeout_json_metadata: fixTakeoutMeta,
             delete_zips_progressively: Boolean(wizardOptDelZips),
+            takeout_architecture: wizardTakeoutArchitecture,
+            takeout_keep_structure: takeoutKeepStruct,
+            takeout_wrap_google_album: takeoutWrapGoogle,
             create_album: Boolean(wizardOptCreateAlbum),
             album_mode: wizardOptCreateAlbum ? wizardSubfolderMode : 'NONE',
             album_name: customAlbumName,

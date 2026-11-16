@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from library_manager import load_libraries, save_libraries, register_library, get_library_icons_dir
+from library_manager import load_libraries, save_libraries, register_library, get_library_icons_dir, resolve_takeout_architecture_flags
 from pipeline_runner import STATE, start_specific_task, request_stop_pipeline
 from database import get_active_db_and_dest, _INITIALIZED_DBS
 from indexeur_visages import init_face_tables
@@ -40,6 +40,9 @@ class CreateLibraryPayload(BaseModel):
     dest_dir: str
     fix_takeout_json_metadata: bool = True
     delete_zips_progressively: bool = False
+    takeout_architecture: str | None = None
+    takeout_keep_structure: bool = True
+    takeout_wrap_google_album: bool = False
     organize_by_year_month: bool = True
 
 
@@ -55,6 +58,13 @@ class DeleteLibraryPayload(BaseModel):
     delete_windows_files: bool = False
 
 
+class RemoveLibrarySourcePayload(BaseModel):
+    library_name: str
+    remove_source: str
+    transfer_content: bool = False
+    target_source: str = ""
+
+
 class SubfolderRuleItem(BaseModel):
     folder_path: str
     include: bool = True
@@ -67,6 +77,9 @@ class AddImportSourcesPayload(BaseModel):
     source_paths: list[str] = []
     fix_takeout_json_metadata: bool = True
     delete_zips_progressively: bool = False
+    takeout_architecture: str | None = None
+    takeout_keep_structure: bool = True
+    takeout_wrap_google_album: bool = False
     create_album: bool = False
     album_mode: str = "SINGLE"
     album_name: str = ""
@@ -179,10 +192,12 @@ def api_select_library(payload: dict):
 
 @router.post("/api/libraries/create")
 def api_create_library(payload: CreateLibraryPayload):
-    paths = [p.strip() for p in payload.source_paths_raw.splitlines() if p.strip()]
+    paths = list(dict.fromkeys(str(Path(p.strip())) for p in payload.source_paths_raw.splitlines() if p.strip()))
     dest = payload.dest_dir.strip() or (paths[0] if paths else "./Photos_Triees")
+    if dest.lower().endswith(".zip"):
+        dest = str(Path(dest).parent)
     if not paths:
-        paths = [dest]
+        paths = [str(Path(dest))]
     Path(dest).mkdir(parents=True, exist_ok=True)
     lib = register_library(
         name=payload.name.strip() or "Ma Bibliothèque",
@@ -250,6 +265,13 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
         opts = lib.setdefault("options", {})
         opts["fix_takeout_json_metadata"] = payload.fix_takeout_json_metadata
         opts["delete_zips_progressively"] = payload.delete_zips_progressively
+        keep_struct, wrap_google = resolve_takeout_architecture_flags({
+            "takeout_architecture": payload.takeout_architecture,
+            "takeout_keep_structure": payload.takeout_keep_structure,
+            "takeout_wrap_google_album": payload.takeout_wrap_google_album,
+        })
+        opts["takeout_keep_structure"] = keep_struct
+        opts["takeout_wrap_google_album"] = wrap_google
         save_libraries(cfg)
         return {"status": "takeout_sources_added", "imported_count": 0}
 
@@ -434,14 +456,20 @@ def api_update_library(payload: dict):
 
     entry = libs.pop(orig_name)
     new_name = (payload.get("new_name") or "").strip() or orig_name
-    new_source = (payload.get("new_source") or "").strip()
+    raw_sources = payload.get("new_sources")
+    if isinstance(raw_sources, list):
+        clean_sources = list(dict.fromkeys(str(Path(str(p).strip())) for p in raw_sources if str(p).strip()))
+    else:
+        new_source = (payload.get("new_source") or "").strip()
+        clean_sources = [str(Path(new_source))] if new_source else []
     move_existing = bool(payload.get("move_existing_content", False))
 
     old_dest = Path(entry.get("dest_dir", ""))
     entry["name"] = new_name
 
-    if new_source:
-        new_dest = Path(new_source)
+    if clean_sources:
+        first_src = Path(clean_sources[0])
+        new_dest = first_src.parent if clean_sources[0].lower().endswith(".zip") else first_src
         new_dest.mkdir(parents=True, exist_ok=True)
         if move_existing and old_dest.exists() and old_dest.resolve() != new_dest.resolve():
             for item in old_dest.iterdir():
@@ -467,8 +495,17 @@ def api_update_library(payload: dict):
                 conn.commit()
                 conn.close()
 
-        entry["source_paths"] = [str(new_dest)]
+        entry["source_paths"] = clean_sources
         entry["dest_dir"] = str(new_dest)
+
+    if "is_takeout" in payload:
+        is_takeout_flag = bool(payload.get("is_takeout"))
+        has_zips = any(str(p).lower().endswith(".zip") for p in (entry.get("source_paths") or []))
+        effective_takeout = is_takeout_flag or has_zips
+        entry["is_takeout"] = effective_takeout
+        entry["source_type"] = "TAKEOUT_ZIPS" if has_zips else ("TAKEOUT_FOLDER" if effective_takeout else "STANDARD_FOLDER")
+        opts = entry.setdefault("options", {})
+        opts["fix_takeout_json_metadata"] = effective_takeout
 
     libs[new_name] = entry
     if cfg.get("active_library") == orig_name:
@@ -476,6 +513,123 @@ def api_update_library(payload: dict):
     save_libraries(cfg)
     _INITIALIZED_DBS.clear()
     return {"status": "updated", "active_library": cfg.get("active_library")}
+
+
+def _merge_move_tree(src_dir: Path, dst_dir: Path, skip_names: set[str] | None = None):
+    """Déplace récursivement le contenu de src_dir vers dst_dir en fusionnant les sous-dossiers."""
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    for item in list(src_dir.iterdir()):
+        if skip_names and item.name in skip_names:
+            continue
+        target = dst_dir / item.name
+        if item.is_dir():
+            if target.exists() and target.is_dir():
+                _merge_move_tree(item, target)
+                try:
+                    if not any(item.iterdir()):
+                        item.rmdir()
+                except OSError:
+                    pass
+            elif not target.exists():
+                try:
+                    shutil.move(str(item), str(target))
+                except Exception:
+                    pass
+        else:
+            if not target.exists():
+                try:
+                    shutil.move(str(item), str(target))
+                except Exception:
+                    pass
+
+
+@router.post("/api/libraries/remove_source")
+def api_remove_library_source(payload: RemoveLibrarySourcePayload):
+    cfg = load_libraries()
+    libs = cfg.get("libraries", {})
+    entry = libs.get(payload.library_name)
+    if not entry:
+        raise HTTPException(404, "Bibliothèque introuvable")
+
+    rem_clean = str(Path(payload.remove_source.strip()))
+    rem_norm = rem_clean.rstrip("\\/").lower()
+    existing = [str(Path(p)) for p in (entry.get("source_paths") or []) if str(p).strip()]
+    remaining = [p for p in existing if p.rstrip("\\/").lower() != rem_norm]
+
+    target_clean = str(Path(payload.target_source.strip())) if payload.target_source.strip() else ""
+    if payload.transfer_content and target_clean:
+        if all(p.rstrip("\\/").lower() != target_clean.rstrip("\\/").lower() for p in remaining):
+            remaining.append(target_clean)
+
+    if not remaining:
+        raise HTTPException(400, "La bibliothèque doit conserver au moins une source.")
+
+    from_p = Path(rem_clean)
+    old_dest = Path(entry.get("dest_dir", ""))
+
+    if payload.transfer_content:
+        dst_str = target_clean or remaining[0]
+        to_p = Path(dst_str)
+        to_p.mkdir(parents=True, exist_ok=True)
+
+        db_p = Path(entry.get("db_path", ""))
+        db_name = db_p.name if db_p.name else ""
+        old_db_in_from = False
+        try:
+            old_db_in_from = db_p.exists() and from_p.exists() and db_p.resolve().parent == from_p.resolve()
+        except OSError:
+            old_db_in_from = False
+
+        if from_p.exists() and to_p.resolve() != from_p.resolve():
+            _merge_move_tree(from_p, to_p)
+            if old_db_in_from and db_name and (to_p / db_name).exists():
+                entry["db_path"] = str(to_p / db_name)
+                db_p = Path(entry["db_path"])
+
+        if db_p.exists():
+            conn = sqlite3.connect(db_p, timeout=30.0)
+            prefixes = [str(from_p)]
+            try:
+                res_str = str(from_p.resolve())
+                if res_str not in prefixes:
+                    prefixes.append(res_str)
+            except OSError:
+                pass
+            new_prefix = str(to_p)
+            for old_prefix in prefixes:
+                conn.execute(
+                    "UPDATE processed_files SET dest_path = REPLACE(dest_path, ?, ?), source_path = REPLACE(source_path, ?, ?), original_dest_path = REPLACE(COALESCE(original_dest_path, ''), ?, ?)",
+                    (old_prefix, new_prefix, old_prefix, new_prefix, old_prefix, new_prefix),
+                )
+                conn.execute(
+                    "UPDATE faces SET dest_path = REPLACE(dest_path, ?, ?), source_path = REPLACE(source_path, ?, ?), thumb_path = REPLACE(COALESCE(thumb_path, ''), ?, ?)",
+                    (old_prefix, new_prefix, old_prefix, new_prefix, old_prefix, new_prefix),
+                )
+                conn.execute(
+                    "UPDATE media_categories SET source_path = REPLACE(source_path, ?, ?)",
+                    (old_prefix, new_prefix),
+                )
+                conn.execute(
+                    "UPDATE albums SET cover_path = REPLACE(COALESCE(cover_path, ''), ?, ?)",
+                    (old_prefix, new_prefix),
+                )
+            conn.commit()
+            conn.close()
+
+        if old_dest.exists() and from_p.exists():
+            try:
+                if old_dest.resolve() == from_p.resolve():
+                    entry["dest_dir"] = str(to_p)
+            except OSError:
+                pass
+    else:
+        if old_dest.name and str(old_dest).rstrip("\\/").lower() == rem_norm:
+            entry["dest_dir"] = remaining[0]
+
+    entry["source_paths"] = remaining
+    save_libraries(cfg)
+    _INITIALIZED_DBS.clear()
+    return {"status": "ok", "source_paths": remaining, "dest_dir": entry.get("dest_dir", "")}
 
 
 @router.post("/api/libraries/delete")

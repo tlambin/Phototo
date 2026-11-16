@@ -62,7 +62,12 @@
                             class="plum-btn w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden shadow relative group cursor-pointer">
                         <span id="lib-pop-avatar-letter" class="text-sm font-extrabold uppercase select-none leading-none">B</span>
                         <img id="lib-pop-avatar-img" src="" alt="" class="hidden w-full h-full object-cover"/>
-                        <span class="hidden group-hover:flex absolute inset-0 bg-black/55 text-white items-center justify-center text-[10px] font-bold">📷</span>
+                        <span class="opacity-0 group-hover:opacity-100 absolute inset-0 bg-black/55 text-white flex items-center justify-center transition-opacity duration-150">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                            </svg>
+                        </span>
                     </button>
                     <div class="ui-pill rounded-full px-3.5 py-2 flex-1 min-w-0 flex items-center justify-between">
                         <select id="library-selector" onchange="switchLibrary(this.value)"
