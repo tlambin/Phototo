@@ -1,5 +1,5 @@
 {
-    "active_library": "Test",
+    "active_library": "Phototo",
     "libraries": {
         "Test": {
             "name": "Test",
@@ -70,7 +70,8 @@
                 "run_ocr": true,
                 "run_similarity": true,
                 "run_semantic_clip": true
-            }
+            },
+            "icon_file": "new_1794846080289.jpg"
         }
     }
 }

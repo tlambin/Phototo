@@ -1030,6 +1030,26 @@ setInterval(async () => {
 
         const pulseBadge = document.getElementById('pulse-badge');
         if (pulseBadge) pulseBadge.classList.toggle('hidden', !st.is_running);
+        const hasActivityBanner = st.is_running || Boolean(effectivePausedTask);
+        const actBtn = document.getElementById('activity-status-btn');
+        const actPill = document.getElementById('activity-notif-pill');
+        const actTextEl = document.getElementById('activity-status-text');
+        if (actBtn) {
+            actBtn.classList.toggle('hidden', !hasActivityBanner);
+            actBtn.classList.toggle('flex', hasActivityBanner);
+        }
+        if (actPill) {
+            actPill.classList.toggle('pl-2.5', hasActivityBanner);
+            actPill.classList.toggle('pr-0.5', hasActivityBanner);
+            actPill.classList.toggle('py-0.5', hasActivityBanner);
+            actPill.classList.toggle('gap-1.5', hasActivityBanner);
+            actPill.classList.toggle('p-0.5', !hasActivityBanner);
+        }
+        if (actTextEl) {
+            actTextEl.textContent = hasActivityBanner
+                ? (st.is_running ? (st.current_step || 'Activité en cours...') : (st.current_step || 'Activité en pause'))
+                : '';
+        }
         const emptySt = document.getElementById('task-empty-state');
         if (emptySt) emptySt.classList.toggle('hidden', showActivePanel);
         const activeSt = document.getElementById('task-active-state');

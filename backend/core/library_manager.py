@@ -154,3 +154,9 @@ def get_takeout_buffer_dir(default_dest_dir: Path) -> Path:
     buffer_path = (Path(custom_dir) / "_Temp_Takeout_Buffer") if custom_dir else (default_dest_dir / "_Temp_Takeout_Buffer")
     buffer_path.mkdir(parents=True, exist_ok=True)
     return buffer_path
+
+
+def get_library_icons_dir() -> Path:
+    icons_dir = CONFIG_FILE.parent / "library_icons"
+    icons_dir.mkdir(parents=True, exist_ok=True)
+    return icons_dir

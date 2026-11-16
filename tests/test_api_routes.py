@@ -1383,6 +1383,92 @@ class TestApiRoutes(unittest.TestCase):
         finally:
             zip_path.unlink(missing_ok=True)
 
+    def test_navbar_activity_notifications_and_library_avatar(self):
+        import library_manager
+        import libraries_router
+
+        html = main.templates.get_template("index.html").render()
+        top_start = html.index('id="floating-topbar"')
+        top_end = html.index('</header>', top_start)
+        top_html = html[top_start:top_end]
+        for snippet in (
+            'id="activity-notif-pill"',
+            'id="activity-status-btn"',
+            'id="activity-status-text"',
+            'id="notif-bell-btn"',
+            'id="lib-avatar-btn"',
+            'id="lib-avatar-letter"',
+            'id="lib-avatar-img"',
+            'id="lib-menu-popover"',
+            'id="lib-pop-avatar-letter"',
+            'id="lib-icon-file-input"',
+            "toggleTaskPopover(event)",
+            "toggleNotificationsPopover(event)",
+            "toggleLibMenuPopover(event)",
+        ):
+            self.assertIn(snippet, top_html)
+        self.assertIn('id="activity-status-btn" type="button" onclick="toggleTaskPopover(event)"', top_html)
+        self.assertLess(top_html.index('id="activity-status-btn"'), top_html.index('id="notif-bell-btn"'))
+        self.assertLess(top_html.index('id="notif-bell-btn"'), top_html.index('id="lib-avatar-btn"'))
+        self.assertNotIn('id="lib-name-btn"', top_html)
+        self.assertNotIn('id="task-pulse-btn"', top_html)
+        self.assertNotIn("Pas d'activité en cours", top_html)
+        self.assertIn('id="lib-edit-avatar-letter"', html)
+        self.assertIn('id="lib-edit-avatar-img"', html)
+
+        libraries_js = (ROOT_DIR / "frontend" / "static" / "js" / "libraries.js").read_text(encoding="utf-8")
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function syncActiveLibraryAvatars(", libraries_js)
+        self.assertIn("async function uploadActiveLibraryIcon(", libraries_js)
+        self.assertIn("hasActivityBanner", app_js)
+
+        class _FakeUpload:
+            filename = "avatar.png"
+
+            async def read(self):
+                return b"\x89PNG\r\n\x1a\nfake"
+
+        cfg_dir = self.tmp_path / "cfg"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        cfg_file = cfg_dir / "libraries_config.json"
+        legacy_cfg = self.tmp_path / "legacy_libraries_config.json"
+
+        with (
+            patch.object(library_manager, "CONFIG_DIR", cfg_dir),
+            patch.object(library_manager, "CONFIG_FILE", cfg_file),
+            patch.object(library_manager, "LEGACY_CONFIG_FILE", legacy_cfg),
+        ):
+            library_manager.save_libraries({
+                "active_library": "Test",
+                "libraries": {
+                    "Test": {
+                        "name": "Test",
+                        "dest_dir": str(self.dest_dir),
+                        "source_paths": [str(self.dest_dir)],
+                    }
+                },
+            })
+            coro = libraries_router.api_upload_library_icon("Test", _FakeUpload())
+            try:
+                coro.send(None)
+            except StopIteration as exc:
+                up_res = exc.value
+            finally:
+                coro.close()
+            self.assertEqual(up_res["status"], "ok")
+            self.assertIn("/api/libraries/icon/Test", up_res["icon_url"])
+
+            listed = libraries_router.api_get_libraries()
+            self.assertEqual(listed["libraries"]["Test"]["icon_url"], up_res["icon_url"])
+
+            icon_resp = libraries_router.api_get_library_icon("Test")
+            self.assertTrue(Path(icon_resp.path).is_file())
+
+            del_res = libraries_router.api_delete_library_icon("Test")
+            self.assertEqual(del_res["status"], "ok")
+            listed_after = libraries_router.api_get_libraries()
+            self.assertEqual(listed_after["libraries"]["Test"]["icon_url"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

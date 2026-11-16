@@ -55,6 +55,26 @@
             <div class="w-3/4 mx-auto h-[2px] ui-divider rounded-full"></div>
         </div>
 
+        <div class="flex items-center gap-3.5 pt-1">
+            <div class="plum-btn w-12 h-12 rounded-full flex items-center justify-center shrink-0 overflow-hidden shadow">
+                <span id="lib-edit-avatar-letter" class="text-lg font-extrabold uppercase select-none leading-none">B</span>
+                <img id="lib-edit-avatar-img" src="" alt="" class="hidden w-full h-full object-cover"/>
+            </div>
+            <div class="flex-1 min-w-0 space-y-1.5">
+                <div class="text-xs font-extrabold">Icône de la bibliothèque :</div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onclick="triggerLibraryIconUpload()"
+                            class="ui-pill px-3 py-1 rounded-full text-[11px] font-bold hover:opacity-85 transition cursor-pointer">
+                        Choisir une image
+                    </button>
+                    <button id="lib-edit-icon-reset-btn" type="button" onclick="resetActiveLibraryIcon()"
+                            class="hidden ui-pill px-2.5 py-1 rounded-full text-[11px] font-bold opacity-75 hover:opacity-100 hover:text-rose-400 transition cursor-pointer">
+                        Lettre par défaut
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="space-y-2">
             <div class="flex items-baseline gap-2">
                 <span class="text-xs font-extrabold">Changer de nom :</span>

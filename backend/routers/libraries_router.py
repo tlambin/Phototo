@@ -5,11 +5,13 @@ import sqlite3
 import threading
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from library_manager import load_libraries, save_libraries, register_library
+from library_manager import load_libraries, save_libraries, register_library, get_library_icons_dir
 from pipeline_runner import STATE, start_specific_task, request_stop_pipeline
 from database import get_active_db_and_dest, _INITIALIZED_DBS
 from indexeur_visages import init_face_tables
@@ -71,9 +73,98 @@ class AddImportSourcesPayload(BaseModel):
     subfolder_rules: list[SubfolderRuleItem] = []
 
 
+LIBRARY_ICON_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def _enrich_libraries_cfg(cfg: dict) -> dict:
+    icons_dir = get_library_icons_dir()
+    libs = cfg.get("libraries", {})
+    out_libs = {}
+    for name, entry in libs.items():
+        copied = dict(entry)
+        icon_file = str(copied.get("icon_file") or "").strip()
+        if icon_file and (icons_dir / Path(icon_file).name).is_file():
+            copied["icon_url"] = f"/api/libraries/icon/{quote(name, safe='')}?v={quote(Path(icon_file).name, safe='')}"
+        else:
+            copied["icon_url"] = ""
+        out_libs[name] = copied
+    return {
+        **cfg,
+        "libraries": out_libs,
+    }
+
+
 @router.get("/api/libraries")
 def api_get_libraries():
-    return load_libraries()
+    return _enrich_libraries_cfg(load_libraries())
+
+
+@router.get("/api/libraries/icon/{lib_name}")
+def api_get_library_icon(lib_name: str):
+    cfg = load_libraries()
+    entry = cfg.get("libraries", {}).get(lib_name)
+    if not entry:
+        raise HTTPException(404, "Bibliothèque introuvable")
+    icon_file = str(entry.get("icon_file") or "").strip()
+    if not icon_file:
+        raise HTTPException(404, "Aucune icône personnalisée")
+    icon_path = get_library_icons_dir() / Path(icon_file).name
+    if not icon_path.is_file():
+        raise HTTPException(404, "Fichier d'icône introuvable")
+    return FileResponse(icon_path)
+
+
+@router.post("/api/libraries/icon/{lib_name}")
+async def api_upload_library_icon(lib_name: str, file: UploadFile = File(...)):
+    cfg = load_libraries()
+    libs = cfg.get("libraries", {})
+    if lib_name not in libs:
+        raise HTTPException(404, "Bibliothèque introuvable")
+
+    orig_name = file.filename or "icon.png"
+    ext = Path(orig_name).suffix.lower()
+    if ext not in LIBRARY_ICON_EXTS:
+        raise HTTPException(400, "Format d'image non supporté")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Fichier vide")
+
+    icons_dir = get_library_icons_dir()
+    old_icon = str(libs[lib_name].get("icon_file") or "").strip()
+    if old_icon:
+        try:
+            (icons_dir / Path(old_icon).name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    safe_slug = "".join(c if c.isalnum() else "_" for c in lib_name.lower()).strip("_") or "lib"
+    new_filename = f"{safe_slug}_{int(time.time() * 1000)}{ext}"
+    (icons_dir / new_filename).write_bytes(data)
+
+    libs[lib_name]["icon_file"] = new_filename
+    save_libraries(cfg)
+    return {
+        "status": "ok",
+        "icon_url": f"/api/libraries/icon/{quote(lib_name, safe='')}?v={quote(new_filename, safe='')}",
+    }
+
+
+@router.delete("/api/libraries/icon/{lib_name}")
+def api_delete_library_icon(lib_name: str):
+    cfg = load_libraries()
+    libs = cfg.get("libraries", {})
+    if lib_name not in libs:
+        raise HTTPException(404, "Bibliothèque introuvable")
+
+    old_icon = str(libs[lib_name].pop("icon_file", "") or "").strip()
+    if old_icon:
+        try:
+            (get_library_icons_dir() / Path(old_icon).name).unlink(missing_ok=True)
+        except OSError:
+            pass
+    save_libraries(cfg)
+    return {"status": "ok"}
 
 
 @router.post("/api/libraries/select")
@@ -400,6 +491,13 @@ def api_delete_library(payload: DeleteLibraryPayload):
 
     lib = libs.pop(payload.name)
     _INITIALIZED_DBS.clear()
+
+    old_icon = str(lib.get("icon_file") or "").strip()
+    if old_icon:
+        try:
+            (get_library_icons_dir() / Path(old_icon).name).unlink(missing_ok=True)
+        except OSError:
+            pass
 
     if payload.delete_windows_files:
         dest_p = Path(lib.get("dest_dir", ""))

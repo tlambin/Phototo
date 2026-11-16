@@ -1,5 +1,42 @@
 // ==================== GESTION DES BIBLIOTHÈQUES (LISTE, CRÉER, MODIFIER, SUPPRIMER, FUSIONNER, DOUBLONS AUTO) ====================
 
+function _renderLibraryAvatarElements(letterId, imgId, libName, iconUrl) {
+    const letterEl = document.getElementById(letterId);
+    const imgEl = document.getElementById(imgId);
+    const cleanName = String(libName || 'Bibliothèque').trim();
+    const firstLetter = (cleanName.charAt(0) || 'B').toUpperCase();
+    if (letterEl) letterEl.textContent = firstLetter;
+    if (imgEl && letterEl) {
+        if (iconUrl) {
+            imgEl.src = iconUrl;
+            imgEl.classList.remove('hidden');
+            letterEl.classList.add('hidden');
+        } else {
+            imgEl.src = '';
+            imgEl.classList.add('hidden');
+            letterEl.classList.remove('hidden');
+        }
+    }
+}
+
+function syncActiveLibraryAvatars() {
+    const active = librariesConfig?.active_library;
+    const libs = librariesConfig?.libraries || {};
+    const activeLib = (active && libs[active]) ? libs[active] : null;
+    const iconUrl = (activeLib && activeLib.icon_url) ? activeLib.icon_url : '';
+
+    const avatarBtn = document.getElementById('lib-avatar-btn');
+    if (avatarBtn) {
+        avatarBtn.title = active ? `Bibliothèque : ${active}` : 'Gérer les bibliothèques';
+    }
+    _renderLibraryAvatarElements('lib-avatar-letter', 'lib-avatar-img', active, iconUrl);
+    _renderLibraryAvatarElements('lib-pop-avatar-letter', 'lib-pop-avatar-img', active, iconUrl);
+    _renderLibraryAvatarElements('lib-edit-avatar-letter', 'lib-edit-avatar-img', active, iconUrl);
+
+    const resetBtn = document.getElementById('lib-edit-icon-reset-btn');
+    if (resetBtn) resetBtn.classList.toggle('hidden', !iconUrl);
+}
+
 async function loadLibrariesDropdown() {
     const res = await fetch('/api/libraries');
     if (!res.ok) return;
@@ -10,11 +47,7 @@ async function loadLibrariesDropdown() {
     const libs = cachedLibrariesData.libraries || {};
     const names = Object.keys(libs);
 
-    // Mise à jour du bouton #lib-name-btn dans topbar.html
-    const nameBtn = document.getElementById('lib-name-btn');
-    if (nameBtn) {
-        nameBtn.textContent = active || 'Nom de la bibliotheque';
-    }
+    syncActiveLibraryAvatars();
 
     // Mise à jour du <select id="library-selector"> dans topbar.html
     const selEl = document.getElementById('library-selector');
@@ -24,6 +57,53 @@ async function loadLibrariesDropdown() {
         } else {
             selEl.innerHTML = names.map(n => `<option value="${n}" ${n === active ? 'selected' : ''}>${n}</option>`).join('');
         }
+    }
+}
+
+function triggerLibraryIconUpload() {
+    const active = librariesConfig?.active_library;
+    if (!active) {
+        alert("Créez ou sélectionnez d'abord une bibliothèque.");
+        return;
+    }
+    const inp = document.getElementById('lib-icon-file-input');
+    if (inp) inp.click();
+}
+
+async function uploadActiveLibraryIcon(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    const active = librariesConfig?.active_library;
+    if (!active) {
+        input.value = '';
+        return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch(`/api/libraries/icon/${encodeURIComponent(active)}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Impossible d'enregistrer l'image de la bibliothèque.");
+            return;
+        }
+        await loadLibrariesDropdown();
+    } finally {
+        input.value = '';
+    }
+}
+
+async function resetActiveLibraryIcon() {
+    const active = librariesConfig?.active_library;
+    if (!active) return;
+    const res = await fetch(`/api/libraries/icon/${encodeURIComponent(active)}`, {
+        method: 'DELETE'
+    });
+    if (res.ok) {
+        await loadLibrariesDropdown();
     }
 }
 
@@ -96,6 +176,7 @@ function openEditLibraryModal() {
     const curSrc = (lib.source_paths && lib.source_paths[0]) ? lib.source_paths[0] : (lib.dest_dir || '');
     document.getElementById('lib-edit-current-source').textContent = curSrc.replace(/\\/g, '/');
     document.getElementById('lib-edit-move-dot').classList.add('hidden');
+    syncActiveLibraryAvatars();
 
     showLibraryModalView('lib-view-edit');
 }
