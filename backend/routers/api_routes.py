@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ for _sub in ("backend/core", "backend/engines", "backend/routers"):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from pipeline_runner import seed_startup_resume_notifications, check_source_files_on_startup_async
 from system_router import router as system_router
 from libraries_router import router as libraries_router
 from gallery_router import router as gallery_router
@@ -16,7 +18,15 @@ from faces_router import router as faces_router
 from search_map_router import router as search_map_router
 from metadata_studio_router import router as metadata_studio_router
 
-app = FastAPI(title="Phototo — Galerie & Studio IA")
+
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI):
+    seed_startup_resume_notifications()
+    check_source_files_on_startup_async()
+    yield
+
+
+app = FastAPI(title="Phototo — Galerie & Studio IA", lifespan=_app_lifespan)
 
 app.include_router(system_router)
 app.include_router(libraries_router)

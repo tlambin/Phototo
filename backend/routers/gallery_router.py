@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from database import RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path
+from database import RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
 from library_manager import load_libraries
 from media_frames import VIDEO_EXTS, IMAGE_EXTS, detect_is_animated
 
@@ -505,6 +505,11 @@ def api_create_album(payload: CreateAlbumPayload):
         (Path(src_dir_clean) / "Albums" / full_path).mkdir(parents=True, exist_ok=True)
     conn.commit()
     conn.close()
+    log_library_action(
+        "ALBUM_CREATE",
+        "Album créé",
+        f"Album « {full_path} » créé",
+    )
     return {
         "status": "created",
         "album": {"album_id": new_id, "name": seg, "full_path": full_path, "parent_id": payload.parent_id, "source_dir": src_dir_clean}
@@ -582,6 +587,11 @@ def api_rename_album(payload: RenameAlbumPayload):
 
     conn.commit()
     conn.close()
+    log_library_action(
+        "ALBUM_RENAME",
+        "Album renommé",
+        f"« {old_full} » renommé en « {new_full} »",
+    )
     return {"status": "renamed", "album_id": payload.album_id, "name": new_seg, "full_path": new_full}
 
 
@@ -625,6 +635,11 @@ def api_delete_album(payload: DeleteAlbumPayload):
 
     conn.commit()
     conn.close()
+    log_library_action(
+        "ALBUM_DELETE",
+        "Album supprimé",
+        f"Album « {target_full} » supprimé",
+    )
     return {"status": "deleted", "removed": sorted(removed_paths)}
 
 
@@ -836,6 +851,14 @@ def api_categories_assign(payload: SmartCategoryAssignPayload):
             updated += 1
     conn.commit()
     conn.close()
+    if updated > 0:
+        is_rem = payload.action.upper() == "REMOVE"
+        log_library_action(
+            "CATEGORY_ASSIGN",
+            "Catégorie retirée" if is_rem else "Catégorie assignée",
+            f"{updated} fichier(s) {'retiré(s) de' if is_rem else 'assigné(s) à'} la catégorie #{payload.category_id}",
+            files=[build_file_entry(sp) for sp in payload.source_paths],
+        )
     return {"status": "ok", "updated": updated}
 
 
@@ -1142,6 +1165,12 @@ def api_toggle_favorite(payload: ToggleFavoritePayload):
     cur.execute("UPDATE processed_files SET is_favorite = ? WHERE source_path = ?", (new_fav, payload.source_path))
     conn.commit()
     conn.close()
+    log_library_action(
+        "FAVORITE",
+        "Favori ajouté" if new_fav == 1 else "Retiré des favoris",
+        f"{dest_path.name} {'ajouté aux favoris' if new_fav == 1 else 'retiré des favoris'}",
+        files=[build_file_entry(str(dest_path))],
+    )
     return {"status": "updated", "is_favorite": new_fav}
 
 
@@ -1197,6 +1226,21 @@ def api_gallery_batch_action(payload: GalleryBatchActionPayload):
 
     conn.commit()
     conn.close()
+    if rows:
+        affected = [build_file_entry(r["dest_path"], target_album) for r in rows]
+        n = len(affected)
+        act_u = payload.action.upper()
+        if act_u == "FAVORITE_ADD":
+            log_library_action("FAVORITE", "Mise en favoris", f"{n} fichier(s) ajouté(s) aux favoris", files=affected)
+        elif act_u == "FAVORITE_REMOVE":
+            log_library_action("FAVORITE", "Retrait des favoris", f"{n} fichier(s) retiré(s) des favoris", files=affected)
+        elif act_u == "ALBUM_ADD" and target_album:
+            log_library_action("ALBUM_ADD", "Mise en album", f"{n} fichier(s) ajouté(s) à « {target_album} »", files=affected)
+        elif act_u == "ALBUM_REMOVE":
+            lbl = f"« {target_album} »" if target_album else "tous les albums"
+            log_library_action("ALBUM_REMOVE", "Retrait d'album", f"{n} fichier(s) retiré(s) de {lbl}", files=affected)
+        elif act_u == "ALBUM_SET_PRIMARY" and target_album:
+            log_library_action("ALBUM_UPDATE", "Album principal défini", f"{n} fichier(s) → « {target_album} »", files=affected)
     return {"status": "ok"}
 
 
@@ -1226,6 +1270,13 @@ def api_gallery_batch_download(payload: GalleryBatchDownloadPayload):
 
     if not files:
         raise HTTPException(status_code=404, detail="Fichier(s) introuvable(s).")
+
+    log_library_action(
+        "MEDIA_DOWNLOAD",
+        "Fichiers téléchargés" if len(files) > 1 else "Fichier téléchargé",
+        f"{len(files)} fichier(s) téléchargé(s)" + (" (archive ZIP)" if len(files) > 1 else f" ({files[0].name})"),
+        files=[build_file_entry(str(f)) for f in files],
+    )
 
     if len(files) == 1:
         return FileResponse(files[0], filename=files[0].name)
@@ -1367,6 +1418,14 @@ def api_auto_resolve_duplicates(payload: AutoResolveDuplicatesPayload):
 
     conn.commit()
     conn.close()
+    if resolved_count > 0:
+        log_library_action(
+            "DEDUP_RESOLVE",
+            "Doublons résolus",
+            f"{resolved_count} doublon(s) {'déplacé(s) vers la corbeille' if payload.move_to_trash else 'marqué(s)'}",
+            total_items=resolved_count,
+            success_count=resolved_count,
+        )
     return {"status": "resolved", "resolved_count": resolved_count}
 
 
@@ -1466,6 +1525,7 @@ def api_trash_action(payload: TrashActionPayload):
     trash_dir.mkdir(parents=True, exist_ok=True)
     now_ts = int(time.time())
 
+    trash_files: list[dict] = []
     for src in payload.source_paths:
         cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (src,))
         row = cur.fetchone()
@@ -1478,19 +1538,30 @@ def api_trash_action(payload: TrashActionPayload):
             if curr_p.exists() and curr_p != target_t:
                 shutil.move(curr_p, target_t)
             cur.execute("UPDATE processed_files SET is_trashed=1, status='trashed', trashed_at=?, dest_path=?, original_dest_path=? WHERE source_path=?", (now_ts, str(target_t), orig_p, src))
+            trash_files.append(build_file_entry(str(target_t)))
         elif payload.action == "RESTORE":
             rest_p = Path(row["original_dest_path"] or (active_dest / "Restaures" / curr_p.name))
             rest_p.parent.mkdir(parents=True, exist_ok=True)
             if curr_p.exists() and curr_p != rest_p:
                 shutil.move(curr_p, rest_p)
             cur.execute("UPDATE processed_files SET is_trashed=0, status='restored', trashed_at=NULL, dest_path=? WHERE source_path=?", (str(rest_p), src))
+            trash_files.append(build_file_entry(str(rest_p)))
         elif payload.action == "DELETE_PERMANENTLY":
             curr_p.unlink(missing_ok=True)
             cur.execute("DELETE FROM faces WHERE source_path = ?", (src,))
             cur.execute("DELETE FROM processed_files WHERE source_path = ?", (src,))
+            trash_files.append(build_file_entry(str(curr_p)))
 
     conn.commit()
     conn.close()
+    if trash_files:
+        n_tr = len(trash_files)
+        if payload.action == "MOVE_TO_TRASH":
+            log_library_action("TRASH_MOVE", "Fichiers mis à la corbeille", f"{n_tr} fichier(s) déplacé(s) vers la corbeille", files=trash_files)
+        elif payload.action == "RESTORE":
+            log_library_action("TRASH_RESTORE", "Fichiers restaurés", f"{n_tr} fichier(s) restauré(s) depuis la corbeille", files=trash_files)
+        elif payload.action == "DELETE_PERMANENTLY":
+            log_library_action("FILE_DELETE", "Fichiers supprimés définitivement", f"{n_tr} fichier(s) supprimé(s) définitivement", files=trash_files)
     return {"status": "ok"}
 
 
@@ -1499,9 +1570,18 @@ def api_empty_all_trash():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT source_path, dest_path FROM processed_files WHERE is_trashed = 1")
+    deleted_files = []
     for r in cur.fetchall():
         Path(r["dest_path"]).unlink(missing_ok=True)
+        deleted_files.append(build_file_entry(r["dest_path"]))
     cur.execute("DELETE FROM processed_files WHERE is_trashed = 1")
     conn.commit()
     conn.close()
+    if deleted_files:
+        log_library_action(
+            "TRASH_EMPTY",
+            "Corbeille vidée",
+            f"{len(deleted_files)} fichier(s) supprimé(s) définitivement",
+            files=deleted_files,
+        )
     return {"status": "emptied"}

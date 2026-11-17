@@ -197,6 +197,93 @@ async function pickStandardFolderForImport() {
     prepareImportStep3('Importer un dossier', 'Dossiers sélectionnés', false);
 }
 
+let _lastWizardPreflight = null;
+let _wizardPreflightSeq = 0;
+
+function _formatBytesWizard(bytes) {
+    const num = Number(bytes || 0);
+    if (!num) return '0 Mo';
+    const gb = num / (1024 ** 3);
+    if (gb >= 1.0) return `${gb.toFixed(1)} Go`;
+    const mb = Math.max(0.1, num / (1024 ** 2));
+    return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)} Mo`;
+}
+
+function cancelWizardSpaceConfirm() {
+    const bar = document.getElementById('wiz-space-confirm-bar');
+    if (bar) bar.classList.add('hidden');
+}
+
+async function runWizardPreflightCheck() {
+    const box = document.getElementById('wiz-preflight-box');
+    const statusEl = document.getElementById('wiz-preflight-status');
+    const detailsEl = document.getElementById('wiz-preflight-details');
+    cancelWizardSpaceConfirm();
+    _lastWizardPreflight = null;
+
+    if (!wizardSelectedPaths.length) {
+        if (box) box.classList.add('hidden');
+        return null;
+    }
+    const seq = ++_wizardPreflightSeq;
+    if (box) box.classList.remove('hidden');
+    if (statusEl) {
+        statusEl.className = 'font-extrabold px-2 py-0.5 rounded-full text-[10px] ui-pill opacity-75';
+        statusEl.textContent = 'Analyse...';
+    }
+    if (detailsEl) detailsEl.textContent = 'Calcul de la taille des médias et de l’espace disque libre...';
+
+    try {
+        const res = await fetch('/api/import/preflight', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                source_type: wizardImportSourceType,
+                paths: wizardSelectedPaths,
+            }),
+        });
+        if (seq !== _wizardPreflightSeq) return null;
+        if (!res.ok) {
+            if (box) box.classList.add('hidden');
+            return null;
+        }
+        const pf = await res.json();
+        _lastWizardPreflight = pf;
+
+        const isTakeoutZips = (pf.source_type === 'TAKEOUT_ZIPS');
+        const countLabel = isTakeoutZips
+            ? `${pf.zip_count || 0} archive(s) · ${pf.file_count || 0} fichier(s)`
+            : `${pf.file_count || 0} média(s) détecté(s)`;
+        const reqTxt = _formatBytesWizard(pf.needed_dest_bytes);
+        const freeTxt = _formatBytesWizard(pf.dest_free_bytes);
+
+        if (pf.enough) {
+            if (statusEl) {
+                statusEl.className = 'font-extrabold px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400';
+                statusEl.textContent = 'Espace suffisant';
+            }
+            if (detailsEl) {
+                detailsEl.textContent = `${countLabel} — Requis : ~${reqTxt} · Libre : ${freeTxt}.`;
+            }
+        } else {
+            if (statusEl) {
+                statusEl.className = 'font-extrabold px-2 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-400';
+                statusEl.textContent = 'Espace insuffisant';
+            }
+            if (detailsEl) {
+                const warnText = (pf.warnings && pf.warnings.length)
+                    ? pf.warnings.join(' ')
+                    : `${countLabel} — Requis : ~${reqTxt} · Libre : ${freeTxt}.`;
+                detailsEl.textContent = warnText;
+            }
+        }
+        return pf;
+    } catch (e) {
+        if (seq === _wizardPreflightSeq && box) box.classList.add('hidden');
+        return null;
+    }
+}
+
 function pickTakeoutSource(sourceType) {
     wizardImportSourceType = sourceType;
     wizardSelectedPaths = [];
@@ -274,6 +361,7 @@ async function addMoreStep3Paths() {
         await _refreshStandardSubfolders(wizardSelectedPaths);
     }
     renderStep3PathsList();
+    runWizardPreflightCheck();
 }
 
 async function removeStep3Path(idx) {
@@ -283,6 +371,7 @@ async function removeStep3Path(idx) {
         await _refreshStandardSubfolders(wizardSelectedPaths);
     }
     renderStep3PathsList();
+    runWizardPreflightCheck();
 }
 
 function prepareImportStep3(headerText, subtitleText, isGoogle) {
@@ -320,6 +409,7 @@ function prepareImportStep3(headerText, subtitleText, isGoogle) {
 
     updateWizardCheckDOM();
     showImportStep(3);
+    runWizardPreflightCheck();
 }
 
 function rePickStep3Paths() {
@@ -353,11 +443,26 @@ async function handleSelectedFilesInput(fileList) {
     }
 }
 
-async function confirmWizardImport() {
+async function confirmWizardImport(forceSpace = false) {
     if (!wizardSelectedPaths.length) {
         alert("Veuillez conserver ou ajouter au moins une source à importer.");
         return;
     }
+    if (!forceSpace) {
+        const pf = _lastWizardPreflight || await runWizardPreflightCheck();
+        if (pf && pf.enough === false) {
+            const confirmBar = document.getElementById('wiz-space-confirm-bar');
+            const confirmMsg = document.getElementById('wiz-space-confirm-msg');
+            if (confirmMsg) {
+                confirmMsg.textContent = (pf.warnings && pf.warnings.length)
+                    ? pf.warnings.join(' ')
+                    : "L'espace libre sur le lecteur cible risque de provoquer une erreur pendant l'import.";
+            }
+            if (confirmBar) confirmBar.classList.remove('hidden');
+            return;
+        }
+    }
+    cancelWizardSpaceConfirm();
     const customAlbumName = (document.getElementById('wiz-album-name-input')?.value || '').trim();
     closeImportWizard();
 

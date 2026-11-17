@@ -122,6 +122,9 @@ async function switchLibrary(name) {
         await loadStats();
         await loadGalleryFilters();
         refreshActiveMediaView();
+        if (typeof loadActivitiesHistory === 'function' && currentTab === 'activities') {
+            loadActivitiesHistory();
+        }
     }
 }
 
@@ -350,11 +353,54 @@ async function confirmRemoveLibrarySource() {
     showLibraryModalView(mode === 'create' ? 'lib-view-create' : 'lib-view-edit');
 }
 
+let pendingCreateLibIconFile = null;
+let _pendingCreateIconPreviewUrl = null;
+
+function syncCreateLibraryAvatarPreview() {
+    const nameVal = (document.getElementById('lib-create-name')?.value || '').trim();
+    _renderLibraryAvatarElements(
+        'lib-create-avatar-letter',
+        'lib-create-avatar-img',
+        nameVal || 'Bibliothèque',
+        _pendingCreateIconPreviewUrl || ''
+    );
+    const resetBtn = document.getElementById('lib-create-icon-reset-btn');
+    if (resetBtn) resetBtn.classList.toggle('hidden', !_pendingCreateIconPreviewUrl);
+}
+
+function triggerCreateLibraryIconUpload() {
+    const inp = document.getElementById('lib-create-icon-file-input');
+    if (inp) inp.click();
+}
+
+function handleCreateLibraryIconSelect(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (_pendingCreateIconPreviewUrl) {
+        try { URL.revokeObjectURL(_pendingCreateIconPreviewUrl); } catch (_) {}
+    }
+    pendingCreateLibIconFile = file;
+    _pendingCreateIconPreviewUrl = URL.createObjectURL(file);
+    syncCreateLibraryAvatarPreview();
+}
+
+function resetCreateLibraryIcon() {
+    pendingCreateLibIconFile = null;
+    if (_pendingCreateIconPreviewUrl) {
+        try { URL.revokeObjectURL(_pendingCreateIconPreviewUrl); } catch (_) {}
+    }
+    _pendingCreateIconPreviewUrl = null;
+    const inp = document.getElementById('lib-create-icon-file-input');
+    if (inp) inp.value = '';
+    syncCreateLibraryAvatarPreview();
+}
+
 function openCreateLibraryModal() {
     hideAllTopPopovers();
     pendingCreateLibFolders = [];
     const nameInput = document.getElementById('lib-create-name');
     if (nameInput) nameInput.value = '';
+    resetCreateLibraryIcon();
     _renderLibrarySourcesList('create');
     showLibraryModalView('lib-view-create');
 }
@@ -432,6 +478,7 @@ async function pickLibraryFolder(mode, createNewSubfolder = false) {
         const nameInput = document.getElementById('lib-create-name');
         if (nameInput && !nameInput.value.trim() && pendingCreateLibFolders.length) {
             nameInput.value = pendingCreateLibFolders[0].split(/[\\/]/).filter(Boolean).pop() || '';
+            syncCreateLibraryAvatarPreview();
         }
     } else {
         _appendUniqueLibFolder(pendingEditLibFolders, chosenPath);
@@ -464,6 +511,17 @@ async function submitCreateLibraryModal() {
         })
     });
     if (res.ok) {
+        if (pendingCreateLibIconFile) {
+            const fd = new FormData();
+            fd.append('file', pendingCreateLibIconFile);
+            try {
+                await fetch(`/api/libraries/icon/${encodeURIComponent(name)}`, {
+                    method: 'POST',
+                    body: fd
+                });
+            } catch (_) {}
+        }
+        resetCreateLibraryIcon();
         closeLibraryModal();
         await loadLibrariesDropdown();
         await loadGalleryFilters();

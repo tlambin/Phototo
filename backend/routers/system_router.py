@@ -25,9 +25,22 @@ from settings_manager import (
     load_settings, save_settings, detect_system_hardware, get_hardware_runtime_config,
     FACES_MODEL_SPECS, CLIP_MODEL_SPECS
 )
-from library_manager import open_native_dialog
-from pipeline_runner import STATE, start_specific_task, request_stop_pipeline
-from database import EMPTY_SVG, MISSING_META_SQL_CONDITION, get_active_db_and_dest, get_db, resolve_actual_path
+from library_manager import open_native_dialog, get_library_tech_dir
+from pipeline_runner import STATE, start_specific_task, request_stop_pipeline, record_interrupted_active_task, notify_unadded_source_files
+from database import (
+    EMPTY_SVG,
+    MISSING_META_SQL_CONDITION,
+    get_active_db_and_dest,
+    get_db,
+    resolve_actual_path,
+    list_activity_entries,
+    get_activity_entry,
+    delete_activity_entry,
+    clear_activity_entries,
+    cancel_paused_activity_entry,
+    log_library_action,
+    build_file_entry,
+)
 from media_frames import VIDEO_EXTS
 
 router = APIRouter()
@@ -162,7 +175,7 @@ def serve_thumbnail(path: str = ""):
         return Response(content=EMPTY_SVG, media_type="image/svg+xml", status_code=200)
 
     _, dest_dir = get_active_db_and_dest()
-    cache_dir = dest_dir / "Miniatures_Cache"
+    cache_dir = get_library_tech_dir(dest_dir, "Miniatures_Cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     stat = actual.stat()
@@ -212,9 +225,123 @@ def api_browse(mode: str = "folder"):
 
 @router.post("/api/notifications/clear")
 def api_clear_notifications():
-    for n in STATE.notifications:
-        n["read"] = True
+    with STATE._lock:
+        for n in STATE.notifications:
+            n["read"] = True
     return {"status": "ok"}
+
+
+@router.delete("/api/notifications/{notif_id}")
+def api_delete_notification(notif_id: int):
+    with STATE._lock:
+        STATE.notifications = [n for n in STATE.notifications if n.get("id") != notif_id]
+        remaining = list(STATE.notifications)
+    return {"status": "ok", "notifications": remaining}
+
+
+@router.delete("/api/notifications")
+def api_delete_all_notifications():
+    with STATE._lock:
+        STATE.notifications.clear()
+    return {"status": "ok", "notifications": []}
+
+
+@router.get("/api/activities")
+def api_list_activities():
+    return {"activities": list_activity_entries(limit=200)}
+
+
+class ClientActivityLogPayload(BaseModel):
+    action_type: str
+    title: str
+    detail: str = ""
+    files: list[str] = []
+
+
+@router.post("/api/activities/log")
+def api_log_client_activity(payload: ClientActivityLogPayload):
+    act = (payload.action_type or "").strip().upper()
+    if act not in {"MEDIA_DOWNLOAD", "MEDIA_SHARE"}:
+        raise HTTPException(400, "Type d'action client non autorisé.")
+    file_entries = [build_file_entry(p) for p in (payload.files or []) if str(p).strip()]
+    log_library_action(
+        act,
+        (payload.title or "").strip() or ("Partage" if act == "MEDIA_SHARE" else "Téléchargement"),
+        (payload.detail or "").strip(),
+        files=file_entries,
+    )
+    return {"status": "ok"}
+
+
+@router.get("/api/activities/export")
+def api_export_activities():
+    acts = list_activity_entries(limit=1000)
+    ts_name = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    body = json.dumps(
+        {"exported_at": datetime.now().isoformat(timespec="seconds"), "count": len(acts), "activities": acts},
+        ensure_ascii=False,
+        indent=2,
+    )
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="phototo_activites_{ts_name}.json"'},
+    )
+
+
+@router.post("/api/activities/{activity_id}/resume")
+def api_resume_activity(activity_id: int):
+    entry = get_activity_entry(activity_id)
+    if not entry:
+        raise HTTPException(404, "Activité introuvable.")
+    raw_params = str(entry.get("params_json") or "").strip()
+    if raw_params:
+        try:
+            import libraries_router
+            p_dict = json.loads(raw_params)
+            return libraries_router.api_import_add_sources(libraries_router.AddImportSourcesPayload(**p_dict))
+        except Exception as e:
+            raise HTTPException(400, f"Impossible de reprendre l'importation : {e}")
+    act = str(entry.get("action_type") or "").upper()
+    task_map = {
+        "INGEST": "INGEST",
+        "UNZIP": "INGEST",
+        "IMPORT": "INGEST",
+        "METADATA": "INGEST",
+        "FACES": "FACES",
+        "OCR": "OCR",
+        "DEDUP": "DEDUP",
+        "SIMILAR": "SIMILAR",
+        "CLIP": "CLIP",
+    }
+    task_code = task_map.get(act)
+    if not task_code:
+        raise HTTPException(400, "Cette action ne peut pas être relancée automatiquement.")
+    try:
+        return start_specific_task(task_code)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/api/activities/{activity_id}")
+def api_delete_activity(activity_id: int):
+    return {"status": "ok", "activities": delete_activity_entry(activity_id)}
+
+
+@router.delete("/api/activities")
+def api_clear_activities():
+    return {"status": "ok", "activities": clear_activity_entries()}
+
+
+@router.post("/api/activities/{activity_id}/cancel_pause")
+def api_cancel_paused_activity(activity_id: int):
+    return {"status": "ok", "activities": cancel_paused_activity_entry(activity_id)}
+
+
+@router.post("/api/activities/check_sources")
+def api_check_activities_sources():
+    threading.Thread(target=notify_unadded_source_files, daemon=True).start()
+    return {"status": "checking"}
 
 
 @router.get("/api/pipeline/status")
@@ -304,7 +431,7 @@ def api_backup_database():
     if not db_path.exists():
         raise HTTPException(404, "Aucune base de données active trouvée.")
 
-    backup_dir = dest_dir / "Sauvegardes_DB"
+    backup_dir = get_library_tech_dir(dest_dir, "Sauvegardes_DB")
     backup_dir.mkdir(parents=True, exist_ok=True)
     ts_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     backup_file = backup_dir / f"{db_path.stem}_backup_{ts_str}.db.bak"
@@ -317,6 +444,12 @@ def api_backup_database():
         dst_conn.close()
         src_conn.close()
         size_mb = round(backup_file.stat().st_size / (1024 * 1024), 2)
+        log_library_action(
+            "DB_BACKUP",
+            "Sauvegarde de la base de données",
+            f"{backup_file.name} ({size_mb} Mo)",
+            files=[build_file_entry(str(backup_file))],
+        )
         return {"status": "ok", "backup_path": str(backup_file), "size_mb": size_mb}
     except Exception as e:
         raise HTTPException(500, f"Erreur lors de la sauvegarde : {e}")
@@ -336,7 +469,7 @@ def api_reset_tool(payload: ResetToolPayload):
         cur.execute("DELETE FROM faces")
         cur.execute("DELETE FROM persons")
         cur.execute("UPDATE processed_files SET faces_scanned = 0, faces_model = NULL")
-        thumbs_dir = dest_dir / "Miniatures_Visages"
+        thumbs_dir = get_library_tech_dir(dest_dir, "Miniatures_Visages")
         if thumbs_dir.exists():
             shutil.rmtree(thumbs_dir, ignore_errors=True)
     elif tool == "OCR":
@@ -348,7 +481,7 @@ def api_reset_tool(payload: ResetToolPayload):
     elif tool == "SIMILAR":
         cur.execute("UPDATE processed_files SET phash = NULL, video_hash = NULL")
     elif tool == "DEDUP":
-        q_dir = dest_dir / "Doublons_Quarantaine"
+        q_dir = get_library_tech_dir(dest_dir, "Doublons_Quarantaine")
         cur.execute("SELECT source_path, dest_path, original_dest_path FROM processed_files WHERE is_duplicate = 1 AND dest_path IS NOT NULL")
         for r in cur.fetchall():
             curr_dest = Path(r["dest_path"])
@@ -372,6 +505,7 @@ def api_reset_tool(payload: ResetToolPayload):
 
     conn.commit()
     conn.close()
+    log_library_action("TOOL_RESET", "Réinitialisation d'outil", f"Données réinitialisées pour {tool}")
     return {"status": "reset", "tool": tool}
 
 
@@ -393,36 +527,56 @@ def api_prune_missing_files():
         cur.executemany("DELETE FROM processed_files WHERE source_path = ?", missing_sources)
         conn.commit()
     conn.close()
+    if missing_sources:
+        log_library_action(
+            "DB_PRUNE",
+            "Nettoyage des fichiers absents",
+            f"{len(missing_sources)} fichier(s) absent(s) retiré(s) de la base",
+            files=[build_file_entry(s[0]) for s in missing_sources],
+        )
     return {"status": "ok", "removed_count": len(missing_sources)}
 
 
+def _prepare_power_transition(activity_action: str = "pause", wait_timeout_sec: float = 4.0) -> str:
+    """Apply user's choice (pause / stop / ignore) for any running pipeline task before power transition."""
+    action = str(activity_action or "pause").strip().lower()
+    if action not in ("pause", "stop", "ignore"):
+        action = "pause"
+
+    if action == "ignore":
+        if STATE.is_running:
+            record_interrupted_active_task()
+    elif STATE.is_running:
+        request_stop_pipeline(cancel=(action == "stop"))
+        deadline = time.time() + max(0.0, float(wait_timeout_sec))
+        while STATE.is_running and time.time() < deadline:
+            time.sleep(0.05)
+    return action
+
+
 @router.post("/api/system/restart")
-def api_system_restart():
-    if STATE.is_running:
-        STATE.stop_requested = True
-        time.sleep(0.4)
+def api_system_restart(activity_action: str = "pause"):
+    chosen = _prepare_power_transition(activity_action)
 
     def _respawn():
-        time.sleep(0.6)
+        time.sleep(0.3 if chosen == "ignore" else 0.5)
         subprocess.Popen([sys.executable, "main.py"], cwd=os.getcwd())
         os._exit(0)
 
     threading.Thread(target=_respawn, daemon=True).start()
-    return {"status": "restarting"}
+    return {"status": "restarting", "activity_action": chosen}
 
 
 @router.post("/api/system/shutdown")
-def api_system_shutdown():
-    if STATE.is_running:
-        STATE.stop_requested = True
-        time.sleep(0.4)
+def api_system_shutdown(activity_action: str = "pause"):
+    chosen = _prepare_power_transition(activity_action)
 
     def _quit():
-        time.sleep(0.6)
+        time.sleep(0.3 if chosen == "ignore" else 0.5)
         os._exit(0)
 
     threading.Thread(target=_quit, daemon=True).start()
-    return {"status": "shutting_down"}
+    return {"status": "shutting_down", "activity_action": chosen}
 
 
 # ==================== GESTION DE L'IA LOCALE ====================

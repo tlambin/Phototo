@@ -1,48 +1,25 @@
 {
-    "active_library": "Test",
+    "active_library": "Rapido",
     "libraries": {
-        "Test": {
-            "name": "Test",
-            "source_type": "STANDARD_FOLDER",
-            "is_takeout": false,
+        "Rapido": {
+            "name": "Rapido",
+            "source_type": "TAKEOUT_ZIPS",
+            "is_takeout": true,
             "source_paths": [
-                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-001.zip",
-                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-002.zip",
-                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-003.zip",
-                "D:/Ressources/Google Photos/Fake Thomas/takeout-20250225T042436Z-004.zip",
-                "D:\\Ressources\\azerty\\Import_Direct",
-                "C:/Users/Thomas/Pictures/Screenshots"
+                "D:\\Rapido\\Nouvelle_Bibliotheque",
+                "D:\\Ressources\\Google Photos\\Fake Thomas\\takeout-20250225T042436Z-001.zip",
+                "D:\\Ressources\\Google Photos\\Fake Thomas\\takeout-20250225T042436Z-002.zip",
+                "D:\\Ressources\\Google Photos\\Fake Thomas\\takeout-20250225T042436Z-003.zip",
+                "D:\\Ressources\\Google Photos\\Fake Thomas\\takeout-20250225T042436Z-004.zip"
             ],
-            "dest_dir": "D:\\Ressources\\azerty",
-            "db_path": "D:\\Ressources\\azerty\\library_azerty.db",
-            "created_at": "2026-11-05T02:56:10.566591",
-            "options": {
-                "fix_takeout_json_metadata": false,
-                "delete_zips_progressively": false,
-                "organize_by_year_month": true,
-                "run_deduplication": true,
-                "run_faces_ai": true,
-                "run_ocr": true,
-                "run_similarity": true,
-                "run_semantic_clip": true
-            }
-        },
-        "Phototo": {
-            "name": "Phototo",
-            "source_type": "STANDARD_FOLDER",
-            "is_takeout": false,
-            "source_paths": [
-                "C:\\Users\\Thomas\\Pictures\\Phototo",
-                "D:\\Ressources\\azerty\\2007",
-                "D:\\Ressources\\azerty\\2008",
-                "D:\\Ressources\\azerty\\2006"
-            ],
-            "dest_dir": "C:\\Users\\Thomas\\Pictures\\Phototo",
-            "db_path": "C:\\Users\\Thomas\\Pictures\\Phototo\\library_phototo.db",
-            "created_at": "2026-11-13T23:19:10.178287",
+            "dest_dir": "D:\\Rapido\\Nouvelle_Bibliotheque",
+            "db_path": "D:\\Rapido\\Nouvelle_Bibliotheque\\Phototo\\library_rapido.db",
+            "created_at": "2026-11-17T01:37:58.494017",
             "options": {
                 "fix_takeout_json_metadata": true,
                 "delete_zips_progressively": false,
+                "takeout_keep_structure": true,
+                "takeout_wrap_google_album": false,
                 "organize_by_year_month": true,
                 "run_deduplication": true,
                 "run_faces_ai": true,
@@ -50,29 +27,6 @@
                 "run_similarity": true,
                 "run_semantic_clip": true
             }
-        },
-        "New": {
-            "name": "New",
-            "source_type": "STANDARD_FOLDER",
-            "is_takeout": false,
-            "source_paths": [
-                "C:\\Users\\Thomas\\Pictures\\new",
-                "C:\\Users\\Thomas\\Pictures\\new\\Import_Direct"
-            ],
-            "dest_dir": "C:\\Users\\Thomas\\Pictures\\new",
-            "db_path": "C:\\Users\\Thomas\\Pictures\\new\\library_new.db",
-            "created_at": "2026-11-15T02:21:27.131983",
-            "options": {
-                "fix_takeout_json_metadata": false,
-                "delete_zips_progressively": false,
-                "organize_by_year_month": true,
-                "run_deduplication": true,
-                "run_faces_ai": true,
-                "run_ocr": true,
-                "run_similarity": true,
-                "run_semantic_clip": true
-            },
-            "icon_file": "new_1794846080289.jpg"
         }
     }
 }

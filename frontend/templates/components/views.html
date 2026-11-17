@@ -1046,12 +1046,209 @@
         <textarea id="settings-scanned-folders" class="hidden"></textarea>
     </div>
 
-    <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES) ==================== -->
-    <div id="tab-activities" class="hidden max-w-3xl space-y-5">
-        <h1 class="text-4xl font-extrabold tracking-tight leading-none mb-6">Activités</h1>
-        <div id="activities-full-list" class="space-y-3">
-            <div class="ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">
-                Aucune activité enregistrée pour le moment.
+    <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES & ACTIONS) ==================== -->
+    <div id="tab-activities" class="hidden max-w-4xl pb-12 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4 min-h-[44px] mb-1">
+            <h1 class="text-4xl font-extrabold tracking-tight leading-none">Activités</h1>
+            <button id="btn-scan-activities" type="button" onclick="runTask('INGEST')" title="Analyser les dossiers sources pour détecter de nouveaux médias"
+                    class="ui-card hover:bg-[var(--bg-hover)] hover:text-sky-500 rounded-full px-4 py-1.5 text-xs font-bold flex items-center gap-2 shadow-sm transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Analyser</span>
+            </button>
+        </div>
+
+        <!-- Accès rapide : Ajoutés récemment -->
+        <button id="btn-recent-activities" type="button" onclick="switchTab('recent')" title="Voir les derniers médias ajoutés"
+                class="w-full ui-card hover:bg-[var(--bg-hover)] rounded-3xl px-5 py-4 flex items-center justify-between gap-4 shadow-sm transition cursor-pointer text-left group">
+            <div class="flex items-center gap-3.5 min-w-0">
+                <div class="w-9 h-9 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-sm font-extrabold leading-tight">Ajoutés récemment</div>
+                    <div class="text-[11px] opacity-60">Consulter les derniers médias importés dans la bibliothèque.</div>
+                </div>
+            </div>
+            <svg class="w-4 h-4 shrink-0 opacity-50 group-hover:opacity-90 group-hover:translate-x-0.5 transition" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+
+        <!-- Case d'activité en cours ou dernière activité -->
+        <div id="activities-current-section">
+            <div id="activities-current-card" class="ui-card rounded-3xl p-5 shadow-sm"></div>
+        </div>
+
+        <!-- Section Historique -->
+        <div class="space-y-4 pt-1">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-lg font-extrabold tracking-tight">Historique</h2>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="btn-export-activities" type="button" onclick="exportActivitiesHistory()" title="Exporter l'historique des activités vers un fichier JSON"
+                            class="ui-card hover:bg-[var(--bg-hover)] hover:text-emerald-500 rounded-full px-3.5 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>Sauvegarder</span>
+                    </button>
+                    <button id="btn-clear-all-activities" type="button" onclick="openClearActivitiesConfirm()" title="Vider tout l'historique des activités"
+                            class="hidden ui-card hover:bg-[var(--bg-hover)] hover:text-rose-500 rounded-full px-3.5 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <span>Tout supprimer</span>
+                    </button>
+                </div>
+            </div>
+
+        <div id="activities-full-list" class="space-y-4">
+            <!-- Section 1 : Imports & Médias -->
+            <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-extrabold leading-tight">Imports &amp; Médias</h2>
+                            <p class="text-[11px] opacity-60">Importations de dossiers, décompressions Takeout et correction des métadonnées.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="act-toggle-operations" type="button" onclick="toggleActivitySection('operations')"
+                                class="hidden ui-pill hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer">
+                            <span id="act-toggle-lbl-operations">Tout voir</span>
+                            <svg id="act-toggle-chevron-operations" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <span id="act-count-operations" class="ui-pill px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shrink-0">0</span>
+                    </div>
+                </div>
+                <div id="activities-list-operations" class="space-y-2">
+                    <div class="ui-pill rounded-2xl p-5 text-center text-xs font-semibold opacity-60">
+                        Aucune opération d'import ou de métadonnées enregistrée.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2 : Analyses IA & Détections -->
+            <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1a3 3 0 0 1 3 3v1a2 2 0 0 1 2 2v1a3 3 0 0 1-3 3h-1v2a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-2H6a3 3 0 0 1-3-3v-1a2 2 0 0 1 2-2v-1a3 3 0 0 1 3-3V6a4 4 0 0 1 4-4z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-extrabold leading-tight">Analyses IA &amp; Détections</h2>
+                            <p class="text-[11px] opacity-60">Reconnaissance faciale, OCR, détection des doublons, similarités et indexation CLIP.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="act-toggle-analyses" type="button" onclick="toggleActivitySection('analyses')"
+                                class="hidden ui-pill hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer">
+                            <span id="act-toggle-lbl-analyses">Tout voir</span>
+                            <svg id="act-toggle-chevron-analyses" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <span id="act-count-analyses" class="ui-pill px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shrink-0">0</span>
+                    </div>
+                </div>
+                <div id="activities-list-analyses" class="space-y-2">
+                    <div class="ui-pill rounded-2xl p-5 text-center text-xs font-semibold opacity-60">
+                        Aucune analyse IA enregistrée pour le moment.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3 : Journal des actions -->
+            <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-extrabold leading-tight">Journal des actions</h2>
+                            <p class="text-[11px] opacity-60">Suppressions, modifications, favoris, gestion des albums, partages et téléchargements.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="act-toggle-actions" type="button" onclick="toggleActivitySection('actions')"
+                                class="hidden ui-pill hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer">
+                            <span id="act-toggle-lbl-actions">Tout voir</span>
+                            <svg id="act-toggle-chevron-actions" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <span id="act-count-actions" class="ui-pill px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shrink-0">0</span>
+                    </div>
+                </div>
+                <div id="activities-list-actions" class="space-y-2">
+                    <div class="ui-pill rounded-2xl p-5 text-center text-xs font-semibold opacity-60">
+                        Aucune action utilisateur enregistrée pour le moment.
+                    </div>
+                </div>
+            </section>
+        </div>
+        </div>
+    </div>
+
+    <!-- Modale de confirmation : Vider toutes les activités -->
+    <div id="activities-confirm-clear-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closeClearActivitiesConfirm()">
+        <div class="ui-card rounded-[28px] max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div class="flex items-center justify-between gap-2">
+                <h2 class="text-base font-extrabold leading-tight">Vider les activités</h2>
+                <button type="button" onclick="closeClearActivitiesConfirm()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer shrink-0">✕</button>
+            </div>
+            <p class="text-xs font-semibold opacity-80 leading-relaxed">
+                Voulez-vous vraiment supprimer tout l'historique des activités de cette bibliothèque ? Pensez à sauvegarder avant si besoin.
+            </p>
+            <div class="flex items-center justify-center gap-3 pt-1">
+                <button type="button" onclick="closeClearActivitiesConfirm()" class="ui-pill hover:bg-[var(--bg-hover)] px-6 py-2 rounded-full text-xs font-extrabold transition cursor-pointer">
+                    Annuler
+                </button>
+                <button type="button" onclick="confirmClearAllActivities()" class="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2 rounded-full text-xs font-extrabold shadow-md transition cursor-pointer">
+                    Tout supprimer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale de confirmation : Arrêt / Redémarrage avec activité en cours -->
+    <div id="power-activity-modal" class="hidden fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none" onclick="if(event.target===this) closePowerActivityModal()">
+        <div class="ui-card rounded-[28px] max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between gap-2">
+                <h2 id="power-modal-title" class="text-base font-extrabold leading-tight">Confirmation</h2>
+                <button type="button" onclick="closePowerActivityModal()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer shrink-0">✕</button>
+            </div>
+            <div id="power-modal-running-badge" class="hidden ui-pill rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5 text-xs font-bold">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <span id="power-modal-running-step" class="truncate"></span>
+            </div>
+            <p id="power-modal-msg" class="text-xs font-semibold opacity-80 leading-relaxed"></p>
+
+            <!-- Choix quand une activité est en cours -->
+            <div id="power-modal-active-choices" class="hidden space-y-2 pt-1">
+                <button type="button" onclick="executePowerAction('pause')"
+                        class="w-full ui-pill hover:bg-[var(--bg-hover)] hover:text-amber-500 px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center justify-between transition cursor-pointer">
+                    <span>Mettre en pause</span>
+                    <span class="text-[10px] font-semibold opacity-65">Reprise possible au prochain lancement</span>
+                </button>
+                <button type="button" onclick="executePowerAction('stop')"
+                        class="w-full ui-pill hover:bg-[var(--bg-hover)] hover:text-rose-500 px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center justify-between transition cursor-pointer">
+                    <span>Arrêter l'activité</span>
+                    <span class="text-[10px] font-semibold opacity-65">Stopper l'opération avant de quitter</span>
+                </button>
+                <button type="button" onclick="executePowerAction('ignore')"
+                        class="w-full ui-pill hover:bg-[var(--bg-hover)] px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center justify-between transition cursor-pointer">
+                    <span>Ignorer l'activité</span>
+                    <span class="text-[10px] font-semibold opacity-65">Continuer sans attendre</span>
+                </button>
+                <div class="flex justify-end pt-1">
+                    <button type="button" onclick="closePowerActivityModal()" class="ui-pill hover:bg-[var(--bg-hover)] px-5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer">
+                        Annuler
+                    </button>
+                </div>
+            </div>
+
+            <!-- Choix simple quand aucune activité n'est en cours -->
+            <div id="power-modal-idle-choices" class="hidden flex items-center justify-center gap-3 pt-1">
+                <button type="button" onclick="closePowerActivityModal()" class="ui-pill hover:bg-[var(--bg-hover)] px-6 py-2 rounded-full text-xs font-extrabold transition cursor-pointer">
+                    Annuler
+                </button>
+                <button id="power-modal-idle-confirm-btn" type="button" onclick="executePowerAction('pause')" class="plum-btn px-6 py-2 rounded-full text-xs font-extrabold shadow-md transition cursor-pointer">
+                    Confirmer
+                </button>
             </div>
         </div>
     </div>

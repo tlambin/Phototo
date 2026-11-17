@@ -11,9 +11,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from settings_manager import get_configured_timezone
-from library_manager import load_libraries
+from library_manager import load_libraries, get_library_tech_dir
 from pipeline_runner import STATE
-from database import MISSING_META_SQL_CONDITION, get_active_db_and_dest, get_db, resolve_actual_path
+from database import MISSING_META_SQL_CONDITION, get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
 from media_editor import process_image_edits, process_video_edits
 from media_frames import VIDEO_EXTS
 import fusion_takeout_complet as fusion
@@ -444,11 +444,14 @@ def api_batch_update_metadata(payload: BatchMetadataUpdatePayload):
 
     base_new_ts = int(datetime.fromisoformat(payload.start_datetime_iso).replace(tzinfo=target_tz).timestamp()) if payload.start_datetime_iso else None
     first_orig_ts = ordered[0]["timestamp"] if ordered else 0
+    updated_meta_files: list[dict] = []
+    failed_meta_files: list[dict] = []
 
     with exiftool.ExifToolHelper() as et:
         for idx, item in enumerate(ordered):
             curr_p = Path(item["dest_path"])
             if not curr_p.exists():
+                failed_meta_files.append({"path": str(curr_p).replace("\\", "/"), "name": curr_p.name, "reason": "Fichier introuvable sur le disque"})
                 continue
             new_ts = item["timestamp"]
             if base_new_ts is not None:
@@ -494,17 +497,34 @@ def api_batch_update_metadata(payload: BatchMetadataUpdatePayload):
             if payload.description:
                 tags["ImageDescription"] = payload.description
 
+            exif_err = None
             if tags:
                 try:
                     et.set_tags([str(curr_p)], tags=tags, params=["-overwrite_original", "-P", "-q", "-api", "QuickTimeUTC=0"])
-                except Exception:
-                    pass
+                except Exception as e:
+                    exif_err = str(e)
             if new_ts:
                 os.utime(curr_p, (new_ts, new_ts))
             cur.execute("UPDATE processed_files SET timestamp=?, latitude=?, longitude=? WHERE source_path=?", (new_ts, new_lat, new_lon, item["source_path"]))
+            if exif_err:
+                failed_meta_files.append({"path": str(curr_p).replace("\\", "/"), "name": curr_p.name, "reason": exif_err[:240]})
+            else:
+                updated_meta_files.append(build_file_entry(str(curr_p)))
 
     conn.commit()
     conn.close()
+    if updated_meta_files or failed_meta_files:
+        log_library_action(
+            "METADATA_EDIT",
+            "Métadonnées modifiées",
+            f"{len(updated_meta_files)} fichier(s) mis à jour" + (f", {len(failed_meta_files)} échec(s)" if failed_meta_files else ""),
+            status="error" if (failed_meta_files and not updated_meta_files) else ("partial" if failed_meta_files else "success"),
+            reason=f"{len(failed_meta_files)} erreur(s) ExifTool" if failed_meta_files else "",
+            total_items=len(ordered),
+            success_count=len(updated_meta_files),
+            files=updated_meta_files,
+            failed_files=failed_meta_files,
+        )
     return {"status": "updated"}
 
 
@@ -514,10 +534,13 @@ def api_batch_strip_metadata(payload: BatchMetadataStripPayload):
     cur = conn.cursor()
     ph = ",".join("?" for _ in payload.source_paths)
     cur.execute(f"SELECT source_path, dest_path, timestamp FROM processed_files WHERE source_path IN ({ph})", payload.source_paths)
+    stripped_files: list[dict] = []
+    failed_strip: list[dict] = []
     with exiftool.ExifToolHelper() as et:
         for r in cur.fetchall():
             p = Path(r["dest_path"])
             if not p.exists():
+                failed_strip.append({"path": str(p).replace("\\", "/"), "name": p.name, "reason": "Fichier introuvable"})
                 continue
             params = ["-overwrite_original", "-P", "-q"]
             if payload.strip_all_exif:
@@ -528,12 +551,22 @@ def api_batch_strip_metadata(payload: BatchMetadataStripPayload):
                 et.execute(*params, str(p))
                 if r["timestamp"]:
                     os.utime(p, (r["timestamp"], r["timestamp"]))
-            except Exception:
-                pass
+                stripped_files.append(build_file_entry(str(p)))
+            except Exception as e:
+                failed_strip.append({"path": str(p).replace("\\", "/"), "name": p.name, "reason": str(e)[:240]})
             if payload.strip_all_exif or payload.strip_gps:
                 cur.execute("UPDATE processed_files SET latitude=0.0, longitude=0.0 WHERE source_path=?", (r["source_path"],))
     conn.commit()
     conn.close()
+    if stripped_files or failed_strip:
+        log_library_action(
+            "METADATA_STRIP",
+            "Métadonnées supprimées",
+            f"{len(stripped_files)} fichier(s) nettoyé(s)",
+            status="partial" if failed_strip else "success",
+            files=stripped_files,
+            failed_files=failed_strip,
+        )
     return {"status": "stripped"}
 
 
@@ -554,6 +587,7 @@ def api_apply_studio_edits(payload: MediaStudioEditPayload):
         out_files = [process_image_edits(media_p, ops, overwrite=payload.overwrite, timestamp=row["timestamp"])] if not is_vid else process_video_edits(media_p, ops, overwrite=payload.overwrite, timestamp=row["timestamp"])
     except Exception as e:
         conn.close()
+        log_library_action("MEDIA_EDIT", "Échec d'édition (Studio)", f"{media_p.name}", status="error", reason=str(e), failed_files=[{"path": str(media_p).replace("\\", "/"), "name": media_p.name, "reason": str(e)}])
         raise HTTPException(500, f"Erreur d'édition : {e}")
 
     for out_p in out_files:
@@ -568,6 +602,12 @@ def api_apply_studio_edits(payload: MediaStudioEditPayload):
 
     conn.commit()
     conn.close()
+    log_library_action(
+        "MEDIA_EDIT",
+        "Média modifié (Studio)",
+        f"{media_p.name} enregistré",
+        files=[build_file_entry(str(p)) for p in out_files],
+    )
     return {"status": "ok", "output_files": [str(p) for p in out_files]}
 
 
@@ -616,6 +656,12 @@ def api_rename_media(payload: RenameMediaPayload):
     cur.execute("UPDATE faces SET dest_path = ? WHERE dest_path = ?", (new_dest_str, old_dest))
     conn.commit()
     conn.close()
+    log_library_action(
+        "MEDIA_RENAME",
+        "Fichier renommé",
+        f"{actual_p.name} → {new_p.name}",
+        files=[build_file_entry(new_dest_str, f"Ancien nom : {actual_p.name}")],
+    )
     return {"status": "ok", "dest_path": new_dest_str, "filename": new_p.name}
 
 
@@ -700,7 +746,7 @@ def api_analyze_single_media(payload: AnalyzeSingleMediaPayload):
 
             faces_ai.DB_PATH = db_p
             faces_ai.DEST_DIR = dest_dir
-            faces_ai.THUMBS_DIR = dest_dir / "Miniatures_Visages"
+            faces_ai.THUMBS_DIR = get_library_tech_dir(dest_dir, "Miniatures_Visages")
             faces_ai.init_face_tables(conn)
 
             if payload.force_faces:
@@ -923,4 +969,10 @@ def api_apply_media_categories(payload: ApplyMediaCategoriesPayload):
             )
     conn.commit()
     conn.close()
+    log_library_action(
+        "CATEGORY_EDIT",
+        "Catégories modifiées",
+        f"{Path(src_clean).name} ({len(payload.categories)} catégorie(s))",
+        files=[build_file_entry(src_clean)],
+    )
     return {"status": "ok"}

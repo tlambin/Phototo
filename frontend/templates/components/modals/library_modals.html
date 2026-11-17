@@ -9,8 +9,30 @@
             <button onclick="closeLibraryModal()" title="Fermer" class="w-6 h-6 rounded-full border-[1.8px] border-current/75 flex items-center justify-center text-xs font-extrabold hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 transition cursor-pointer shrink-0">✕</button>
         </div>
 
-        <input id="lib-create-name" type="text" placeholder="Choisir un nom"
-               class="ui-pill w-full rounded-full px-4 py-2.5 text-xs font-bold outline-none placeholder:opacity-50"/>
+        <!-- Icône + Nom de la bibliothèque côte à côte -->
+        <div class="flex items-center gap-3.5 pt-0.5">
+            <div class="relative shrink-0">
+                <button type="button" onclick="triggerCreateLibraryIconUpload()" title="Choisir une icône pour la bibliothèque"
+                        class="plum-btn w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shadow relative group cursor-pointer">
+                    <span id="lib-create-avatar-letter" class="text-xl font-extrabold uppercase select-none leading-none">B</span>
+                    <img id="lib-create-avatar-img" src="" alt="" class="hidden w-full h-full object-cover"/>
+                    <span class="opacity-0 group-hover:opacity-100 absolute inset-0 bg-black/50 text-white flex items-center justify-center transition-opacity duration-150">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                        </svg>
+                    </span>
+                </button>
+                <button id="lib-create-icon-reset-btn" type="button" onclick="resetCreateLibraryIcon()" title="Revenir à la lettre par défaut"
+                        class="hidden absolute -bottom-1 -right-1 w-5 h-5 rounded-full ui-card border border-white/15 hover:text-rose-400 flex items-center justify-center text-[10px] font-bold shadow transition cursor-pointer">
+                    ✕
+                </button>
+                <input id="lib-create-icon-file-input" type="file" accept="image/*" class="hidden" onchange="handleCreateLibraryIconSelect(this)"/>
+            </div>
+
+            <input id="lib-create-name" type="text" placeholder="Choisir un nom" oninput="syncCreateLibraryAvatarPreview()"
+                   class="ui-pill flex-1 min-w-0 rounded-full px-4 py-2.5 text-xs font-bold outline-none placeholder:opacity-50"/>
+        </div>
 
         <div class="space-y-2.5">
             <div class="flex items-center justify-between gap-2">

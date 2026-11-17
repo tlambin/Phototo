@@ -1609,6 +1609,42 @@ class TestApiRoutes(unittest.TestCase):
         self.assertNotIn('id="lib-name-btn"', top_html)
         self.assertNotIn('id="task-pulse-btn"', top_html)
         self.assertNotIn("Pas d'activité en cours", top_html)
+        self.assertNotIn("plum-btn w-12 h-12 rounded-2xl", top_html)
+        self.assertNotIn("plum-btn w-10 h-10 rounded-2xl", top_html)
+        for modern_tok in (
+            "Créer une bibliothèque",
+            "Modifier la bibliothèque",
+            "Fusionner des bibliothèques",
+            'id="label-pause-pipe"',
+            'id="btn-console-pipe"',
+            'id="btn-clear-all-notifs"',
+            'id="btn-clear-all-activities"',
+            'hover:text-amber-500',
+            'hover:text-sky-500',
+            'hover:text-rose-500',
+            'id="pipe-bar" class="h-full bg-emerald-500',
+            "Fichiers traités",
+            "Imports &amp; Médias",
+            "Analyses IA &amp; Détections",
+            "Journal des actions",
+            'id="btn-export-activities"',
+            'id="activities-confirm-clear-modal"',
+            'id="btn-recent-activities"',
+            "Ajoutés récemment",
+            'id="btn-scan-activities"',
+            "<span>Analyser</span>",
+        ):
+            self.assertIn(modern_tok, html)
+        sidebar_html = (ROOT_DIR / "frontend" / "templates" / "components" / "sidebar.html").read_text(encoding="utf-8")
+        self.assertNotIn('id="tab-btn-recent"', sidebar_html)
+        self.assertLess(html.index('Activités</h1>'), html.index('id="btn-recent-activities"'))
+        self.assertLess(html.index('id="btn-recent-activities"'), html.index('id="activities-current-section"'))
+        self.assertNotIn('id="activities-current-heading"', html)
+        self.assertLess(html.index('id="activities-current-section"'), html.index('>Historique</h2>'))
+        self.assertLess(html.index('>Historique</h2>'), html.index('id="activities-full-list"'))
+        self.assertIn('id="lib-create-avatar-letter"', html)
+        self.assertIn('id="lib-create-avatar-img"', html)
+        self.assertIn('id="lib-create-icon-file-input"', html)
         self.assertIn('id="lib-edit-avatar-letter"', html)
         self.assertIn('id="lib-edit-avatar-img"', html)
         self.assertIn('id="lib-edit-name-display"', html)
@@ -1621,6 +1657,220 @@ class TestApiRoutes(unittest.TestCase):
         self.assertIn("function toggleEditLibraryNameInput(", libraries_js)
         self.assertIn("async function uploadActiveLibraryIcon(", libraries_js)
         self.assertIn("hasActivityBanner", app_js)
+        self.assertIn("function renderCurrentOrPendingActivity(", app_js)
+        self.assertIn("function _findActivePausedActivityFromHistory(", app_js)
+        self.assertIn("async function discardPausedActivity(", app_js)
+        self.assertNotIn("_findPendingResumableActivity", app_js)
+        self.assertIn("async function deleteNotification(", app_js)
+        self.assertIn("async function clearAllNotifications(", app_js)
+
+        # Suppression unitaire et globale des notifications côté backend
+        import pipeline_runner
+        with pipeline_runner.STATE._lock:
+            saved_notifs = list(pipeline_runner.STATE.notifications)
+            pipeline_runner.STATE.notifications.clear()
+        try:
+            pipeline_runner.STATE.add_notification("Tâche 1", "success", "OK 1")
+            pipeline_runner.STATE.add_notification("Tâche 2", "error", "Err 2")
+            all_notifs = pipeline_runner.STATE.notifications
+            self.assertEqual(len(all_notifs), 2)
+            self.assertNotEqual(all_notifs[0]["id"], all_notifs[1]["id"])
+            id_to_remove = all_notifs[1]["id"]
+            del_one = system_router.api_delete_notification(id_to_remove)
+            self.assertEqual(len(del_one["notifications"]), 1)
+            self.assertEqual(del_one["notifications"][0]["title"], "Tâche 2")
+            del_all = system_router.api_delete_all_notifications()
+            self.assertEqual(del_all["notifications"], [])
+            self.assertEqual(len(pipeline_runner.STATE.notifications), 0)
+        finally:
+            with pipeline_runner.STATE._lock:
+                pipeline_runner.STATE.notifications = saved_notifs
+
+        # La décompression et le suivi console reçoivent le nom du fichier courant
+        import zipfile
+        test_zip = self.tmp_path / "sample.zip"
+        with zipfile.ZipFile(test_zip, "w") as zf:
+            zf.writestr("Takeout/2025/vacances.jpg", b"img-bytes")
+        seen_labels = []
+        _, ok_z, cnt_z, _ = pipeline_runner.extract_zip_interruptible(
+            test_zip,
+            self.tmp_path / "buf",
+            lambda sz, c, lbl="": seen_labels.append(lbl),
+        )
+        self.assertTrue(ok_z)
+        self.assertEqual(cnt_z, 1)
+        self.assertEqual(seen_labels, ["sample.zip -> vacances.jpg"])
+
+        # Historique persistant des activités (UNZIP + METADATA avec fichiers en échec + raisons + suppression)
+        for fn_act in (
+            "async function loadActivitiesHistory(",
+            "function renderActivitiesHistory(",
+            "function toggleActivityFailedFiles(",
+            "async function deleteActivityEntry(",
+            "async function confirmClearAllActivities(",
+            "Voir les fichiers non traités",
+        ):
+            self.assertIn(fn_act, app_js)
+
+        issue_err = pipeline_runner._collect_ingestion_issue(
+            ("/src/bad.jpg", None, None, "error", None, None, 0, 0, 0, None, 0.0, 0.0, 0, None, "Disque plein")
+        )
+        self.assertEqual(issue_err["name"], "bad.jpg")
+        self.assertEqual(issue_err["reason"], "Disque plein")
+        issue_nometa = pipeline_runner._collect_ingestion_issue(
+            ("/src/nodate.jpg", "/dst/nodate.jpg", "/dst/nodate.jpg", "no_metadata", None, None, 0, 0, 0, None, 0.0, 0.0, 0, None, None)
+        )
+        self.assertIn("Métadonnées", issue_nometa["reason"])
+
+        with pipeline_runner.STATE._lock:
+            saved_n2 = list(pipeline_runner.STATE.notifications)
+            pipeline_runner.STATE.notifications.clear()
+        try:
+            database.get_db().close()
+            import time as _time
+            from datetime import datetime as _dt
+            t0 = _time.time() - 3.5
+            iso0 = _dt.now().isoformat(timespec="seconds")
+            pipeline_runner._record_step_activity(
+                self.db_path, "MaLib", "UNZIP", "Décompression Google Takeout",
+                t0, iso0, 42, 42, [],
+            )
+            pipeline_runner._record_step_activity(
+                self.db_path, "MaLib", "METADATA", "Correction des métadonnées Takeout",
+                t0, iso0, 10, 8, [issue_err, issue_nometa],
+            )
+            acts = system_router.api_list_activities()["activities"]
+            self.assertEqual(len(acts), 2)
+            self.assertEqual(acts[0]["action_type"], "METADATA")
+            self.assertEqual(acts[0]["status"], "partial")
+            self.assertEqual(acts[0]["failed_count"], 2)
+            self.assertEqual(len(acts[0]["failed_files"]), 2)
+            self.assertEqual(acts[0]["failed_files"][0]["reason"], "Disque plein")
+            self.assertGreater(acts[0]["duration_sec"], 0.0)
+            self.assertEqual(acts[1]["action_type"], "UNZIP")
+            self.assertEqual(acts[1]["status"], "success")
+            self.assertIn("Décompression terminée avec succès", acts[1]["detail"])
+            # Les notifications associées ont aussi été émises en direct
+            self.assertEqual(len(pipeline_runner.STATE.notifications), 2)
+
+            # Suppression unitaire puis suppression totale
+            rem_acts = system_router.api_delete_activity(acts[0]["activity_id"])["activities"]
+            self.assertEqual(len(rem_acts), 1)
+            self.assertEqual(rem_acts[0]["action_type"], "UNZIP")
+            cleared_acts = system_router.api_clear_activities()["activities"]
+            self.assertEqual(cleared_acts, [])
+
+            # Traçabilité des actions utilisateur (favoris, albums, renommage, corbeille)
+            import metadata_studio_router
+            self.assertIn("function toggleActivityFiles(", app_js)
+            self.assertIn("Voir les fichiers (", app_js)
+
+            p_user = self.dest_dir / "act_photo.jpg"
+            p_user.write_bytes(b"img")
+            conn_u = database.get_db()
+            try:
+                conn_u.execute(
+                    "INSERT INTO processed_files (source_path, dest_path, status, is_duplicate, is_trashed, is_favorite) VALUES (?, ?, 'ok', 0, 0, 0)",
+                    (str(p_user), str(p_user)),
+                )
+                conn_u.commit()
+            finally:
+                conn_u.close()
+
+            gallery_router.api_toggle_favorite(gallery_router.ToggleFavoritePayload(source_path=str(p_user)))
+            gallery_router.api_gallery_batch_action(
+                gallery_router.GalleryBatchActionPayload(source_paths=[str(p_user)], action="ALBUM_ADD", album_name="Vacances")
+            )
+            with patch.object(metadata_studio_router, "resolve_actual_path", return_value=p_user):
+                metadata_studio_router.api_rename_media(
+                    metadata_studio_router.RenameMediaPayload(source_path=str(p_user), new_name="act_renamed.jpg")
+                )
+            gallery_router.api_trash_action(
+                gallery_router.TrashActionPayload(source_paths=[str(p_user)], action="MOVE_TO_TRASH")
+            )
+            user_acts = system_router.api_list_activities()["activities"]
+            act_types = [a["action_type"] for a in user_acts]
+            for expected_type in ("TRASH_MOVE", "MEDIA_RENAME", "ALBUM_ADD", "FAVORITE"):
+                self.assertIn(expected_type, act_types)
+            self.assertGreaterEqual(len(user_acts[0]["files"]), 1)
+
+            # Partage client, export JSON et reprise/réessai d'une activité
+            system_router.api_log_client_activity(
+                system_router.ClientActivityLogPayload(
+                    action_type="MEDIA_SHARE",
+                    title="Fichier partagé",
+                    detail="act_photo.jpg partagé",
+                    files=[str(p_user)],
+                )
+            )
+            import json as _json
+            exp_resp = system_router.api_export_activities()
+            exp_data = _json.loads(exp_resp.body.decode("utf-8"))
+            self.assertGreaterEqual(exp_data["count"], 5)
+            self.assertIn("MEDIA_SHARE", [x["action_type"] for x in exp_data["activities"]])
+
+            # Ajout d'une activité IA interrompue puis reprise via /api/activities/{id}/resume
+            aid_faces = database.record_activity_entry(
+                self.db_path,
+                library_name="MaLib",
+                action_type="FACES",
+                title="Analyse des visages",
+                status="paused",
+                detail="Mis en pause",
+            )
+            with patch.object(system_router, "start_specific_task", return_value={"status": "started", "task": "FACES"}) as mock_start:
+                res_resume = system_router.api_resume_activity(aid_faces)
+                self.assertEqual(res_resume["task"], "FACES")
+                mock_start.assert_called_once_with("FACES")
+
+            # Reprise après redémarrage d'un import de dossier mis en pause via params_json
+            aid_folder = database.record_activity_entry(
+                self.db_path,
+                library_name="MaLib",
+                action_type="IMPORT",
+                title="Importation : Vacances",
+                status="paused",
+                detail="Mis en pause",
+                params_json=_json.dumps({"source_type": "STANDARD_FOLDER", "source_paths": ["C:/Tmp/Vacances"]}),
+            )
+            import libraries_router
+            with patch.object(libraries_router, "api_import_add_sources", return_value={"status": "import_started"}) as mock_imp:
+                res_folder_resume = system_router.api_resume_activity(aid_folder)
+                self.assertEqual(res_folder_resume["status"], "import_started")
+                mock_imp.assert_called_once()
+                self.assertEqual(mock_imp.call_args[0][0].source_paths, ["C:/Tmp/Vacances"])
+
+            # Prévention de la mise en veille Windows pendant les traitements
+            with patch.object(pipeline_runner.ctypes.windll.kernel32, "SetThreadExecutionState", return_value=1) as mock_exec:
+                with pipeline_runner.prevent_system_sleep():
+                    pass
+                self.assertEqual(
+                    [c[0][0] for c in mock_exec.call_args_list],
+                    [
+                        pipeline_runner.ES_CONTINUOUS | pipeline_runner.ES_SYSTEM_REQUIRED,
+                        pipeline_runner.ES_CONTINUOUS,
+                    ],
+                )
+
+            for fn_ui in (
+                "function openClearActivitiesConfirm(",
+                "async function confirmClearAllActivities(",
+                "async function exportActivitiesHistory(",
+                "async function resumeOrRetryActivity(",
+                "function toggleActivitySection(",
+                "function toggleActivityGroup(",
+                "function _groupConsecutiveActivities(",
+                "olderEndedRun",
+                "groups.slice(0, 1)",
+            ):
+                self.assertIn(fn_ui, app_js)
+            for tog_id in ("act-toggle-operations", "act-toggle-analyses", "act-toggle-actions"):
+                self.assertIn(tog_id, html)
+
+            system_router.api_clear_activities()
+        finally:
+            with pipeline_runner.STATE._lock:
+                pipeline_runner.STATE.notifications = saved_n2
 
         class _FakeUpload:
             filename = "avatar.png"
@@ -1851,6 +2101,321 @@ class TestApiRoutes(unittest.TestCase):
                 self.assertEqual(row["dest_path"], str(src1 / "2024" / "moved.jpg"))
             finally:
                 conn.close()
+
+    def test_library_technical_dirs_isolated_under_phototo(self):
+        import libraries_router
+        import library_manager
+
+        cfg_dir = self.tmp_path / "cfg_tech"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        cfg_file = cfg_dir / "libraries_config.json"
+        legacy_cfg = self.tmp_path / "legacy_tech_libraries_config.json"
+        dest_dir = self.tmp_path / "MyPhotos"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        self.assertIn("Phototo", libraries_router.IGNORED_INTERNAL_DIRS)
+
+        with (
+            patch.object(library_manager, "CONFIG_DIR", cfg_dir),
+            patch.object(library_manager, "CONFIG_FILE", cfg_file),
+            patch.object(library_manager, "LEGACY_CONFIG_FILE", legacy_cfg),
+            patch.object(library_manager, "load_settings", return_value={}),
+        ):
+            entry = library_manager.register_library(
+                name="Vacances 2026",
+                source_type="STANDARD_FOLDER",
+                source_paths=[str(dest_dir)],
+                dest_dir=str(dest_dir),
+                options={},
+            )
+            expected_tech = dest_dir / "Phototo"
+            expected_db = expected_tech / "library_vacances_2026.db"
+            self.assertEqual(Path(entry["db_path"]), expected_db)
+            self.assertTrue(expected_tech.is_dir())
+            self.assertEqual(
+                library_manager.get_library_tech_dir(dest_dir, "Miniatures_Cache"),
+                expected_tech / "Miniatures_Cache",
+            )
+            self.assertEqual(
+                library_manager.get_takeout_buffer_dir(dest_dir),
+                expected_tech / "_Temp_Takeout_Buffer",
+            )
+
+            # Même si un dossier racine existe déjà, tout reste strictement sous <dest_dir>/Phototo
+            other_dest = self.tmp_path / "StrictPhotos"
+            (other_dest / "Miniatures_Cache").mkdir(parents=True, exist_ok=True)
+            self.assertEqual(
+                library_manager.get_library_tech_dir(other_dest, "Miniatures_Cache"),
+                other_dest / "Phototo" / "Miniatures_Cache",
+            )
+
+            # Sauvegarde DB placée sous <dest_dir>/Phototo/Sauvegardes_DB
+            with (
+                patch.object(database, "get_active_db_and_dest", return_value=(expected_db, dest_dir)),
+                patch.object(system_router, "get_active_db_and_dest", return_value=(expected_db, dest_dir)),
+            ):
+                database.get_db().close()
+                bkp = system_router.api_backup_database()
+            bkp_path = Path(bkp["backup_path"])
+            self.assertEqual(bkp_path.parent, expected_tech / "Sauvegardes_DB")
+            self.assertTrue(bkp_path.exists())
+
+            # Déplacement de la destination de la bibliothèque : db_path reste pointé vers <new_dest>/Phototo/...
+            moved_dest = self.tmp_path / "MovedPhotos"
+            moved_dest.mkdir(parents=True, exist_ok=True)
+            upd = libraries_router.api_update_library({
+                "original_name": "Vacances 2026",
+                "new_name": "Vacances 2026",
+                "new_sources": [str(moved_dest)],
+                "move_existing_content": True,
+            })
+            self.assertEqual(upd["status"], "updated")
+            cfg_after = library_manager.load_libraries()
+            self.assertEqual(
+                Path(cfg_after["libraries"]["Vacances 2026"]["db_path"]),
+                moved_dest / "Phototo" / "library_vacances_2026.db",
+            )
+            self.assertTrue((moved_dest / "Phototo" / "library_vacances_2026.db").exists())
+
+    def test_error_translation_status_dots_warning_position_and_preflight(self):
+        import sqlite3
+        import zipfile
+        from collections import namedtuple
+        import pipeline_runner
+        import libraries_router
+
+        # 1. Traduction française des erreurs SQLite / OS
+        tr_full = pipeline_runner.translate_runtime_error(sqlite3.OperationalError("database or disk is full"))
+        self.assertIn("Disque plein", tr_full)
+        self.assertIn("espace insuffisant", tr_full)
+        tr_locked = pipeline_runner.translate_runtime_error("database is locked")
+        self.assertIn("verrouillée", tr_locked)
+        self.assertEqual(pipeline_runner.translate_runtime_error("Echec réseau inconnu"), "Echec réseau inconnu")
+
+        # 2. status_level dans PipelineState (running / paused / error / stopped)
+        st = pipeline_runner.PipelineState()
+        st.set_task("INGEST", "Importation en cours...")
+        self.assertEqual(st.to_dict()["status_level"], "running")
+        with st._lock:
+            st.is_running = False
+            st.status_level = "error"
+            st.current_step = f"Erreur : {tr_full}"
+        snap = st.to_dict()
+        self.assertEqual(snap["status_level"], "error")
+        self.assertIn("Disque plein", snap["current_step"])
+
+        # 3. Analyse préalable d'espace disque (TAKEOUT_ZIPS + STANDARD_FOLDER)
+        src_folder = self.tmp_path / "SrcFolder"
+        src_folder.mkdir(parents=True, exist_ok=True)
+        (src_folder / "vacances.jpg").write_bytes(b"a" * (512 * 1024))
+        dest_folder = self.tmp_path / "DestLib"
+        dest_folder.mkdir(parents=True, exist_ok=True)
+
+        pf_ok = libraries_router.api_import_preflight(libraries_router.PreflightImportPayload(
+            source_type="STANDARD_FOLDER",
+            paths=[str(src_folder)],
+            dest_dir=str(dest_folder),
+        ))
+        self.assertEqual(pf_ok["file_count"], 1)
+        self.assertGreater(pf_ok["needed_dest_bytes"], 512 * 1024)
+        self.assertTrue(pf_ok["enough"])
+        self.assertEqual(pf_ok["deficit_dest_bytes"], 0)
+
+        zip_path = self.tmp_path / "takeout-001.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("Takeout/Google Photos/photo.jpg", b"b" * (4 * 1024 * 1024))
+
+        DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
+        with patch.object(libraries_router.shutil, "disk_usage", return_value=DiskUsage(100_000_000, 99_900_000, 100_000)):
+            pf_low = libraries_router.api_import_preflight(libraries_router.PreflightImportPayload(
+                source_type="TAKEOUT_ZIPS",
+                paths=[str(zip_path)],
+                dest_dir=str(dest_folder),
+            ))
+        self.assertFalse(pf_low["enough"])
+        self.assertEqual(pf_low["zip_count"], 1)
+        self.assertEqual(pf_low["file_count"], 1)
+        self.assertGreater(pf_low["deficit_dest_bytes"], 0)
+        self.assertTrue(any("Espace insuffisant" in w for w in pf_low["warnings"]))
+
+        # 4. Vérifications UI : point de statut, bouton d'avertissement déplacé à côté de Fichiers traités, preflight wizard
+        topbar_html = (ROOT_DIR / "frontend" / "templates" / "components" / "topbar.html").read_text(encoding="utf-8")
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        wiz_html = (ROOT_DIR / "frontend" / "templates" / "components" / "modals" / "import_wizard_modal.html").read_text(encoding="utf-8")
+        wiz_js = (ROOT_DIR / "frontend" / "static" / "js" / "import_wizard.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="pop-status-dot"', topbar_html)
+        self.assertIn('id="pop-files-row"', topbar_html)
+        self.assertIn('id="task-preflight-warning"', topbar_html)
+        files_row_idx = topbar_html.index('id="pop-files-row"')
+        files_pill_idx = topbar_html.index('id="pop-files-pill"')
+        warn_btn_idx = topbar_html.index('id="btn-task-warning"')
+        self.assertLess(files_row_idx, files_pill_idx)
+        self.assertLess(files_pill_idx, warn_btn_idx)
+
+        for token in ("bg-emerald-400", "bg-amber-400", "bg-rose-500", "/api/import/preflight_active"):
+            self.assertIn(token, app_js)
+        self.assertIn('id="wiz-preflight-box"', wiz_html)
+        self.assertIn('id="wiz-space-confirm-bar"', wiz_html)
+        self.assertIn("runWizardPreflightCheck", wiz_js)
+        self.assertIn("/api/import/preflight", wiz_js)
+
+        # 5. Annulation explicite d'une pause persistée (après redémarrage) via /api/activities/{id}/cancel_pause
+        import system_router
+        aid_paused = database.record_activity_entry(
+            self.db_path,
+            library_name="MaLib",
+            action_type="IMPORT",
+            title="Importation : Vacances",
+            status="paused",
+            detail="Mis en pause (10/100 traité(s)) · 12s",
+            reason="Mis en pause (10/100 traité(s))",
+            total_items=100,
+            success_count=10,
+        )
+        res_cancel = system_router.api_cancel_paused_activity(aid_paused)
+        self.assertEqual(res_cancel["status"], "ok")
+        updated_entry = database.get_activity_entry(aid_paused)
+        self.assertIn("arrêtée par l'utilisateur", updated_entry["reason"])
+        self.assertIn("· 12s", updated_entry["detail"])
+
+        # 6. Arrêt / Redémarrage avec activité en cours : choix pause / stop / ignore + modale UI
+        views_html = (ROOT_DIR / "frontend" / "templates" / "components" / "views.html").read_text(encoding="utf-8")
+        self.assertIn('id="power-activity-modal"', views_html)
+        for tok in ("Mettre en pause", "Arrêter l'activité", "Ignorer l'activité"):
+            self.assertIn(tok, views_html)
+        for js_tok in ("function _openPowerActivityModal(", "async function executePowerAction(", "beforeunload"):
+            self.assertIn(js_tok, app_js)
+
+        calls = []
+        with (
+            patch.object(system_router.STATE, "is_running", True),
+            patch.object(system_router, "request_stop_pipeline", side_effect=lambda cancel=False: calls.append(("stop", cancel)) or {"status": "stopping"}),
+        ):
+            self.assertEqual(system_router._prepare_power_transition("pause", wait_timeout_sec=0.05), "pause")
+            self.assertEqual(system_router._prepare_power_transition("stop", wait_timeout_sec=0.05), "stop")
+            self.assertEqual(system_router._prepare_power_transition("ignore", wait_timeout_sec=0.05), "ignore")
+        self.assertEqual(calls, [("stop", False), ("stop", True)])
+
+        with patch.object(system_router.threading, "Thread") as mock_thread:
+            r_res = system_router.api_system_restart("pause")
+            s_res = system_router.api_system_shutdown("ignore")
+        self.assertEqual(r_res, {"status": "restarting", "activity_action": "pause"})
+        self.assertEqual(s_res, {"status": "shutting_down", "activity_action": "ignore"})
+        self.assertEqual(mock_thread.call_count, 2)
+
+        # 7. Notification automatique au lancement si activité mise en pause ou interrompue avant l'arrêt
+        database.clear_activity_entries()
+        aid_pause_restart = database.record_activity_entry(
+            self.db_path,
+            library_name="MaLib",
+            action_type="IMPORT",
+            title="Importation : Été",
+            status="paused",
+            detail="Mis en pause (25/100 traité(s)) · 10s",
+            reason="Mis en pause (25/100 traité(s))",
+            total_items=100,
+            success_count=25,
+        )
+        aid_stopped_manual = database.record_activity_entry(
+            self.db_path,
+            library_name="MaLib",
+            action_type="FACES",
+            title="Analyse des visages",
+            status="paused",
+            detail="Tâche arrêtée par l'utilisateur · 5s",
+            reason="Tâche arrêtée par l'utilisateur",
+            total_items=50,
+            success_count=5,
+        )
+        with pipeline_runner.STATE._lock:
+            saved_startup_notifs = list(pipeline_runner.STATE.notifications)
+            pipeline_runner.STATE.notifications.clear()
+        try:
+            added_cnt = pipeline_runner.seed_startup_resume_notifications()
+            self.assertEqual(added_cnt, 1)
+            self.assertEqual(pipeline_runner.seed_startup_resume_notifications(), 0)
+            self.assertEqual(len(pipeline_runner.STATE.notifications), 1)
+            notif = pipeline_runner.STATE.notifications[0]
+            self.assertEqual(notif["action_activity_id"], aid_pause_restart)
+            self.assertEqual(notif["action_label"], "Reprendre")
+            self.assertFalse(notif["read"])
+            self.assertIn("Importation : Été", notif["title"])
+            self.assertNotEqual(notif["action_activity_id"], aid_stopped_manual)
+        finally:
+            with pipeline_runner.STATE._lock:
+                pipeline_runner.STATE.notifications = saved_startup_notifs
+        self.assertIn("async function resumeActivityFromNotif(", app_js)
+        self.assertIn("action_activity_id", app_js)
+        self.assertIn("async function runTaskFromNotif(", app_js)
+        self.assertIn("action_task", app_js)
+
+        # 8. Détection et notification de nouveaux fichiers dans les dossiers sources non ajoutés par l'application
+        watch_src = self.tmp_path / "WatchedPhotos"
+        watch_src.mkdir(parents=True, exist_ok=True)
+        known_img = watch_src / "deja_importe.jpg"
+        known_img.write_bytes(b"ok")
+        new_img = watch_src / "nouveau_externe.jpg"
+        new_img.write_bytes(b"new")
+        ignored_sub = watch_src / "Phototo"
+        ignored_sub.mkdir(parents=True, exist_ok=True)
+        (ignored_sub / "thumb.jpg").write_bytes(b"ignored")
+
+        conn_w = database.get_db()
+        try:
+            conn_w.execute(
+                "INSERT OR REPLACE INTO processed_files (source_path, dest_path) VALUES (?, ?)",
+                (str(known_img.resolve()), str(known_img.resolve())),
+            )
+            conn_w.commit()
+        finally:
+            conn_w.close()
+
+        fake_libs = {
+            "active_library": "MaLib",
+            "libraries": {
+                "MaLib": {
+                    "name": "MaLib",
+                    "source_type": "STANDARD_FOLDER",
+                    "source_paths": [str(watch_src)],
+                    "dest_dir": str(watch_src),
+                    "db_path": str(self.db_path),
+                }
+            },
+        }
+        with pipeline_runner.STATE._lock:
+            saved_watch_notifs = list(pipeline_runner.STATE.notifications)
+            pipeline_runner.STATE.notifications.clear()
+            pipeline_runner.STATE._last_new_files_sig = None
+        try:
+            with (
+                patch.object(pipeline_runner, "load_libraries", return_value=fake_libs),
+                patch.object(pipeline_runner, "load_settings", return_value={"scanned_folders": []}),
+            ):
+                res_info = pipeline_runner.detect_unadded_source_files()
+                self.assertEqual(res_info["new_count"], 1)
+                self.assertEqual(res_info["kind"], "media")
+
+                cnt = pipeline_runner.notify_unadded_source_files()
+                self.assertEqual(cnt, 1)
+                self.assertEqual(len(pipeline_runner.STATE.notifications), 1)
+                nf = pipeline_runner.STATE.notifications[0]
+                self.assertEqual(nf["action_task"], "INGEST")
+                self.assertEqual(nf["action_label"], "Analyser")
+                self.assertIn("1 nouveau(x) média(s)", nf["detail"])
+                # Pas de doublon sur les vérifications périodiques suivantes si le compte n'a pas changé
+                self.assertEqual(pipeline_runner.notify_unadded_source_files(), 0)
+                with patch.object(system_router.threading, "Thread") as mock_chk_thread:
+                    chk_res = system_router.api_check_activities_sources()
+                self.assertEqual(chk_res, {"status": "checking"})
+                self.assertEqual(mock_chk_thread.call_count, 1)
+                self.assertIn("/api/activities/check_sources", app_js)
+                self.assertFalse(hasattr(pipeline_runner, "start_source_files_watcher_thread"))
+                self.assertTrue(callable(pipeline_runner.check_source_files_on_startup_async))
+        finally:
+            with pipeline_runner.STATE._lock:
+                pipeline_runner.STATE.notifications = saved_watch_notifs
+                pipeline_runner.STATE._last_new_files_sig = None
 
 
 if __name__ == "__main__":

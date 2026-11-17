@@ -7,7 +7,8 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from database import get_active_db_and_dest, get_db, resolve_actual_path
+from database import get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
+from library_manager import get_library_tech_dir
 from indexeur_visages import save_face_thumbnail
 from sync_visages_exif import sync_all_named_faces_to_exif
 
@@ -74,10 +75,12 @@ def api_get_persons():
 
 @router.post("/api/person/rename")
 def api_rename_person(payload: RenamePersonPayload):
+    new_n = payload.new_name.strip() or "Inconnu"
     conn = get_db()
-    conn.execute("UPDATE persons SET name = ? WHERE person_id = ?", (payload.new_name.strip() or "Inconnu", payload.person_id))
+    conn.execute("UPDATE persons SET name = ? WHERE person_id = ?", (new_n, payload.person_id))
     conn.commit()
     conn.close()
+    log_library_action("PERSON_RENAME", "Personne renommée", f"Personne #{payload.person_id} → « {new_n} »")
     return {"status": "renamed"}
 
 
@@ -116,6 +119,7 @@ def api_merge_persons(payload: MergeMultiplePersonsPayload):
     _recompute_person_stats(cur, target_id)
     conn.commit()
     conn.close()
+    log_library_action("PERSON_MERGE", "Personnes fusionnées", f"{len(pids)} groupe(s) fusionné(s) en « {final_name} »")
     return {"status": "merged", "target_person_id": target_id}
 
 
@@ -176,6 +180,11 @@ def api_reassign_faces(payload: ReassignFacesPayload):
         _recompute_person_stats(cur, new_pid)
     conn.commit()
     conn.close()
+    log_library_action(
+        "FACE_REASSIGN",
+        "Visages mis à jour",
+        f"{len(payload.face_ids)} visage(s) {'ignoré(s)' if payload.action == 'IGNORE' else 'réassigné(s)'}",
+    )
     return {"status": "reassigned"}
 
 
@@ -199,7 +208,7 @@ def api_add_manual_face(payload: ManualFacePayload):
 
     _, active_dest = get_active_db_and_dest()
     import indexeur_visages as fv
-    fv.THUMBS_DIR = active_dest / "Miniatures_Visages"
+    fv.THUMBS_DIR = get_library_tech_dir(active_dest, "Miniatures_Visages")
     uid = f"manual_{abs(hash(str(media_path)))}_{int(time.time() * 1000)}"
     thumb_path = save_face_thumbnail(img, [x1, y1, x2, y2], uid)
 
@@ -222,4 +231,5 @@ def api_add_manual_face(payload: ManualFacePayload):
     _recompute_person_stats(cur, person_id)
     conn.commit()
     conn.close()
+    log_library_action("FACE_MANUAL", "Visage ajouté manuellement", f"Sur {media_path.name}", files=[build_file_entry(str(media_path))])
     return {"status": "added"}

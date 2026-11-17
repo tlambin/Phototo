@@ -102,6 +102,15 @@ def save_libraries(data: dict):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
+TECH_DIR_NAME = "Phototo"
+
+
+def get_library_tech_dir(dest_dir: Path, subdir: str | None = None) -> Path:
+    """Return Phototo's technical subfolder inside a library destination."""
+    base = dest_dir / TECH_DIR_NAME
+    return (base / subdir) if subdir else base
+
+
 def resolve_takeout_architecture_flags(options: dict) -> tuple[bool, bool]:
     arch = str(options.get("takeout_architecture") or "").strip().upper()
     if arch == "GOOGLE_ALBUM":
@@ -120,9 +129,11 @@ def register_library(name: str, source_type: str, source_paths: list[str], dest_
     cfg = load_libraries()
     dest_path = Path(dest_dir)
     dest_path.mkdir(parents=True, exist_ok=True)
+    tech_dir = get_library_tech_dir(dest_path)
+    tech_dir.mkdir(parents=True, exist_ok=True)
 
     safe_slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_") or "default"
-    db_path = str(dest_path / f"library_{safe_slug}.db")
+    db_path = str(tech_dir / f"library_{safe_slug}.db")
     is_takeout = source_type in ("TAKEOUT_FOLDER", "TAKEOUT_ZIPS")
     keep_struct, wrap_google = resolve_takeout_architecture_flags(options)
 
@@ -168,7 +179,11 @@ def collect_zip_files(source_paths: list[str]) -> list[Path]:
 def get_takeout_buffer_dir(default_dest_dir: Path) -> Path:
     settings = load_settings()
     custom_dir = settings.get("takeout_extract_dir", "").strip()
-    buffer_path = (Path(custom_dir) / "_Temp_Takeout_Buffer") if custom_dir else (default_dest_dir / "_Temp_Takeout_Buffer")
+    buffer_path = (
+        (Path(custom_dir) / "_Temp_Takeout_Buffer")
+        if custom_dir
+        else get_library_tech_dir(default_dest_dir, "_Temp_Takeout_Buffer")
+    )
     buffer_path.mkdir(parents=True, exist_ok=True)
     return buffer_path
 

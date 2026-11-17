@@ -1,7 +1,9 @@
 import os
+import json
 import time
 import shutil
 import sqlite3
+import zipfile
 import threading
 from pathlib import Path
 from datetime import datetime
@@ -11,9 +13,26 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from library_manager import load_libraries, save_libraries, register_library, get_library_icons_dir, resolve_takeout_architecture_flags
-from pipeline_runner import STATE, start_specific_task, request_stop_pipeline
-from database import get_active_db_and_dest, _INITIALIZED_DBS
+from library_manager import (
+    load_libraries,
+    save_libraries,
+    register_library,
+    get_library_icons_dir,
+    resolve_takeout_architecture_flags,
+    collect_zip_files,
+    get_library_tech_dir,
+    load_settings,
+)
+from pipeline_runner import (
+    STATE,
+    start_specific_task,
+    request_stop_pipeline,
+    _record_step_activity,
+    set_system_sleep_inhibit,
+    translate_runtime_error,
+    notify_unadded_source_files,
+)
+from database import get_active_db_and_dest, _INITIALIZED_DBS, log_library_action
 from indexeur_visages import init_face_tables
 from indexeur_ocr import init_ocr_tables
 from indexeur_semantique_gps import upgrade_db_for_clip_and_gps
@@ -28,8 +47,7 @@ MEDIA_IMPORT_EXTS = {
     ".mp4", ".mov", ".avi", ".mkv", ".3gp", ".m4v", ".webm"
 }
 IGNORED_INTERNAL_DIRS = {
-    "Miniatures_Cache", "Miniatures_Visages", "Corbeille",
-    "Doublons_Quarantaine", "Sauvegardes_DB", "_Temp_Takeout_Buffer"
+    "Phototo", "Corbeille"
 }
 
 
@@ -187,6 +205,9 @@ def api_select_library(payload: dict):
     if name in cfg.get("libraries", {}):
         cfg["active_library"] = name
         save_libraries(cfg)
+        with STATE._lock:
+            STATE._last_new_files_sig = None
+        threading.Thread(target=notify_unadded_source_files, kwargs={"force": True}, daemon=True).start()
     return {"status": "selected", "active_library": name}
 
 
@@ -283,6 +304,9 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
 
     def _run_folder_import_job():
         STATE.is_running = True
+        STATE.status_level = "running"
+        STATE.stop_requested = False
+        STATE.cancel_requested = False
         STATE.active_task = "INGEST"
         STATE.current_step = "Analyse du dossier à importer..."
         STATE.processed_items = 0
@@ -292,15 +316,34 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
         STATE.eta_text = "--:--"
 
         start_ts = time.time()
+        start_iso = datetime.now().isoformat(timespec="seconds")
         imported_count = 0
         updated_count = 0
         bytes_processed = 0
+        failed_imports: list[dict] = []
+        stopped_early = False
+        cancelled_early = False
+        resume_params_json = json.dumps(payload.model_dump(), ensure_ascii=False)
+        import_title = (
+            f"Importation : {Path(clean_new_paths[0]).name}"
+            if len(clean_new_paths) == 1
+            else f"Importation ({len(clean_new_paths)} dossiers)"
+        )
+
+        if hasattr(STATE, "logs") and isinstance(STATE.logs, list):
+            STATE.logs.clear()
 
         try:
+            set_system_sleep_inhibit(True)
             candidate_files: list[tuple[Path, str | None]] = []
             for folder_str in clean_new_paths:
                 folder_p = Path(folder_str)
                 if not folder_p.exists() or not folder_p.is_dir():
+                    failed_imports.append({
+                        "path": str(folder_p).replace("\\", "/"),
+                        "name": folder_p.name or str(folder_p),
+                        "reason": "Dossier source introuvable ou inaccessible",
+                    })
                     continue
 
                 for file_p in folder_p.rglob("*"):
@@ -340,17 +383,27 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
             cur = conn.cursor()
 
             for idx, (file_p, effective_album) in enumerate(candidate_files, start=1):
-                if not STATE.is_running:
+                if getattr(STATE, "stop_requested", False) or not STATE.is_running:
+                    stopped_early = True
+                    cancelled_early = bool(getattr(STATE, "cancel_requested", False))
                     if hasattr(STATE, "log"):
-                        STATE.log("⏸️ Importation interrompue par l'utilisateur.")
+                        STATE.log("⏹ Importation arrêtée." if cancelled_early else "⏸️ Importation mise en pause par l'utilisateur.")
                     break
+
+                if hasattr(STATE, "log"):
+                    STATE.log(f"📥 {file_p.name} ({idx}/{total_files})")
 
                 src_str = str(file_p.resolve())
                 try:
                     stat = file_p.stat()
                     mtime = int(stat.st_mtime)
                     fsize = stat.st_size
-                except OSError:
+                except OSError as stat_err:
+                    failed_imports.append({
+                        "path": src_str.replace("\\", "/"),
+                        "name": file_p.name,
+                        "reason": f"Lecture impossible : {translate_runtime_error(stat_err)}",
+                    })
                     continue
 
                 dt = datetime.fromtimestamp(mtime)
@@ -367,8 +420,13 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
                     if not final_dest.exists():
                         try:
                             shutil.copy2(str(file_p), str(final_dest))
-                        except Exception:
-                            final_dest = file_p.resolve()
+                        except Exception as copy_err:
+                            failed_imports.append({
+                                "path": src_str.replace("\\", "/"),
+                                "name": file_p.name,
+                                "reason": f"Copie impossible : {translate_runtime_error(copy_err)}",
+                            })
+                            continue
 
                 cur.execute(
                     "SELECT album_name FROM processed_files WHERE source_path = ? OR dest_path = ?",
@@ -407,38 +465,62 @@ def api_import_add_sources(payload: AddImportSourcesPayload):
             conn.commit()
             conn.close()
 
-            STATE.current_step = "Importation terminée"
-            STATE.percent = 100
+            if stopped_early and not cancelled_early:
+                STATE.current_step = "En pause : Importation des médias..."
+                STATE.last_paused_task = "INGEST"
+                STATE.status_level = "paused"
+            elif cancelled_early:
+                STATE.current_step = "Tâche arrêtée : Importation"
+                STATE.percent = 0
+                STATE.last_paused_task = ""
+                STATE.status_level = "stopped"
+            else:
+                STATE.current_step = "Importation terminée"
+                STATE.percent = 100
+                STATE.last_paused_task = ""
+                STATE.status_level = "idle"
             detail_msg = f"{imported_count} nouveau(x) média(s) importé(s), {updated_count} mis à jour."
             if hasattr(STATE, "log"):
                 STATE.log(f"✅ {detail_msg}")
 
-            if hasattr(STATE, "add_notification"):
-                STATE.add_notification("Importation de dossier terminée", "success", detail_msg)
-            elif hasattr(STATE, "notifications") and isinstance(STATE.notifications, list):
-                STATE.notifications.insert(0, {
-                    "title": "Importation de dossier terminée",
-                    "detail": detail_msg,
-                    "status": "success",
-                    "time": datetime.now().strftime("%H:%M"),
-                    "read": False
-                })
+            _record_step_activity(
+                db_path,
+                active_name,
+                "IMPORT",
+                import_title,
+                start_ts,
+                start_iso,
+                total_files,
+                imported_count + updated_count,
+                failed_imports,
+                stopped=stopped_early,
+                cancelled=cancelled_early,
+                params_json=resume_params_json,
+            )
 
         except Exception as e:
-            err_msg = f"Erreur lors de l'importation : {e}"
+            translated_err = translate_runtime_error(e)
+            err_msg = f"Erreur : {translated_err}"
+            STATE.current_step = err_msg
+            STATE.last_paused_task = ""
+            STATE.status_level = "error"
             if hasattr(STATE, "log"):
                 STATE.log(f"❌ {err_msg}")
-            if hasattr(STATE, "add_notification"):
-                STATE.add_notification("Échec de l'importation", "error", str(e))
-            elif hasattr(STATE, "notifications") and isinstance(STATE.notifications, list):
-                STATE.notifications.insert(0, {
-                    "title": "Échec de l'importation",
-                    "detail": str(e),
-                    "status": "error",
-                    "time": datetime.now().strftime("%H:%M"),
-                    "read": False
-                })
+            _record_step_activity(
+                db_path,
+                active_name,
+                "IMPORT",
+                import_title,
+                start_ts,
+                start_iso,
+                int(getattr(STATE, "total_items", 0) or 0),
+                imported_count + updated_count,
+                failed_imports,
+                error_reason=translated_err,
+                params_json=resume_params_json,
+            )
         finally:
+            set_system_sleep_inhibit(False)
             STATE.is_running = False
             STATE.active_task = "IDLE"
 
@@ -480,20 +562,22 @@ def api_update_library(payload: dict):
                     except Exception:
                         pass
             old_db_name = Path(entry.get("db_path", "")).name
-            if old_db_name and (new_dest / old_db_name).exists():
-                entry["db_path"] = str(new_dest / old_db_name)
+            if old_db_name and (new_dest / "Phototo" / old_db_name).exists():
+                entry["db_path"] = str(new_dest / "Phototo" / old_db_name)
 
             db_p = Path(entry["db_path"])
             if db_p.exists():
                 conn = sqlite3.connect(db_p, timeout=30.0)
-                old_prefix = str(old_dest)
-                new_prefix = str(new_dest)
-                conn.execute(
-                    "UPDATE processed_files SET dest_path = REPLACE(dest_path, ?, ?), source_path = REPLACE(source_path, ?, ?)",
-                    (old_prefix, new_prefix, old_prefix, new_prefix)
-                )
-                conn.commit()
-                conn.close()
+                try:
+                    old_prefix = str(old_dest)
+                    new_prefix = str(new_dest)
+                    conn.execute(
+                        "UPDATE processed_files SET dest_path = REPLACE(dest_path, ?, ?), source_path = REPLACE(source_path, ?, ?)",
+                        (old_prefix, new_prefix, old_prefix, new_prefix)
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
 
         entry["source_paths"] = clean_sources
         entry["dest_dir"] = str(new_dest)
@@ -573,17 +657,17 @@ def api_remove_library_source(payload: RemoveLibrarySourcePayload):
         to_p.mkdir(parents=True, exist_ok=True)
 
         db_p = Path(entry.get("db_path", ""))
-        db_name = db_p.name if db_p.name else ""
-        old_db_in_from = False
+        db_rel_to_from = None
         try:
-            old_db_in_from = db_p.exists() and from_p.exists() and db_p.resolve().parent == from_p.resolve()
-        except OSError:
-            old_db_in_from = False
+            if db_p.exists() and from_p.exists():
+                db_rel_to_from = db_p.resolve().relative_to(from_p.resolve())
+        except (OSError, ValueError):
+            db_rel_to_from = None
 
         if from_p.exists() and to_p.resolve() != from_p.resolve():
             _merge_move_tree(from_p, to_p)
-            if old_db_in_from and db_name and (to_p / db_name).exists():
-                entry["db_path"] = str(to_p / db_name)
+            if db_rel_to_from and (to_p / db_rel_to_from).exists():
+                entry["db_path"] = str(to_p / db_rel_to_from)
                 db_p = Path(entry["db_path"])
 
         if db_p.exists():
@@ -765,6 +849,11 @@ def api_merge_libraries(payload: dict):
     cfg["active_library"] = dst_name
     save_libraries(cfg)
     _INITIALIZED_DBS.clear()
+    log_library_action(
+        "LIBRARY_MERGE",
+        "Bibliothèques fusionnées",
+        f"« {src_name} » fusionnée dans « {dst_name} »" + (f" ({duplicates_detected} doublon(s) détecté(s))" if duplicates_detected else ""),
+    )
     return {
         "status": "merged",
         "active_library": dst_name,
@@ -833,3 +922,253 @@ async def api_upload_dropped_files(files: list[UploadFile] = File(...)):
         fix_metadata=False,
         delete_zips=False
     ))
+
+
+class PreflightImportPayload(BaseModel):
+    source_type: str = "STANDARD_FOLDER"
+    paths: list[str] = []
+    dest_dir: str = ""
+    only_pending_zips: bool = False
+
+
+def _existing_ancestor(path_obj: Path) -> Path:
+    """Return the deepest existing ancestor directory for disk usage lookup."""
+    cur = path_obj
+    try:
+        cur = path_obj.resolve()
+    except OSError:
+        cur = path_obj
+    while not cur.exists():
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    return cur if cur.exists() else Path(".")
+
+
+def _volume_identity(path_obj: Path) -> tuple[str, int]:
+    """Identify the filesystem volume holding `path_obj` cleanly across platforms."""
+    anc = _existing_ancestor(path_obj)
+    drive = os.path.splitdrive(str(anc))[0].lower()
+    try:
+        dev = os.stat(anc).st_dev
+    except OSError:
+        dev = 0
+    return (drive, dev)
+
+
+def _format_bytes_fr(num_bytes: int) -> str:
+    """Format byte counts in French (Mo / Go) for preflight messages."""
+    gb = num_bytes / (1024 ** 3)
+    if gb >= 1.0:
+        return f"{gb:.1f} Go"
+    mb = max(0.1, num_bytes / (1024 ** 2)) if num_bytes > 0 else 0.0
+    return f"{mb:.0f} Mo" if mb >= 10 else f"{mb:.1f} Mo"
+
+
+def _walk_folder_sizes(folder_path: Path, dest_resolved: Path) -> tuple[int, int, int]:
+    """Return (file_count, total_bytes, bytes_to_copy) via fast scandir traversal."""
+    file_count = 0
+    total_bytes = 0
+    copy_bytes = 0
+    stack = [folder_path]
+    while stack:
+        cur = stack.pop()
+        try:
+            with os.scandir(cur) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            if entry.name not in IGNORED_INTERNAL_DIRS:
+                                stack.append(Path(entry.path))
+                        elif entry.is_file(follow_symlinks=False):
+                            ext = os.path.splitext(entry.name)[1].lower()
+                            if ext not in MEDIA_IMPORT_EXTS:
+                                continue
+                            fsize = entry.stat(follow_symlinks=False).st_size
+                            file_count += 1
+                            total_bytes += fsize
+                            try:
+                                Path(entry.path).resolve().relative_to(dest_resolved)
+                            except ValueError:
+                                copy_bytes += fsize
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return file_count, total_bytes, copy_bytes
+
+
+def _inspect_disk_preflight(
+    source_type: str,
+    source_paths: list[str],
+    dest_dir: Path,
+    buffer_dir: Path | None = None,
+    only_pending_zips: bool = False,
+    db_path: Path | None = None,
+) -> dict:
+    """Estimate required vs free disk space on destination and Takeout buffer volumes."""
+    clean_sources = [str(p).strip() for p in (source_paths or []) if str(p).strip()]
+    dest_resolved = dest_dir.resolve()
+    warnings: list[str] = []
+
+    if buffer_dir is None:
+        settings = load_settings()
+        custom_dir = str(settings.get("takeout_extract_dir", "") or "").strip()
+        buffer_dir = (
+            (Path(custom_dir) / "_Temp_Takeout_Buffer")
+            if custom_dir
+            else get_library_tech_dir(dest_dir, "_Temp_Takeout_Buffer")
+        )
+
+    dest_anc = _existing_ancestor(dest_dir)
+    buf_anc = _existing_ancestor(buffer_dir)
+    dest_free = shutil.disk_usage(dest_anc).free
+    buffer_free = shutil.disk_usage(buf_anc).free
+    same_volume = (_volume_identity(dest_dir) == _volume_identity(buffer_dir))
+
+    file_count = 0
+    zip_count = 0
+    compressed_bytes = 0
+    uncompressed_bytes = 0
+    largest_zip_bytes = 0
+
+    if source_type == "TAKEOUT_ZIPS":
+        zips = collect_zip_files(clean_sources)
+        done_zips: set[str] = set()
+        if only_pending_zips and db_path and Path(db_path).exists():
+            try:
+                conn = sqlite3.connect(db_path, timeout=10.0)
+                cur = conn.cursor()
+                for row in cur.execute("SELECT zip_path FROM extracted_zips WHERE status IN ('EXTRACTED', 'DONE')"):
+                    done_zips.add(os.path.normcase(str(Path(row[0]).resolve())))
+                conn.close()
+            except Exception:
+                pass
+
+        for zp in zips:
+            try:
+                if os.path.normcase(str(zp.resolve())) in done_zips:
+                    continue
+            except OSError:
+                pass
+            zip_count += 1
+            try:
+                compressed_bytes += zp.stat().st_size
+                with zipfile.ZipFile(zp, "r") as zf:
+                    z_uncomp = 0
+                    for info in zf.infolist():
+                        if not info.is_dir():
+                            file_count += 1
+                            z_uncomp += info.file_size
+                    uncompressed_bytes += z_uncomp
+                    if z_uncomp > largest_zip_bytes:
+                        largest_zip_bytes = z_uncomp
+            except Exception as zerr:
+                warnings.append(f"Archive ZIP illisible ({zp.name}) : {translate_runtime_error(zerr)}")
+
+        # On a shared drive, extracted files in buffer + copied destination coexist briefly before zip cleanup;
+        # ~1.15x uncompressed accounts for media destination + SQLite/thumbnails overhead.
+        needed_dest = int(uncompressed_bytes * 1.15)
+        needed_buffer = int(largest_zip_bytes * 1.05) if largest_zip_bytes > 0 else 0
+        effective_dest_needed = (needed_dest + needed_buffer) if same_volume else needed_dest
+    else:
+        copy_bytes = 0
+        for p_str in clean_sources:
+            fp = Path(p_str)
+            if not fp.exists() or not fp.is_dir():
+                warnings.append(f"Dossier introuvable ou inaccessible : {p_str}")
+                continue
+            fc, tb, cb = _walk_folder_sizes(fp, dest_resolved)
+            file_count += fc
+            uncompressed_bytes += tb
+            copy_bytes += cb
+        needed_dest = int(copy_bytes * 1.10) + (max(10 * 1024 * 1024, int(uncompressed_bytes * 0.03)) if file_count > 0 else 0)
+        needed_buffer = 0
+        effective_dest_needed = needed_dest
+
+    deficit_dest = max(0, effective_dest_needed - dest_free)
+    deficit_buffer = max(0, needed_buffer - buffer_free) if not same_volume else 0
+    enough = (deficit_dest == 0) and (deficit_buffer == 0)
+
+    if deficit_dest > 0:
+        warnings.append(
+            f"Espace insuffisant sur le disque de destination ({dest_anc}) : "
+            f"{_format_bytes_fr(effective_dest_needed)} requis, "
+            f"{_format_bytes_fr(dest_free)} disponible "
+            f"(il manque {_format_bytes_fr(deficit_dest)})."
+        )
+    if deficit_buffer > 0:
+        warnings.append(
+            f"Espace insuffisant sur le lecteur tampon Takeout ({buf_anc}) : "
+            f"{_format_bytes_fr(needed_buffer)} requis pour décompresser l'archive, "
+            f"{_format_bytes_fr(buffer_free)} disponible "
+            f"(il manque {_format_bytes_fr(deficit_buffer)})."
+        )
+
+    return {
+        "source_type": source_type,
+        "file_count": file_count,
+        "zip_count": zip_count,
+        "compressed_bytes": compressed_bytes,
+        "uncompressed_bytes": uncompressed_bytes,
+        "needed_dest_bytes": effective_dest_needed,
+        "needed_buffer_bytes": needed_buffer,
+        "dest_dir": str(dest_dir),
+        "buffer_dir": str(buffer_dir),
+        "dest_free_bytes": dest_free,
+        "buffer_free_bytes": buffer_free,
+        "deficit_dest_bytes": deficit_dest,
+        "deficit_buffer_bytes": deficit_buffer,
+        "same_volume": same_volume,
+        "enough": enough,
+        "warnings": warnings,
+    }
+
+
+@router.post("/api/import/preflight")
+def api_import_preflight(payload: PreflightImportPayload):
+    clean_paths = [str(p).strip() for p in payload.paths if str(p).strip()]
+    if not clean_paths:
+        raise HTTPException(400, "Aucune source sélectionnée pour l'analyse.")
+
+    dest_str = (payload.dest_dir or "").strip()
+    if dest_str:
+        dest_dir = Path(dest_str)
+        db_path = None
+    else:
+        cfg = load_libraries()
+        active_name = cfg.get("active_library")
+        libs = cfg.get("libraries", {})
+        if active_name and active_name in libs:
+            db_path, dest_dir = get_active_db_and_dest()
+        else:
+            first_p = Path(clean_paths[0])
+            dest_dir = first_p.parent if first_p.suffix.lower() == ".zip" else first_p
+            db_path = None
+
+    return _inspect_disk_preflight(
+        source_type=payload.source_type,
+        source_paths=clean_paths,
+        dest_dir=dest_dir,
+        only_pending_zips=payload.only_pending_zips,
+        db_path=db_path,
+    )
+
+
+@router.get("/api/import/preflight_active")
+def api_import_preflight_active():
+    cfg = load_libraries()
+    active_name = cfg.get("active_library")
+    libs = cfg.get("libraries", {})
+    if not active_name or active_name not in libs:
+        return {"enough": True, "warnings": [], "file_count": 0, "zip_count": 0}
+    lib = libs[active_name]
+    db_path, dest_dir = get_active_db_and_dest()
+    return _inspect_disk_preflight(
+        source_type=lib.get("source_type", "STANDARD_FOLDER"),
+        source_paths=lib.get("source_paths", []),
+        dest_dir=dest_dir,
+        only_pending_zips=True,
+        db_path=db_path,
+    )

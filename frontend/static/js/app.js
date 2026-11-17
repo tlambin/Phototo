@@ -153,7 +153,7 @@ function _getActiveOptionsContext() {
     if (currentTab === 'albums' && albumsOverview && !albumsOverview.classList.contains('hidden')) {
         return { headerId: 'albums-sticky-header', drawerId: 'albums-options-drawer', btnId: 'alb-options-btn' };
     }
-    if (currentTab === 'gallery' || currentTab === 'favorites') {
+    if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') {
         return { headerId: 'gallery-sticky-header', drawerId: 'filter-drawer', btnId: 'gal-options-btn' };
     }
     return null;
@@ -332,31 +332,50 @@ window.addEventListener('click', e => {
 
 // ==================== NAVIGATION PRINCIPALE ====================
 
-const ALL_TABS = ['gallery', 'albums', 'favorites', 'faces', 'map', 'types', 'tools', 'dups', 'similar', 'trash', 'activities', 'settings', 'search'];
+const ALL_TABS = ['gallery', 'recent', 'albums', 'favorites', 'faces', 'map', 'types', 'tools', 'dups', 'similar', 'trash', 'activities', 'settings', 'search'];
+let _wasRecentTab = false;
 
 function switchTab(tab) {
     currentTab = tab;
     ALL_TABS.forEach(t => {
         const btn = document.getElementById(`tab-btn-${t}`);
-        if (btn) btn.classList.toggle('nav-item-active', t === tab);
+        if (btn) btn.classList.toggle('nav-item-active', t === tab || (tab === 'recent' && t === 'activities'));
         const panel = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
     });
 
     const tlBox = document.getElementById('gallery-timeline-box') || document.getElementById('timeline-scrubber');
-    if (tlBox) tlBox.classList.toggle('hidden', tab !== 'gallery' && tab !== 'favorites');
+    if (tlBox) tlBox.classList.toggle('hidden', tab !== 'gallery' && tab !== 'favorites' && tab !== 'recent');
 
     const titleEl = document.getElementById('gallery-main-title') || document.getElementById('gallery-main-heading');
+    const sortByEl = document.getElementById('gal-sort-by');
+    const sortOrdEl = document.getElementById('gal-sort-order');
 
     if (tab === 'favorites') {
+        _wasRecentTab = false;
         document.getElementById('tab-gallery').classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Favoris';
         document.getElementById('gal-fav').checked = true;
         currentExtFilter = '';
         resetAndLoadGallery();
+    } else if (tab === 'recent') {
+        _wasRecentTab = true;
+        document.getElementById('tab-gallery').classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Ajoutés récemment';
+        document.getElementById('gal-fav').checked = false;
+        if (sortByEl) sortByEl.value = 'added';
+        if (sortOrdEl) sortOrdEl.value = 'desc';
+        const arrow = document.getElementById('gal-sort-arrow');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+        currentExtFilter = '';
+        resetAndLoadGallery();
     } else if (tab === 'gallery') {
         if (titleEl) titleEl.textContent = 'Galerie';
         document.getElementById('gal-fav').checked = false;
+        if (_wasRecentTab && sortByEl && sortByEl.value === 'added') {
+            sortByEl.value = 'date';
+        }
+        _wasRecentTab = false;
         currentExtFilter = '';
         resetAndLoadGallery();
     } else if (tab === 'albums') {
@@ -373,6 +392,9 @@ function switchTab(tab) {
         loadSimilarGroups();
     } else if (tab === 'trash') {
         loadTrashTab();
+    } else if (tab === 'activities') {
+        loadActivitiesHistory();
+        fetch('/api/activities/check_sources', {method: 'POST'}).catch(() => {});
     } else if (tab === 'settings') {
         loadAppSettings();
     }
@@ -432,7 +454,41 @@ async function runGlobalSearch() {
 
 // ==================== CONTRÔLES DU PIPELINE IA (LANCER, PAUSE, REPRISE, STOP, LOGS) ====================
 
-async function runTask(taskCode) {
+let _pendingPreflightTask = '';
+
+function cancelPendingPreflightTask() {
+    _pendingPreflightTask = '';
+    const box = document.getElementById('task-preflight-warning');
+    if (box) box.classList.add('hidden');
+}
+
+async function confirmPendingPreflightTask() {
+    const task = _pendingPreflightTask || 'INGEST';
+    cancelPendingPreflightTask();
+    await runTask(task, true);
+}
+
+async function runTask(taskCode, skipPreflight = false) {
+    if (taskCode === 'INGEST' && !skipPreflight) {
+        try {
+            const pfRes = await fetch('/api/import/preflight_active');
+            if (pfRes.ok) {
+                const pf = await pfRes.json();
+                if (pf && pf.enough === false && Array.isArray(pf.warnings) && pf.warnings.length) {
+                    _pendingPreflightTask = taskCode;
+                    const warnBox = document.getElementById('task-preflight-warning');
+                    const warnTxt = document.getElementById('task-preflight-warning-text');
+                    if (warnTxt) warnTxt.textContent = pf.warnings.join(' ');
+                    if (warnBox) warnBox.classList.remove('hidden');
+                    const pop = document.getElementById('task-popover');
+                    if (pop) pop.classList.remove('hidden');
+                    return;
+                }
+            }
+        } catch (e) {}
+    }
+
+    cancelPendingPreflightTask();
     clientPausedTask = '';
     const res = await fetch('/api/pipeline/run_task', {
         method: 'POST',
@@ -447,11 +503,28 @@ async function runTask(taskCode) {
     }
 }
 
+async function discardPausedActivity(activityId, e) {
+    if (e) e.stopPropagation();
+    clientPausedTask = '';
+    try {
+        const res = await fetch(`/api/activities/${encodeURIComponent(activityId)}/cancel_pause`, {method: 'POST'});
+        if (res.ok) {
+            const d = await res.json();
+            renderActivitiesHistory(d.activities || []);
+        }
+    } catch (_) {}
+}
+
 async function handlePipeActionButton() {
     if (latestPipelineState && latestPipelineState.is_running) {
         clientPausedTask = latestPipelineState.active_task || lastSeenActiveTask || 'INGEST';
         await fetch('/api/pipeline/stop?cancel=false', {method: 'POST'});
     } else {
+        const pausedFromDb = _findActivePausedActivityFromHistory(_latestActivitiesCache);
+        if (_resolvePipelineVisualState(latestPipelineState) === 'idle' && pausedFromDb) {
+            await resumeOrRetryActivity(pausedFromDb.activity_id);
+            return;
+        }
         const resumeCode = (latestPipelineState && latestPipelineState.last_paused_task) || clientPausedTask || lastSeenActiveTask || 'INGEST';
         await runTask(resumeCode);
     }
@@ -461,7 +534,11 @@ const togglePauseResumeTask = handlePipeActionButton;
 
 async function stopPipelineCompletely() {
     clientPausedTask = '';
+    const pausedFromDb = _findActivePausedActivityFromHistory(_latestActivitiesCache);
     await fetch('/api/pipeline/stop?cancel=true', {method: 'POST'});
+    if (pausedFromDb) {
+        await discardPausedActivity(pausedFromDb.activity_id);
+    }
 }
 
 const stopTaskCompletely = stopPipelineCompletely;
@@ -548,28 +625,650 @@ async function toggleNotificationsPopover(e) {
     }
 }
 
+let _lastNotifTopId = null;
+
+function _statusBadgeSvg(status) {
+    if (status === 'success') {
+        return '<span class="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>';
+    }
+    if (status === 'error') {
+        return '<span class="w-5 h-5 rounded-full bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>';
+    }
+    if (status === 'partial') {
+        return '<span class="w-5 h-5 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>';
+    }
+    return '<span class="w-5 h-5 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></span>';
+}
+
+function _formatActivityDateTime(isoStr) {
+    if (!isoStr) return '--';
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return String(isoStr);
+    return d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function _formatActivityDuration(sec) {
+    const val = Math.max(0, Number(sec) || 0);
+    if (val < 60) return `${val.toFixed(1).replace('.', ',')} s`;
+    const total = Math.round(val);
+    if (total < 3600) {
+        const m = Math.floor(total / 60);
+        const s = String(total % 60).padStart(2, '0');
+        return `${m} min ${s} s`;
+    }
+    const h = Math.floor(total / 3600);
+    const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+    return `${h} h ${m} min`;
+}
+
+async function deleteNotification(notifId, e) {
+    if (e) e.stopPropagation();
+    try {
+        const res = await fetch(`/api/notifications/${encodeURIComponent(notifId)}`, {method: 'DELETE'});
+        if (res.ok) {
+            const d = await res.json();
+            renderNotificationsLists(d.notifications || []);
+        }
+    } catch (_) {}
+}
+
+async function clearAllNotifications(e) {
+    if (e) e.stopPropagation();
+    try {
+        const res = await fetch('/api/notifications', {method: 'DELETE'});
+        if (res.ok) {
+            renderNotificationsLists([]);
+        }
+    } catch (_) {}
+}
+
+async function resumeActivityFromNotif(activityId, notifId, e) {
+    if (e) e.stopPropagation();
+    const pop = document.getElementById('notif-popover');
+    if (pop) pop.classList.add('hidden');
+    if (notifId) {
+        await deleteNotification(notifId);
+    }
+    await resumeOrRetryActivity(activityId, e);
+}
+
+async function runTaskFromNotif(taskCode, notifId, e) {
+    if (e) e.stopPropagation();
+    const pop = document.getElementById('notif-popover');
+    if (pop) pop.classList.add('hidden');
+    if (notifId) {
+        await deleteNotification(notifId);
+    }
+    await runTask(taskCode);
+}
+
 function renderNotificationsLists(notifs) {
-    if (!notifs || !notifs.length) return;
-    const unread = notifs.some(n => !n.read);
+    const list = Array.isArray(notifs) ? notifs : [];
+    const unread = list.some(n => !n.read);
     const dot = document.getElementById('notif-unread-dot');
     if (dot) dot.classList.toggle('hidden', !unread);
 
-    const html = notifs.map(n => {
-        const badge = n.status === 'success' ? '✅' : (n.status === 'error' ? '❌' : '⏸️');
-        return `
-        <div class="ui-pill rounded-2xl p-3 flex items-start justify-between gap-2">
-            <div>
-                <div class="font-extrabold text-xs">${badge} ${n.title}</div>
-                <div class="text-[11px] opacity-70 mt-0.5">${n.detail}</div>
-            </div>
-            <span class="text-[10px] font-mono opacity-60 shrink-0">${n.time}</span>
-        </div>`;
-    }).join('');
+    const btnClearAll = document.getElementById('btn-clear-all-notifs');
+    if (btnClearAll) btnClearAll.classList.toggle('hidden', list.length === 0);
+
+    const topId = list.length ? list[0].id : null;
+    if (topId !== null && topId !== _lastNotifTopId) {
+        _lastNotifTopId = topId;
+        if (currentTab === 'activities') loadActivitiesHistory();
+    }
 
     const popList = document.getElementById('notif-popover-list');
-    if (popList) popList.innerHTML = html;
-    const fullList = document.getElementById('activities-full-list');
-    if (fullList) fullList.innerHTML = html;
+    if (!popList) return;
+    if (!list.length) {
+        popList.innerHTML = '<div class="py-4 text-center opacity-60 font-semibold">Aucune activité récente</div>';
+        return;
+    }
+
+    popList.innerHTML = list.map(n => {
+        const badgeSvg = _statusBadgeSvg(n.status);
+        const nid = Number(n.id) || 0;
+        const aid = Number(n.action_activity_id) || 0;
+        const taskCode = n.action_task ? String(n.action_task) : '';
+        let actionBtn = '';
+        if (aid > 0) {
+            actionBtn = `<div class="mt-1.5">
+                   <button type="button" onclick="resumeActivityFromNotif(${aid}, ${nid}, event)"
+                           class="ui-card hover:bg-[var(--bg-hover)] hover:text-emerald-500 px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                       <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                       <span>${escapeHtml(n.action_label || 'Reprendre')}</span>
+                   </button>
+               </div>`;
+        } else if (taskCode) {
+            actionBtn = `<div class="mt-1.5">
+                   <button type="button" onclick="runTaskFromNotif('${escapeHtml(taskCode)}', ${nid}, event)"
+                           class="ui-card hover:bg-[var(--bg-hover)] hover:text-sky-500 px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                       <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                       <span>${escapeHtml(n.action_label || 'Analyser')}</span>
+                   </button>
+               </div>`;
+        }
+        return `
+        <div class="ui-pill rounded-2xl p-2.5 flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+                ${badgeSvg}
+                <div class="min-w-0">
+                    <div class="font-extrabold text-xs truncate">${escapeHtml(n.title)}</div>
+                    <div class="text-[11px] opacity-70 mt-0.5 break-words">${escapeHtml(n.detail)}</div>
+                    ${actionBtn}
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-[10px] font-mono opacity-60">${escapeHtml(n.time)}</span>
+                <button type="button" onclick="deleteNotification(${nid}, event)" title="Effacer la notification"
+                        class="w-5 h-5 rounded-full hover:bg-[var(--bg-hover)] hover:text-rose-500 flex items-center justify-center text-[11px] font-extrabold opacity-55 hover:opacity-100 transition cursor-pointer">✕</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function loadActivitiesHistory() {
+    try {
+        const res = await fetch('/api/activities');
+        if (!res.ok) return;
+        const d = await res.json();
+        renderActivitiesHistory(d.activities || []);
+    } catch (_) {}
+}
+
+function _toggleActivityListBox(prefix, activityId, closedPrefix) {
+    const box = document.getElementById(`act-${prefix}-list-${activityId}`);
+    const lbl = document.getElementById(`act-${prefix}-lbl-${activityId}`);
+    if (!box) return;
+    const willOpen = box.classList.contains('hidden');
+    box.classList.toggle('hidden', !willOpen);
+    if (lbl && lbl.dataset.count) {
+        lbl.textContent = willOpen
+            ? `Masquer la liste (${lbl.dataset.count})`
+            : `${closedPrefix} (${lbl.dataset.count})`;
+    }
+}
+
+function toggleActivityFailedFiles(activityId) {
+    _toggleActivityListBox('failed', activityId, 'Voir les fichiers non traités');
+}
+
+function toggleActivityFiles(activityId) {
+    _toggleActivityListBox('files', activityId, 'Voir les fichiers');
+}
+
+async function deleteActivityEntry(activityId, e) {
+    if (e) e.stopPropagation();
+    try {
+        const res = await fetch(`/api/activities/${encodeURIComponent(activityId)}`, {method: 'DELETE'});
+        if (res.ok) {
+            const d = await res.json();
+            renderActivitiesHistory(d.activities || []);
+        }
+    } catch (_) {}
+}
+
+function openClearActivitiesConfirm() {
+    const m = document.getElementById('activities-confirm-clear-modal');
+    if (m) m.classList.remove('hidden');
+}
+
+function closeClearActivitiesConfirm() {
+    const m = document.getElementById('activities-confirm-clear-modal');
+    if (m) m.classList.add('hidden');
+}
+
+async function confirmClearAllActivities() {
+    closeClearActivitiesConfirm();
+    try {
+        const res = await fetch('/api/activities', {method: 'DELETE'});
+        if (res.ok) renderActivitiesHistory([]);
+    } catch (_) {}
+}
+
+async function exportActivitiesHistory() {
+    try {
+        const res = await fetch('/api/activities/export');
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const disp = res.headers.get('Content-Disposition') || '';
+        const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+        const fileName = m ? decodeURIComponent(m[1]) : 'phototo_activites.json';
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (_) {}
+}
+
+async function resumeOrRetryActivity(activityId, e) {
+    if (e) e.stopPropagation();
+    clientPausedTask = '';
+    try {
+        const res = await fetch(`/api/activities/${encodeURIComponent(activityId)}/resume`, {method: 'POST'});
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Impossible de relancer cette opération.");
+            return;
+        }
+        const taskPop = document.getElementById('task-popover');
+        if (taskPop) taskPop.classList.remove('hidden');
+    } catch (_) {}
+}
+
+const ACTIVITY_GROUP_OPS = new Set(['INGEST', 'UNZIP', 'IMPORT', 'METADATA']);
+const ACTIVITY_GROUP_AI = new Set(['FACES', 'OCR', 'DEDUP', 'SIMILAR', 'CLIP', 'AI_REINDEX']);
+const RESUMABLE_ACTIVITY_TYPES = new Set(['INGEST', 'UNZIP', 'IMPORT', 'METADATA', 'FACES', 'OCR', 'DEDUP', 'SIMILAR', 'CLIP']);
+
+const _expandedActivityGroups = new Set();
+
+function toggleActivityGroup(leadId, e) {
+    if (e) e.stopPropagation();
+    const key = Number(leadId) || 0;
+    if (_expandedActivityGroups.has(key)) {
+        _expandedActivityGroups.delete(key);
+    } else {
+        _expandedActivityGroups.add(key);
+    }
+    renderActivitiesHistory(_latestActivitiesCache);
+}
+
+function _groupConsecutiveActivities(items) {
+    const groups = [];
+    for (const a of items) {
+        const actType = String(a.action_type || '').toUpperCase();
+        const key = `${actType}||${String(a.title || '')}||${String(a.library_name || '')}`;
+        const last = groups.length ? groups[groups.length - 1] : null;
+        const isResumable = RESUMABLE_ACTIVITY_TYPES.has(actType);
+        const olderEndedRun = isResumable && (
+            a.status === 'success' || String(a.reason || '').toLowerCase().includes('arrêtée')
+        );
+        if (last && last.key === key && !olderEndedRun) {
+            last.items.push(a);
+        } else {
+            groups.push({ key, items: [a] });
+        }
+    }
+    return groups;
+}
+
+function _buildSingleActivityCardHtml(a, opts = {}) {
+    const statusMeta = {
+        success: { label: 'Succès', cls: 'text-emerald-500' },
+        partial: { label: 'Partiel', cls: 'text-amber-500' },
+        error: { label: 'Échec', cls: 'text-rose-500' },
+        paused: { label: 'Interrompu', cls: 'text-amber-500' },
+    };
+    const olderItems = Array.isArray(opts.olderItems) ? opts.olderItems : [];
+    const isNested = Boolean(opts.isNested);
+    const aid = Number(a.activity_id) || 0;
+    const stInfo = statusMeta[a.status] || statusMeta.paused;
+    const badgeSvg = _statusBadgeSvg(a.status);
+    const dtTxt = _formatActivityDateTime(a.finished_at || a.started_at);
+    const durVal = Number(a.duration_sec) || 0;
+    const durTxt = _formatActivityDuration(durVal);
+    const cumDurVal = olderItems.length
+        ? durVal + olderItems.reduce((acc, x) => acc + (Number(x.duration_sec) || 0), 0)
+        : durVal;
+    const cumDurHtml = olderItems.length && cumDurVal > durVal
+        ? `<span class="mx-1.5">•</span><span>Cumulée (${olderItems.length + 1}×) : ${escapeHtml(_formatActivityDuration(cumDurVal))}</span>`
+        : '';
+
+    const failedFiles = Array.isArray(a.failed_files) ? a.failed_files : [];
+    const failedTotal = Math.max(Number(a.failed_count) || 0, failedFiles.length);
+    const okFiles = Array.isArray(a.files) ? a.files : [];
+    const actType = String(a.action_type || '').toUpperCase();
+    const canResume = RESUMABLE_ACTIVITY_TYPES.has(actType) && (a.status === 'paused' || a.status === 'error' || a.status === 'partial');
+    const resumeLbl = a.status === 'paused' ? 'Reprendre' : 'Réessayer';
+    const resumeHoverCls = a.status === 'paused' ? 'hover:text-emerald-500' : 'hover:text-amber-500';
+    const resumeBtnHtml = canResume
+        ? `<button type="button" onclick="resumeOrRetryActivity(${aid}, event)"
+                   class="mt-2 ui-card hover:bg-[var(--bg-hover)] ${resumeHoverCls} px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+               <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+               <span>${resumeLbl}</span>
+           </button>`
+        : '';
+
+    const isGrpExpanded = olderItems.length > 0 && _expandedActivityGroups.has(aid);
+    const grpBtnHtml = olderItems.length > 0
+        ? `<button type="button" id="act-grp-btn-${aid}" onclick="toggleActivityGroup(${aid}, event)"
+                   class="mt-2 ui-card hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+               <span>${olderItems.length} autre${olderItems.length > 1 ? 's' : ''} identique${olderItems.length > 1 ? 's' : ''}</span>
+               <svg class="w-3.5 h-3.5 shrink-0 transition-transform duration-150" style="transform:${isGrpExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+           </button>`
+        : '';
+
+    const reasonHtml = a.reason
+        ? `<div class="text-[11px] font-semibold text-rose-500/90 mt-1">Raison : ${escapeHtml(a.reason)}</div>`
+        : '';
+    const okFilesBtnHtml = okFiles.length > 0
+        ? `<button type="button" onclick="toggleActivityFiles(${aid})"
+                   class="mt-2 ui-card hover:bg-[var(--bg-hover)] hover:text-sky-500 px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+               <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+               <span id="act-files-lbl-${aid}" data-count="${okFiles.length}">Voir les fichiers (${okFiles.length})</span>
+           </button>`
+        : '';
+    const failedBtnHtml = failedFiles.length > 0
+        ? `<button type="button" onclick="toggleActivityFailedFiles(${aid})"
+                   class="mt-2 ui-card hover:bg-[var(--bg-hover)] hover:text-amber-500 px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+               <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+               <span id="act-failed-lbl-${aid}" data-count="${failedTotal}">Voir les fichiers non traités (${failedTotal})</span>
+           </button>`
+        : '';
+    const actionButtonsRow = (resumeBtnHtml || grpBtnHtml || okFilesBtnHtml || failedBtnHtml)
+        ? `<div class="flex flex-wrap items-center gap-2">${resumeBtnHtml}${grpBtnHtml}${okFilesBtnHtml}${failedBtnHtml}</div>`
+        : '';
+    const okFilesBoxHtml = okFiles.length > 0
+        ? `<div id="act-files-list-${aid}" class="hidden mt-2.5 ui-card rounded-2xl p-3 space-y-1.5 max-h-56 overflow-y-auto">
+               ${okFiles.map(f => `
+                   <div class="text-[11px] border-b border-[var(--border-subtle)] last:border-b-0 pb-1.5 last:pb-0">
+                       <div class="font-bold truncate" title="${escapeHtml(f.path || f.name || '')}">${escapeHtml(f.name || f.path || 'Fichier')}</div>
+                       ${f.path ? `<div class="text-[10px] font-mono opacity-55 truncate" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</div>` : ''}
+                       ${f.info ? `<div class="text-[10px] opacity-75 font-semibold">${escapeHtml(f.info)}</div>` : ''}
+                   </div>
+               `).join('')}
+           </div>`
+        : '';
+    const failedBoxHtml = failedFiles.length > 0
+        ? `<div id="act-failed-list-${aid}" class="hidden mt-2.5 ui-card rounded-2xl p-3 space-y-1.5 max-h-56 overflow-y-auto">
+               ${failedFiles.map(f => `
+                   <div class="text-[11px] border-b border-[var(--border-subtle)] last:border-b-0 pb-1.5 last:pb-0">
+                       <div class="font-bold truncate" title="${escapeHtml(f.path || f.name || '')}">${escapeHtml(f.name || f.path || 'Fichier')}</div>
+                       <div class="text-[10px] font-mono opacity-55 truncate" title="${escapeHtml(f.path || '')}">${escapeHtml(f.path || '')}</div>
+                       <div class="text-[10px] text-rose-500 font-semibold">${escapeHtml(f.reason || 'Erreur inconnue')}</div>
+                   </div>
+               `).join('')}
+           </div>`
+        : '';
+    const nestedChildrenHtml = (olderItems.length > 0 && isGrpExpanded)
+        ? `<div id="act-grp-body-${aid}" class="mt-2.5 pl-3 ml-2 border-l-2 border-[var(--border-subtle)] space-y-2">
+               ${olderItems.map(child => _buildSingleActivityCardHtml(child, { isNested: true })).join('')}
+           </div>`
+        : '';
+
+    const cardCls = isNested ? 'ui-card rounded-2xl p-3 space-y-1' : 'ui-pill rounded-2xl p-3.5 space-y-1';
+    return `
+    <div class="${cardCls}">
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+                ${badgeSvg}
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-extrabold text-xs">${escapeHtml(a.title)}</span>
+                        <span class="ui-card px-2 py-0.5 rounded-full text-[10px] font-extrabold ${stInfo.cls}">${stInfo.label}</span>
+                        ${olderItems.length > 0 ? `<span class="ui-card px-2 py-0.5 rounded-full text-[10px] font-extrabold opacity-75">${olderItems.length + 1}×</span>` : ''}
+                        ${a.library_name ? `<span class="text-[10px] font-bold opacity-55">· ${escapeHtml(a.library_name)}</span>` : ''}
+                    </div>
+                    <div class="text-[11px] opacity-75 mt-0.5">${escapeHtml(a.detail)}</div>
+                    <div class="text-[10px] opacity-60 font-semibold mt-1">
+                        <span>${escapeHtml(dtTxt)}</span>
+                        <span class="mx-1.5">•</span>
+                        <span>Durée : ${escapeHtml(durTxt)}</span>
+                        ${cumDurHtml}
+                    </div>
+                    ${reasonHtml}
+                    ${actionButtonsRow}
+                </div>
+            </div>
+            <button type="button" onclick="deleteActivityEntry(${aid}, event)" title="Supprimer cette activité"
+                    class="w-6 h-6 rounded-full hover:bg-[var(--bg-hover)] hover:text-rose-500 flex items-center justify-center text-xs font-extrabold opacity-55 hover:opacity-100 transition cursor-pointer shrink-0">✕</button>
+        </div>
+        ${okFilesBoxHtml}
+        ${failedBoxHtml}
+        ${nestedChildrenHtml}
+    </div>`;
+}
+
+function _renderActivityGroupsHtml(groups) {
+    return groups.map(grp => _buildSingleActivityCardHtml(grp.items[0], { olderItems: grp.items.slice(1) })).join('');
+}
+
+let _latestActivitiesCache = [];
+const _expandedActivitySections = new Set();
+
+function _resolvePipelineVisualState(st) {
+    if (!st) return 'idle';
+    const effectivePausedTask = st.last_paused_task || clientPausedTask;
+    if (st.is_running) return 'running';
+    if (st.status_level === 'error' || (st.current_step && st.current_step.startsWith('Erreur'))) return 'error';
+    if (st.status_level === 'stopped' || (st.current_step && st.current_step.startsWith('Tâche arrêtée'))) return 'stopped';
+    if (st.status_level === 'paused' || Boolean(effectivePausedTask) || (st.current_step && st.current_step.includes('En pause'))) return 'paused';
+    return 'idle';
+}
+
+function _statusDotClassesForState(visualState) {
+    if (visualState === 'running') return 'bg-emerald-400 animate-pulse';
+    if (visualState === 'paused') return 'bg-amber-400';
+    if (visualState === 'error' || visualState === 'stopped') return 'bg-rose-500';
+    return 'bg-emerald-400';
+}
+
+function _findActivePausedActivityFromHistory(activities) {
+    const list = Array.isArray(activities) ? activities : [];
+    const seenEnded = new Set();
+    for (const a of list) {
+        const actType = String(a.action_type || '').toUpperCase();
+        if (!RESUMABLE_ACTIVITY_TYPES.has(actType)) continue;
+        const sig = `${actType}||${String(a.title || '')}||${String(a.library_name || '')}`;
+        if (seenEnded.has(sig)) continue;
+        const reasonLower = String(a.reason || '').toLowerCase();
+        const isPausedOnly = (a.status === 'paused') && !reasonLower.includes('arrêtée');
+        if (isPausedOnly) {
+            return a;
+        }
+        seenEnded.add(sig);
+    }
+    return null;
+}
+
+function renderCurrentOrPendingActivity(st, activities) {
+    const sec = document.getElementById('activities-current-section');
+    const cardEl = document.getElementById('activities-current-card');
+    if (!sec || !cardEl) return;
+
+    sec.classList.remove('hidden');
+    const visualState = _resolvePipelineVisualState(st);
+    if (visualState !== 'idle' && st) {
+        const dotCls = _statusDotClassesForState(visualState);
+        const stateMeta = {
+            running: { badge: 'En cours', badgeCls: 'text-emerald-500', barCls: 'bg-emerald-500' },
+            paused: { badge: 'En pause', badgeCls: 'text-amber-500', barCls: 'bg-amber-400' },
+            error: { badge: 'Erreur', badgeCls: 'text-rose-500', barCls: 'bg-rose-500' },
+            stopped: { badge: 'Arrêtée', badgeCls: 'text-rose-500', barCls: 'bg-rose-500' },
+        }[visualState] || { badge: 'En cours', badgeCls: 'text-emerald-500', barCls: 'bg-emerald-500' };
+
+        const pct = Math.max(0, Math.min(100, Number(st.percent) || 0));
+        const etaClean = (st.eta_text || '').replace('ETA: ', '') || '--:--';
+        const spdClean = st.speed_text || '-- Mo/s';
+        const proc = Number(st.processed_items) || 0;
+        const tot = Number(st.total_items) || 0;
+
+        let actionBtnHtml = '';
+        if (st.is_running) {
+            actionBtnHtml = `
+                <button type="button" onclick="handlePipeActionButton()" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-amber-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"><span>Pause</span></button>
+                <button type="button" onclick="stopPipelineCompletely()" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-rose-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"><span>Arrêter</span></button>`;
+        } else if (visualState === 'paused') {
+            actionBtnHtml = `
+                <button type="button" onclick="handlePipeActionButton()" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-emerald-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    <span>Reprendre</span>
+                </button>
+                <button type="button" onclick="stopPipelineCompletely()" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-rose-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"><span>Arrêter</span></button>`;
+        } else {
+            actionBtnHtml = `
+                <button type="button" onclick="handlePipeActionButton()" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-emerald-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    <span>Reprendre</span>
+                </button>`;
+        }
+
+        cardEl.innerHTML = `
+            <div class="space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotCls}"></span>
+                        <div class="text-sm font-extrabold truncate" title="${escapeHtml(st.current_step || '')}">${escapeHtml(st.current_step || 'Activité en cours...')}</div>
+                        <span class="ui-pill px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${stateMeta.badgeCls}">${stateMeta.badge}</span>
+                    </div>
+                    <div class="text-xs font-extrabold tabular-nums opacity-85 shrink-0">${pct} %</div>
+                </div>
+                <div class="w-full ui-pill rounded-full h-2 overflow-hidden">
+                    <div class="h-full ${stateMeta.barCls} rounded-full transition-all duration-300" style="width:${pct}%;"></div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                        <span class="ui-pill rounded-full px-3 py-1 tabular-nums">Fichiers : ${proc} / ${tot}</span>
+                        <span class="ui-pill rounded-full px-3 py-1 tabular-nums">Restant : ${escapeHtml(etaClean)}</span>
+                        <span class="ui-pill rounded-full px-3 py-1 tabular-nums">${escapeHtml(spdClean)}</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">${actionBtnHtml}</div>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const list = Array.isArray(activities) ? activities : [];
+    const latest = list.length ? list[0] : null;
+    if (!latest) {
+        cardEl.innerHTML = `<div class="text-xs font-semibold opacity-60 text-center py-1">Aucune activité enregistrée pour le moment.</div>`;
+        return;
+    }
+
+    const aid = Number(latest.activity_id) || 0;
+    const actType = String(latest.action_type || '').toUpperCase();
+    const reasonLower = String(latest.reason || '').toLowerCase();
+    const isStopped = (latest.status === 'paused' && reasonLower.includes('arrêtée'));
+    const isPausedOnly = (latest.status === 'paused' && !isStopped);
+    const proc = Number(latest.success_count) || 0;
+    const tot = Number(latest.total_items) || 0;
+    const pct = latest.status === 'success' ? 100 : (tot > 0 ? Math.min(100, Math.round((proc / tot) * 100)) : 0);
+    const dtTxt = _formatActivityDateTime(latest.finished_at || latest.started_at);
+    const durTxt = _formatActivityDuration(Number(latest.duration_sec) || 0);
+    const canResume = RESUMABLE_ACTIVITY_TYPES.has(actType) && (latest.status === 'paused' || latest.status === 'error' || latest.status === 'partial');
+
+    let dotCls = 'bg-emerald-400';
+    let badgeTxt = 'Terminée';
+    let badgeCls = 'text-emerald-500';
+    let barCls = 'bg-emerald-500';
+    if (isPausedOnly) {
+        dotCls = 'bg-amber-400';
+        badgeTxt = 'En pause';
+        badgeCls = 'text-amber-500';
+        barCls = 'bg-amber-400';
+    } else if (isStopped) {
+        dotCls = 'bg-rose-500';
+        badgeTxt = 'Arrêtée';
+        badgeCls = 'text-rose-500';
+        barCls = 'bg-rose-500';
+    } else if (latest.status === 'error') {
+        dotCls = 'bg-rose-500';
+        badgeTxt = 'Échouée';
+        badgeCls = 'text-rose-500';
+        barCls = 'bg-rose-500';
+    } else if (latest.status === 'partial') {
+        dotCls = 'bg-amber-400';
+        badgeTxt = 'Partielle';
+        badgeCls = 'text-amber-500';
+        barCls = 'bg-amber-400';
+    }
+
+    let btnsHtml = '';
+    if (isPausedOnly) {
+        btnsHtml = `
+            <button type="button" onclick="resumeOrRetryActivity(${aid}, event)" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-emerald-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>Reprendre</span>
+            </button>
+            <button type="button" onclick="discardPausedActivity(${aid}, event)" class="ui-pill hover:bg-[var(--bg-hover)] hover:text-rose-500 px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                <span>Arrêter</span>
+            </button>`;
+    } else if (canResume) {
+        const retryHover = (latest.status === 'error' || isStopped) ? 'hover:text-amber-500' : 'hover:text-emerald-500';
+        btnsHtml = `
+            <button type="button" onclick="resumeOrRetryActivity(${aid}, event)" class="ui-pill hover:bg-[var(--bg-hover)] ${retryHover} px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>Réessayer</span>
+            </button>`;
+    }
+
+    cardEl.innerHTML = `
+        <div class="space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotCls}"></span>
+                    <div class="text-sm font-extrabold truncate">${escapeHtml(latest.title || 'Activité')}</div>
+                    <span class="ui-pill px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${badgeCls}">${badgeTxt}</span>
+                    ${latest.library_name ? `<span class="text-[11px] font-bold opacity-55 shrink-0">· ${escapeHtml(latest.library_name)}</span>` : ''}
+                </div>
+                ${tot > 0 ? `<div class="text-xs font-extrabold tabular-nums opacity-85 shrink-0">${pct} %</div>` : ''}
+            </div>
+            ${tot > 0 ? `<div class="w-full ui-pill rounded-full h-2 overflow-hidden"><div class="h-full ${barCls} rounded-full transition-all duration-300" style="width:${pct}%;"></div></div>` : ''}
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0 space-y-0.5">
+                    <div class="text-xs opacity-75 truncate">${escapeHtml(latest.detail || '')}</div>
+                    ${latest.reason ? `<div class="text-[11px] font-semibold text-rose-500/90 truncate">Raison : ${escapeHtml(latest.reason)}</div>` : ''}
+                    <div class="text-[10px] opacity-60 font-semibold">${escapeHtml(dtTxt)} · Durée : ${escapeHtml(durTxt)}</div>
+                </div>
+                ${btnsHtml ? `<div class="flex items-center gap-2 shrink-0">${btnsHtml}</div>` : ''}
+            </div>
+        </div>`;
+}
+
+function toggleActivitySection(sectionKey) {
+    if (_expandedActivitySections.has(sectionKey)) {
+        _expandedActivitySections.delete(sectionKey);
+    } else {
+        _expandedActivitySections.add(sectionKey);
+    }
+    renderActivitiesHistory(_latestActivitiesCache);
+}
+
+function renderActivitiesHistory(activities) {
+    const list = Array.isArray(activities) ? activities : [];
+    _latestActivitiesCache = list;
+    renderCurrentOrPendingActivity(latestPipelineState, list);
+    const btnClear = document.getElementById('btn-clear-all-activities');
+    if (btnClear) btnClear.classList.toggle('hidden', list.length === 0);
+
+    const ops = [];
+    const analyses = [];
+    const actions = [];
+    list.forEach(a => {
+        const t = String(a.action_type || '').toUpperCase();
+        if (ACTIVITY_GROUP_OPS.has(t)) ops.push(a);
+        else if (ACTIVITY_GROUP_AI.has(t)) analyses.push(a);
+        else actions.push(a);
+    });
+
+    const buckets = [
+        { key: 'operations', items: ops, empty: "Aucune opération d'import ou de métadonnées enregistrée." },
+        { key: 'analyses', items: analyses, empty: "Aucune analyse IA enregistrée pour le moment." },
+        { key: 'actions', items: actions, empty: "Aucune action utilisateur enregistrée pour le moment." },
+    ];
+    buckets.forEach(b => {
+        const cntEl = document.getElementById(`act-count-${b.key}`);
+        if (cntEl) cntEl.textContent = String(b.items.length);
+
+        const groups = _groupConsecutiveActivities(b.items);
+        const isExpanded = _expandedActivitySections.has(b.key);
+        const toggleBtn = document.getElementById(`act-toggle-${b.key}`);
+        const toggleLbl = document.getElementById(`act-toggle-lbl-${b.key}`);
+        const toggleChev = document.getElementById(`act-toggle-chevron-${b.key}`);
+        if (toggleBtn) toggleBtn.classList.toggle('hidden', groups.length <= 1);
+        if (toggleLbl) toggleLbl.textContent = isExpanded ? 'Réduire' : 'Tout voir';
+        if (toggleChev) toggleChev.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+
+        const boxEl = document.getElementById(`activities-list-${b.key}`);
+        if (!boxEl) return;
+        const visibleGroups = isExpanded ? groups : groups.slice(0, 1);
+        boxEl.innerHTML = visibleGroups.length
+            ? _renderActivityGroupsHtml(visibleGroups)
+            : `<div class="ui-pill rounded-2xl p-5 text-center text-xs font-semibold opacity-60">${b.empty}</div>`;
+    });
 }
 
 // ==================== PARAMÈTRES & MAINTENANCE ====================
@@ -1178,17 +1877,85 @@ async function retryMissingMetadataNow() {
     }
 }
 
-async function restartApplication() {
-    if (!confirm("Redémarrer Phototo maintenant ?")) return;
-    await fetch('/api/system/restart', {method: 'POST'});
-    setTimeout(() => window.location.reload(), 2000);
+let _pendingPowerMode = ''; // 'restart' | 'shutdown'
+
+function closePowerActivityModal() {
+    _pendingPowerMode = '';
+    const m = document.getElementById('power-activity-modal');
+    if (m) m.classList.add('hidden');
 }
 
-async function shutdownApplication() {
-    if (!confirm("Arrêter complètement Phototo ?")) return;
-    await fetch('/api/system/shutdown', {method: 'POST'});
-    document.body.innerHTML = `<div class="h-screen flex items-center justify-center text-xl font-extrabold">🛑 Phototo est arrêté.</div>`;
+function _openPowerActivityModal(mode) {
+    _pendingPowerMode = mode;
+    const isRestart = (mode === 'restart');
+    const isRunning = Boolean(latestPipelineState && latestPipelineState.is_running);
+
+    const modal = document.getElementById('power-activity-modal');
+    const titleEl = document.getElementById('power-modal-title');
+    const badgeEl = document.getElementById('power-modal-running-badge');
+    const stepEl = document.getElementById('power-modal-running-step');
+    const msgEl = document.getElementById('power-modal-msg');
+    const activeChoices = document.getElementById('power-modal-active-choices');
+    const idleChoices = document.getElementById('power-modal-idle-choices');
+    const idleBtn = document.getElementById('power-modal-idle-confirm-btn');
+
+    if (!modal) return;
+    if (titleEl) titleEl.textContent = isRestart ? 'Redémarrer Phototo' : 'Arrêter Phototo';
+
+    if (isRunning) {
+        if (badgeEl) badgeEl.classList.remove('hidden');
+        if (stepEl) stepEl.textContent = latestPipelineState.current_step || 'Activité en cours...';
+        if (msgEl) {
+            msgEl.textContent = isRestart
+                ? "Une activité est en cours. Choisissez si vous souhaitez la mettre en pause, l'arrêter ou l'ignorer avant de redémarrer le programme :"
+                : "Une activité est en cours. Choisissez si vous souhaitez la mettre en pause, l'arrêter ou l'ignorer avant d'arrêter le programme :";
+        }
+        if (activeChoices) activeChoices.classList.remove('hidden');
+        if (idleChoices) idleChoices.classList.add('hidden');
+    } else {
+        if (badgeEl) badgeEl.classList.add('hidden');
+        if (msgEl) {
+            msgEl.textContent = isRestart
+                ? 'Voulez-vous redémarrer Phototo maintenant ?'
+                : 'Voulez-vous arrêter complètement Phototo ?';
+        }
+        if (activeChoices) activeChoices.classList.add('hidden');
+        if (idleChoices) idleChoices.classList.remove('hidden');
+        if (idleBtn) idleBtn.textContent = isRestart ? 'Redémarrer' : 'Arrêter';
+    }
+
+    modal.classList.remove('hidden');
 }
+
+async function executePowerAction(activityAction = 'pause') {
+    const mode = _pendingPowerMode;
+    closePowerActivityModal();
+    if (!mode) return;
+
+    const act = encodeURIComponent(activityAction || 'pause');
+    if (mode === 'restart') {
+        await fetch(`/api/system/restart?activity_action=${act}`, {method: 'POST'});
+        setTimeout(() => window.location.reload(), 2000);
+    } else if (mode === 'shutdown') {
+        await fetch(`/api/system/shutdown?activity_action=${act}`, {method: 'POST'});
+        document.body.innerHTML = `<div class="h-screen flex items-center justify-center text-xl font-extrabold">🛑 Phototo est arrêté.</div>`;
+    }
+}
+
+function restartApplication() {
+    _openPowerActivityModal('restart');
+}
+
+function shutdownApplication() {
+    _openPowerActivityModal('shutdown');
+}
+
+window.addEventListener('beforeunload', (e) => {
+    if (latestPipelineState && latestPipelineState.is_running) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
 // ==================== BOUCLE DE STATUT EN DIRECT ====================
 
@@ -1209,13 +1976,41 @@ setInterval(async () => {
         if (!st.is_running && st.current_step && st.current_step.includes('En pause') && !clientPausedTask) {
             clientPausedTask = lastSeenActiveTask || 'INGEST';
         }
-        const effectivePausedTask = st.last_paused_task || clientPausedTask;
         const hasMissing = (st.missing_meta_files && st.missing_meta_files.length > 0);
-        const showActivePanel = st.is_running || Boolean(effectivePausedTask) || hasMissing;
+        const liveVisualState = _resolvePipelineVisualState(st);
+        const pausedFromDb = (liveVisualState === 'idle') ? _findActivePausedActivityFromHistory(_latestActivitiesCache) : null;
+        const visualState = pausedFromDb ? 'paused' : liveVisualState;
+        const uiState = pausedFromDb ? {
+            ...st,
+            current_step: `En pause : ${pausedFromDb.title || 'Opération'}`,
+            processed_items: Number(pausedFromDb.success_count) || 0,
+            total_items: Number(pausedFromDb.total_items) || 0,
+            percent: (Number(pausedFromDb.total_items) > 0)
+                ? Math.min(100, Math.round((Number(pausedFromDb.success_count || 0) / Number(pausedFromDb.total_items)) * 100))
+                : 0,
+            eta_text: '--:--',
+            speed_text: '-- Mo/s',
+        } : st;
+
+        const applyDotStyle = (dotEl) => {
+            if (!dotEl) return;
+            dotEl.classList.remove('bg-emerald-400', 'bg-amber-400', 'bg-rose-500', 'animate-pulse');
+            _statusDotClassesForState(visualState).split(' ').forEach(cls => {
+                if (cls) dotEl.classList.add(cls);
+            });
+        };
+
+        renderCurrentOrPendingActivity(st, _latestActivitiesCache);
+
+        const hasActivityBanner = (visualState !== 'idle');
+        const showActivePanel = hasActivityBanner || hasMissing;
 
         const pulseBadge = document.getElementById('pulse-badge');
-        if (pulseBadge) pulseBadge.classList.toggle('hidden', !st.is_running);
-        const hasActivityBanner = st.is_running || Boolean(effectivePausedTask);
+        if (pulseBadge) {
+            pulseBadge.classList.toggle('hidden', !hasActivityBanner);
+            applyDotStyle(pulseBadge);
+        }
+        applyDotStyle(document.getElementById('pop-status-dot'));
         const actBtn = document.getElementById('activity-status-btn');
         const actPill = document.getElementById('activity-notif-pill');
         const actTextEl = document.getElementById('activity-status-text');
@@ -1232,7 +2027,7 @@ setInterval(async () => {
         }
         if (actTextEl) {
             actTextEl.textContent = hasActivityBanner
-                ? (st.is_running ? (st.current_step || 'Activité en cours...') : (st.current_step || 'Activité en pause'))
+                ? (uiState.is_running ? (uiState.current_step || 'Activité en cours...') : (uiState.current_step || 'Activité en pause'))
                 : '';
         }
         const emptySt = document.getElementById('task-empty-state');
@@ -1241,14 +2036,14 @@ setInterval(async () => {
         if (activeSt) activeSt.classList.toggle('hidden', !showActivePanel);
 
         if (showActivePanel) {
-            document.getElementById('pop-step-title').textContent = st.current_step || 'Analyse en cours...';
-            document.getElementById('pipe-bar').style.width = `${st.percent}%`;
-            document.getElementById('pop-percent-text').textContent = `${st.percent} %`;
+            document.getElementById('pop-step-title').textContent = uiState.current_step || 'Analyse en cours...';
+            document.getElementById('pipe-bar').style.width = `${uiState.percent}%`;
+            document.getElementById('pop-percent-text').textContent = `${uiState.percent} %`;
 
-            document.getElementById('pop-files-pill').innerHTML = `${st.processed_items} / ${st.total_items}<br>fichiers`;
-            const etaClean = (st.eta_text || '').replace('ETA: ', '') || '--:--';
-            document.getElementById('pop-eta-pill').innerHTML = `Temps restant estimé<br>${etaClean}`;
-            document.getElementById('pop-speed-pill').textContent = st.speed_text || '-- Mo/s';
+            document.getElementById('pop-files-pill').innerHTML = `<span class="opacity-70 truncate">Fichiers traités</span><span class="font-extrabold tabular-nums shrink-0">${uiState.processed_items} / ${uiState.total_items}</span>`;
+            const etaClean = (uiState.eta_text || '').replace('ETA: ', '') || '--:--';
+            document.getElementById('pop-eta-pill').innerHTML = `Temps restant<br>${etaClean}`;
+            document.getElementById('pop-speed-pill').innerHTML = `Vitesse<br>${escapeHtml(uiState.speed_text || '-- Mo/s')}`;
 
             const dupsEta = document.getElementById('dups-eta-label');
             if (dupsEta) dupsEta.textContent = etaClean;
@@ -1257,6 +2052,13 @@ setInterval(async () => {
 
             document.getElementById('icon-pause-bars').classList.toggle('hidden', !st.is_running);
             document.getElementById('icon-play-triangle').classList.toggle('hidden', st.is_running);
+            const pauseLbl = document.getElementById('label-pause-pipe');
+            if (pauseLbl) pauseLbl.textContent = st.is_running ? 'Pause' : 'Reprendre';
+            const pauseBtn = document.getElementById('btn-pause-pipe');
+            if (pauseBtn) {
+                pauseBtn.classList.toggle('hover:text-amber-500', st.is_running);
+                pauseBtn.classList.toggle('hover:text-emerald-500', !st.is_running);
+            }
 
             const warnBtn = document.getElementById('btn-task-warning');
             if (warnBtn) warnBtn.classList.toggle('hidden', !hasMissing);
@@ -1268,11 +2070,14 @@ setInterval(async () => {
             }
         }
 
-        if (st.logs && st.logs.length) {
-            const box = document.getElementById('pipe-logs-box');
-            if (box) {
-                box.innerHTML = st.logs.map(l => `<div>${l}</div>`).join('');
-                box.scrollTop = box.scrollHeight;
+        const box = document.getElementById('pipe-logs-box');
+        if (box) {
+            if (st.logs && st.logs.length) {
+                const wasAtBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 36;
+                box.innerHTML = st.logs.map(l => `<div class="truncate" title="${escapeHtml(l)}">${escapeHtml(l)}</div>`).join('');
+                if (wasAtBottom) box.scrollTop = box.scrollHeight;
+            } else {
+                box.innerHTML = '';
             }
         }
 
@@ -1282,7 +2087,7 @@ setInterval(async () => {
             if (pipelineRefreshTicks % 8 === 0) {
                 const isLightboxOpen = !document.getElementById('lightbox-modal').classList.contains('hidden');
                 if (!isLightboxOpen && selectedGalleryPaths.size === 0) {
-                    if ((currentTab === 'gallery' || currentTab === 'favorites') && galleryPage === 1 && currentSkipOffset === 0) loadGalleryItems(false);
+                    if ((currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') && galleryPage === 1 && currentSkipOffset === 0) loadGalleryItems(false);
                     else if (currentTab === 'faces' && typeof selectedPersonIds !== 'undefined' && selectedPersonIds.size === 0) loadPersons();
                     else if (currentTab === 'dups') loadDuplicates();
                     else if (currentTab === 'similar') loadSimilarGroups();
@@ -1296,6 +2101,7 @@ setInterval(async () => {
             await loadStats();
             await loadGalleryFilters();
             refreshActiveMediaView();
+            loadActivitiesHistory();
         }
         wasPipelineRunning = st.is_running;
     } catch (e) {}
@@ -1306,6 +2112,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     setAppTheme(savedTheme);
     await loadAppSettings();
     await loadLibrariesDropdown();
+    await loadActivitiesHistory();
     await loadStats();
     await loadGalleryFilters();
     await loadGalleryItems();

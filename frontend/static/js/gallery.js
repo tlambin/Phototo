@@ -952,7 +952,9 @@ async function downloadGalleryBatch() {
     if (!items.length) return;
     if (items.length === 1 && items[0].dest_path) {
         const destPath = items[0].dest_path;
-        _triggerDownloadHref(`/media?path=${encodeURIComponent(destPath)}`, destPath.split(/[\\/]/).pop() || 'media');
+        const fName = destPath.split(/[\\/]/).pop() || 'media';
+        _triggerDownloadHref(`/media?path=${encodeURIComponent(destPath)}`, fName);
+        _recordClientMediaActivity('MEDIA_DOWNLOAD', 'Fichier téléchargé', `${fName} téléchargé`, [destPath]);
         return;
     }
     const res = await fetch('/api/gallery/batch_download', {
@@ -2788,6 +2790,22 @@ async function lightboxAddToAlbum() {
     await openLightboxAlbumsEditor();
 }
 
+function _recordClientMediaActivity(actionType, title, detail, paths) {
+    try {
+        fetch('/api/activities/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            body: JSON.stringify({
+                action_type: actionType,
+                title: title,
+                detail: detail,
+                files: Array.isArray(paths) ? paths.filter(Boolean) : []
+            })
+        }).catch(() => {});
+    } catch (_) {}
+}
+
 function _triggerDownloadHref(href, fileName) {
     const a = document.createElement('a');
     a.href = href;
@@ -2807,12 +2825,14 @@ async function _shareMediaItems(items) {
         if (navigator.share) {
             try {
                 await navigator.share({ title: fileName, url: fullUrl });
+                _recordClientMediaActivity('MEDIA_SHARE', 'Fichier partagé', `${fileName} partagé`, [rawPath]);
                 return;
             } catch (e) {}
         }
         try {
             const norm = rawPath.replace(/\\/g, '/');
             await navigator.clipboard.writeText(norm);
+            _recordClientMediaActivity('MEDIA_SHARE', 'Fichier partagé', `${fileName} (chemin copié)`, [rawPath]);
             alert(`Chemin copié dans le presse-papiers :\n${norm}`);
         } catch (e) {}
         return;
@@ -2826,11 +2846,13 @@ async function _shareMediaItems(items) {
                 title: `${displayPaths.length} médias Phototo`,
                 text: displayPaths.join('\n')
             });
+            _recordClientMediaActivity('MEDIA_SHARE', 'Fichiers partagés', `${displayPaths.length} fichier(s) partagé(s)`, displayPaths);
             return;
         } catch (e) {}
     }
     try {
         await navigator.clipboard.writeText(displayPaths.join('\n'));
+        _recordClientMediaActivity('MEDIA_SHARE', 'Fichiers partagés', `${displayPaths.length} chemin(s) copié(s)`, displayPaths);
         alert(`${displayPaths.length} chemins copiés dans le presse-papiers.`);
     } catch (e) {}
 }
@@ -2844,7 +2866,9 @@ async function lightboxShareMedia() {
 function lightboxDownloadMedia() {
     const item = currentGalleryItems[currentLightboxIndex];
     if (!item) return;
-    _triggerDownloadHref(`/media?path=${encodeURIComponent(item.dest_path)}`, item.dest_path.split(/[\\/]/).pop() || 'media');
+    const fName = item.dest_path.split(/[\\/]/).pop() || 'media';
+    _triggerDownloadHref(`/media?path=${encodeURIComponent(item.dest_path)}`, fName);
+    _recordClientMediaActivity('MEDIA_DOWNLOAD', 'Fichier téléchargé', `${fName} téléchargé`, [item.dest_path]);
 }
 
 let _deleteConfirmMode = null;

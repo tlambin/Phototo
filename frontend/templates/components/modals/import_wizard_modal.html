@@ -232,6 +232,29 @@
                 </div>
             </div>
 
+            <div id="wiz-preflight-box" class="hidden ui-pill rounded-2xl px-3.5 py-2.5 text-[11px] space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="font-extrabold">Vérification de l'espace disque</span>
+                    <span id="wiz-preflight-status" class="font-extrabold px-2 py-0.5 rounded-full text-[10px]">Analyse...</span>
+                </div>
+                <div id="wiz-preflight-details" class="opacity-75 font-semibold leading-snug"></div>
+            </div>
+
+            <div id="wiz-space-confirm-bar" class="hidden rounded-2xl border border-amber-500/35 bg-amber-500/10 p-3 space-y-2 text-[11px]">
+                <div class="font-extrabold text-amber-400">Espace disque insuffisant pour importer en toute sécurité.</div>
+                <div id="wiz-space-confirm-msg" class="opacity-85 font-semibold leading-snug"></div>
+                <div class="flex items-center justify-end gap-2 pt-0.5">
+                    <button type="button" onclick="cancelWizardSpaceConfirm()"
+                            class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full font-bold cursor-pointer">
+                        Annuler
+                    </button>
+                    <button type="button" onclick="confirmWizardImport(true)"
+                            class="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1 rounded-full font-bold cursor-pointer">
+                        Importer quand même
+                    </button>
+                </div>
+            </div>
+
             <div class="flex justify-center pt-1">
                 <button onclick="confirmWizardImport()" class="plum-btn px-8 py-2 rounded-full text-xs font-extrabold shadow-md cursor-pointer">
                     Importer
