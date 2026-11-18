@@ -1,0 +1,129 @@
+<!-- Custom Virtual Group Create / Edit Modal (Software-only, no Windows folders modified) -->
+<div id="custom-group-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
+     onclick="if (event.target === this) closeCustomGroupModal()">
+    <div class="ui-card rounded-3xl shadow-2xl w-full max-w-lg p-6 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-3 shrink-0">
+            <div>
+                <h3 id="custom-group-modal-title" class="text-lg font-extrabold">Nouveau groupe</h3>
+                <p id="custom-group-modal-subtitle" class="text-xs opacity-60 mt-0.5">Groupe logiciel uniquement — aucun fichier Windows n'est modifié.</p>
+            </div>
+            <button type="button" onclick="closeCustomGroupModal()" class="ui-pill rounded-full w-8 h-8 flex items-center justify-center text-sm opacity-75 hover:opacity-100 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="submitCustomGroupModal(event)" class="flex flex-col flex-1 min-h-0 space-y-3.5">
+            <div class="shrink-0">
+                <label for="custom-group-name-input" class="block text-xs font-bold opacity-75 mb-1.5">Nom du groupe</label>
+                <input id="custom-group-name-input" type="text" required autocomplete="off"
+                       placeholder="Ex: Vacances"
+                       class="ui-pill w-full px-3.5 py-2.5 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-current/25">
+            </div>
+
+            <div class="flex items-center justify-between gap-2 shrink-0">
+                <input id="custom-group-items-search" type="text" oninput="renderCustomGroupModalChecklist()"
+                       placeholder="Rechercher dans la liste..."
+                       class="ui-pill flex-1 px-3.5 py-1.5 rounded-full text-xs font-semibold focus:outline-none">
+                <span id="custom-group-selected-count" class="text-[11px] font-bold opacity-70 shrink-0">0 sélectionné</span>
+                <button type="button" onclick="setAllCustomGroupModalItems(true)" class="ui-pill px-2.5 py-1 rounded-full text-[10px] font-bold hover:opacity-85 cursor-pointer">Tout</button>
+                <button type="button" onclick="setAllCustomGroupModalItems(false)" class="ui-pill px-2.5 py-1 rounded-full text-[10px] font-bold hover:opacity-85 cursor-pointer">Aucun</button>
+            </div>
+
+            <div id="custom-group-items-list" class="flex-1 min-h-[180px] overflow-y-auto space-y-1.5 pr-1"></div>
+
+            <p id="custom-group-error" class="text-xs text-rose-400 hidden shrink-0"></p>
+
+            <div class="flex justify-end gap-2 pt-1 shrink-0">
+                <button type="button" onclick="closeCustomGroupModal()" class="ui-pill rounded-full px-4 py-2 text-xs font-bold hover:opacity-85 transition cursor-pointer">Annuler</button>
+                <button id="custom-group-submit-btn" type="submit" class="plum-btn px-5 py-2 rounded-full text-xs font-extrabold cursor-pointer">Créer le groupe</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Per-Page Settings Modal (Groups management + Page default options, independent from global App Settings) -->
+<div id="page-settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
+     onclick="if (event.target === this) closePageSettingsModal()">
+    <div class="ui-card rounded-3xl shadow-2xl w-full max-w-lg p-6 flex flex-col max-h-[88vh]" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4 shrink-0">
+            <div>
+                <h3 id="ps-modal-title" class="text-lg font-extrabold">Réglages de la page</h3>
+                <p id="ps-modal-subtitle" class="text-xs opacity-60 mt-0.5">Groupes et options par défaut propres à cette vue uniquement.</p>
+            </div>
+            <button type="button" onclick="closePageSettingsModal()" class="ui-pill rounded-full w-8 h-8 flex items-center justify-center text-sm opacity-75 hover:opacity-100 cursor-pointer">✕</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-5 pr-1">
+            <!-- Section Groupes -->
+            <div id="ps-groups-section" class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-extrabold uppercase tracking-wider opacity-70">Groupes</h4>
+                    <button type="button" onclick="closePageSettingsModal(); openCustomGroupModal(_pageSettingsCtx.groupScope)"
+                            class="ui-pill px-3 py-1 rounded-full text-[11px] font-extrabold hover:bg-[var(--bg-hover)] transition cursor-pointer">
+                        + Nouveau groupe
+                    </button>
+                </div>
+                <div class="ui-pill rounded-2xl p-3.5 space-y-2.5">
+                    <label class="flex items-center justify-between gap-3 cursor-pointer">
+                        <span class="text-xs font-bold">Masquer « Tous »</span>
+                        <input id="cg-pref-hide-all" type="checkbox" onchange="onChangeCustomGroupsPref()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+                    </label>
+                    <label class="flex items-center justify-between gap-3 cursor-pointer">
+                        <span class="text-xs font-bold">Afficher le nombre</span>
+                        <input id="cg-pref-show-count" type="checkbox" onchange="onChangeCustomGroupsPref()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+                    </label>
+                </div>
+                <div id="cg-manage-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Section Options par défaut de la page -->
+            <div id="ps-defaults-section" class="space-y-3 pt-2 border-t border-[var(--border-subtle)]">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-extrabold uppercase tracking-wider opacity-70">Options par défaut de la page</h4>
+                    <button type="button" onclick="resetPageDefaultOptions()"
+                            class="text-[11px] font-bold opacity-70 hover:opacity-100 hover:text-rose-400 transition cursor-pointer">
+                        Réinitialiser
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold opacity-70 px-1">Tri par défaut</span>
+                        <select id="ps-def-sort-by" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full"></select>
+                    </label>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold opacity-70 px-1">Ordre par défaut</span>
+                        <div class="flex items-center gap-2">
+                            <input type="hidden" id="ps-def-sort-order" value="desc"/>
+                            <button type="button" id="ps-def-sort-dir-btn" onclick="togglePageDefaultSortOrder()"
+                                    class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold flex items-center justify-center gap-2 hover:opacity-85 transition cursor-pointer w-full">
+                                <svg id="ps-def-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                                </svg>
+                                <span id="ps-def-sort-dir-label">Décroissant</span>
+                            </button>
+                        </div>
+                    </div>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold opacity-70 px-1">Regroupement</span>
+                        <select id="ps-def-group-by" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full"></select>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold opacity-70 px-1">Disposition</span>
+                        <select id="ps-def-layout" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full"></select>
+                    </label>
+                    <label class="flex flex-col gap-1 col-span-2">
+                        <span class="text-[11px] font-bold opacity-70 px-1">Taille par défaut</span>
+                        <select id="ps-def-size" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                            <option value="SM">Petit</option>
+                            <option value="MD">Moyen</option>
+                            <option value="LG">Grand</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-4 shrink-0">
+            <button type="button" onclick="closePageSettingsModal()" class="ui-pill rounded-full px-4 py-2 text-xs font-bold hover:opacity-85 transition cursor-pointer">Fermer</button>
+            <button id="ps-save-btn" type="button" onclick="savePageDefaultOptions()" class="plum-btn px-5 py-2 rounded-full text-xs font-extrabold cursor-pointer">Enregistrer et appliquer</button>
+        </div>
+    </div>
+</div>

@@ -1060,6 +1060,7 @@ def api_gallery_items(
     favorites_only: bool = False, no_faces_only: bool = False,
     media_type: str = "", ext_filter: str = "",
     date_from: str = "", date_to: str = "", periods: str = "",
+    group_id: int | None = None,
     sort_by: str = "date", sort_order: str = "desc",
     page: int = 1, limit: int = 60, skip_to: int = -1
 ):
@@ -1075,6 +1076,9 @@ def api_gallery_items(
         media_type=media_type, ext_filter=ext_filter, require_timestamp=False,
         date_from=date_from, date_to=date_to, periods=periods
     )
+    if group_id is not None:
+        where_sql = f"{where_sql} AND pf.source_path IN (SELECT item_key FROM custom_group_items WHERE group_id = ?)"
+        params.append(group_id)
 
     direction = "ASC" if sort_order.lower() == "asc" else "DESC"
     if sort_by == "name":

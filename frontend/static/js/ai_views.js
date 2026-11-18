@@ -262,12 +262,12 @@ function _comparePersonItems(a, b, sortBy = 'content', sortOrder = 'desc') {
 function getFacesGridClass() {
     if (facesLayout === 'LIST') {
         if (facesSize === 'SM') return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2';
-        if (facesSize === 'LG') return 'grid grid-cols-1 lg:grid-cols-2 gap-3.5';
-        return 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5';
+        if (facesSize === 'LG') return 'grid grid-cols-1 lg:grid-cols-2 gap-4';
+        return 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
     }
     if (facesSize === 'SM') return 'grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 lg:grid-cols-12 gap-2.5';
-    if (facesSize === 'LG') return 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4';
-    return 'grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-11 gap-3.5';
+    if (facesSize === 'LG') return 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5';
+    return 'grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-4';
 }
 
 function _personGroupKeyAndLabel(person, groupBy, sortBy) {
@@ -304,8 +304,8 @@ function renderPersonCardHTML(p) {
     const ringCls = isChk ? 'ring-2 ring-emerald-400' : '';
 
     if (facesLayout === 'LIST') {
-        const thumbCls = facesSize === 'SM' ? 'w-11 h-11 rounded-xl' : (facesSize === 'LG' ? 'w-20 h-20 rounded-2xl' : 'w-14 h-14 rounded-2xl');
-        const padCls = facesSize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (facesSize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3 rounded-2xl');
+        const thumbCls = facesSize === 'SM' ? 'w-10 h-10 rounded-xl' : (facesSize === 'LG' ? 'w-24 h-24 rounded-2xl' : 'w-16 h-16 rounded-2xl');
+        const padCls = facesSize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (facesSize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
         const titleCls = facesSize === 'SM' ? 'text-xs' : (facesSize === 'LG' ? 'text-base' : 'text-sm');
         const dateStr = p.recent_ts ? new Date(p.recent_ts * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         const metaLine = [`${fCount} média${fCount > 1 ? 's' : ''}`, dateStr].filter(Boolean).join(' · ');
@@ -375,7 +375,10 @@ function renderPersonsOverviewFromCache() {
     const sortOrder = document.getElementById('faces-sort-order')?.value || 'desc';
     const groupBy = document.getElementById('faces-group-by')?.value || 'NONE';
 
-    const filtered = _filterPersonsList(allPersonsCache);
+    const groupFiltered = typeof filterItemsByActiveCustomGroup === 'function'
+        ? filterItemsByActiveCustomGroup('persons', allPersonsCache, p => p.person_id)
+        : allPersonsCache;
+    const filtered = _filterPersonsList(groupFiltered);
     const sorted = [...filtered].sort((a, b) => _comparePersonItems(a, b, sortBy, sortOrder));
     const identified = sorted.filter(_isPersonIdentified);
     const unknown = sorted.filter(p => !_isPersonIdentified(p));
@@ -458,6 +461,7 @@ async function loadPersons() {
     allPersonsCache = d.persons || [];
     populateFacesYearFilterOptions();
     syncFacesLayoutSizeButtons();
+    if (typeof loadCustomGroups === 'function') await loadCustomGroups('persons');
     renderPersonsOverviewFromCache();
 }
 
@@ -703,6 +707,40 @@ function openSinglePlaceView(idx) {
     }
 }
 
+let _allPlacesBucketsList = [];
+
+function renderPlacesOverviewFromCache() {
+    const grid = document.getElementById('places-cards-grid');
+    if (!grid) return;
+    const filtered = typeof filterItemsByActiveCustomGroup === 'function'
+        ? filterItemsByActiveCustomGroup('places', _allPlacesBucketsList, pl => pl.bucket_key)
+        : _allPlacesBucketsList;
+    const pinSvg = `<svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    if (!filtered.length) {
+        const hasGrp = typeof activeCustomGroupId !== 'undefined' && activeCustomGroupId.places !== null;
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">${hasGrp ? 'Aucun lieu dans ce groupe.' : 'Aucun média géolocalisé pour le moment. Cliquez sur « Ajouter » pour localiser vos photos.'}</div>`;
+        return;
+    }
+    grid.innerHTML = filtered.map(pl => {
+        const idx = _placesBucketsList.indexOf(pl);
+        return `
+            <div onclick="openSinglePlaceView(${idx})" class="place-card cursor-pointer group flex flex-col">
+                <div class="ui-card aspect-square rounded-[24px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-200">
+                    ${renderMediaPreview(pl.cover, "w-full h-full object-cover group-hover:scale-105 transition-transform duration-300")}
+                    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 via-black/15 to-transparent opacity-75 group-hover:opacity-95 transition-opacity"></div>
+                    <span class="absolute bottom-2.5 left-2.5 bg-black/50 backdrop-blur-md border border-white/15 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 z-10">
+                        ${pinSvg}<span>GPS</span>
+                    </span>
+                </div>
+                <div class="pt-2.5 px-1">
+                    <div id="place-card-label-${idx}" class="text-sm font-extrabold truncate leading-tight">${escapeHtml(pl.label)}</div>
+                    <div class="text-[11px] opacity-60 font-semibold mt-0.5 truncate">${pl.count} élément${pl.count > 1 ? 's' : ''}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 async function loadWorldMap(force) {
     closeSinglePlaceView();
     if (!leafletMap) {
@@ -731,6 +769,7 @@ async function loadWorldMap(force) {
         const key = `${pt.latitude.toFixed(1)}, ${pt.longitude.toFixed(1)}`;
         if (!buckets[key]) {
             buckets[key] = {
+                bucket_key: key,
                 label: pt.album_name || 'Lieu localisé',
                 city: pt.album_name || '',
                 place_subtitle: '',
@@ -747,25 +786,9 @@ async function loadWorldMap(force) {
     });
     const topPlaces = Object.values(buckets).sort((a,b) => b.count - a.count).slice(0, 20);
     _placesBucketsList = topPlaces;
-
-    const pinSvg = `<svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
-    document.getElementById('places-cards-grid').innerHTML = topPlaces.length
-        ? topPlaces.map((pl, idx) => `
-            <div onclick="openSinglePlaceView(${idx})" class="place-card cursor-pointer group flex flex-col">
-                <div class="ui-card aspect-square rounded-[24px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-200">
-                    ${renderMediaPreview(pl.cover, "w-full h-full object-cover group-hover:scale-105 transition-transform duration-300")}
-                    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 via-black/15 to-transparent opacity-75 group-hover:opacity-95 transition-opacity"></div>
-                    <span class="absolute bottom-2.5 left-2.5 bg-black/50 backdrop-blur-md border border-white/15 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 z-10">
-                        ${pinSvg}<span>GPS</span>
-                    </span>
-                </div>
-                <div class="pt-2.5 px-1">
-                    <div id="place-card-label-${idx}" class="text-sm font-extrabold truncate leading-tight">${escapeHtml(pl.label)}</div>
-                    <div class="text-[11px] opacity-60 font-semibold mt-0.5 truncate">${pl.count} élément${pl.count > 1 ? 's' : ''}</div>
-                </div>
-            </div>
-        `).join('')
-        : `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun média géolocalisé pour le moment. Cliquez sur « Ajouter » pour localiser vos photos.</div>`;
+    _allPlacesBucketsList = topPlaces;
+    if (typeof loadCustomGroups === 'function') await loadCustomGroups('places');
+    renderPlacesOverviewFromCache();
 
     topPlaces.forEach(async (pl, idx) => {
         try {

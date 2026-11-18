@@ -96,6 +96,30 @@ def get_db() -> sqlite3.Connection:
                 PRIMARY KEY (lat_key, lon_key)
             )
         """)
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS custom_groups (
+                group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scope TEXT NOT NULL,
+                name TEXT NOT NULL,
+                color TEXT DEFAULT '',
+                sort_order INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(scope, name)
+            )
+        """)
+        cg_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(custom_groups)").fetchall()}
+        if "sort_order" not in cg_cols:
+            init_conn.execute("ALTER TABLE custom_groups ADD COLUMN sort_order INTEGER DEFAULT 0")
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS custom_group_items (
+                group_id INTEGER NOT NULL,
+                item_key TEXT NOT NULL,
+                added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (group_id, item_key),
+                FOREIGN KEY (group_id) REFERENCES custom_groups(group_id) ON DELETE CASCADE
+            )
+        """)
+        init_conn.execute("CREATE INDEX IF NOT EXISTS idx_cg_scope ON custom_groups(scope)")
         _ensure_activity_history_table(init_conn)
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_gallery ON processed_files(is_duplicate, is_trashed, timestamp DESC)")
         init_conn.execute("CREATE INDEX IF NOT EXISTS idx_pf_album ON processed_files(album_name)")

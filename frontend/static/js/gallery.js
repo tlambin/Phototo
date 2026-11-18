@@ -154,7 +154,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
 
     const borderClass = isSel
         ? 'tile-selected'
-        : 'hover:ring-2 hover:ring-current/20';
+        : 'hover:ring-2 hover:ring-emerald-400/75';
 
     const favVisibility = it.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
 
@@ -194,7 +194,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         const padCls = gallerySize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (gallerySize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
         const titleCls = gallerySize === 'SM' ? 'text-xs' : (gallerySize === 'LG' ? 'text-base' : 'text-sm');
 
-        const listSelectBorder = isSel ? 'tile-selected-list' : 'hover:ring-1 hover:ring-current/20';
+        const listSelectBorder = isSel ? 'tile-selected-list' : 'hover:ring-1 hover:ring-emerald-400/75';
         const metaParts = [dtStr, dimStr, sizeStr].filter(Boolean).join(' • ');
 
         return `
@@ -624,6 +624,9 @@ async function loadGalleryItems(append = false, customSkip = -1) {
             limit: 60,
             skip_to: effectiveSkip
         });
+        if (currentTab === 'favorites' && typeof activeCustomGroupId !== 'undefined' && activeCustomGroupId.favorites !== null) {
+            p.set('group_id', String(activeCustomGroupId.favorites));
+        }
         const res = await fetch(`/api/gallery/items?${p.toString()}`);
         const d = await res.json();
         if (currentTab !== 'gallery' && currentTab !== 'favorites' && currentTab !== 'recent') return;
@@ -907,6 +910,8 @@ function updateGalleryBatchBar() {
     document.getElementById('gal-batch-count').textContent = `${selectedGalleryPaths.size} sélectionné(s)`;
     const remBtn = document.getElementById('btn-batch-album-remove');
     if (remBtn) remBtn.classList.toggle('hidden', !openedAlbumName);
+    const grpBtn = document.getElementById('gal-batch-group-btn');
+    if (grpBtn) grpBtn.classList.toggle('hidden', currentTab !== 'favorites');
     ['gallery-content-area', 'album-single-content-area', 'tl-faces-grid'].forEach(id => {
         const area = document.getElementById(id);
         if (area) area.classList.toggle('selection-active', hasSelection);
@@ -1628,7 +1633,10 @@ function renderAlbumsOverviewFromCache() {
         return;
     }
 
-    const filtered = _filterAlbumsList(rootAlbumsCache);
+    const groupFiltered = typeof filterItemsByActiveCustomGroup === 'function'
+        ? filterItemsByActiveCustomGroup('albums', rootAlbumsCache, a => a.album_id)
+        : rootAlbumsCache;
+    const filtered = _filterAlbumsList(groupFiltered);
     const sorted = sortAlbumItems(filtered);
     if (totalLbl) {
         totalLbl.textContent = `${sorted.length} album${sorted.length > 1 ? 's' : ''}`;
@@ -1692,6 +1700,7 @@ async function loadAlbumsView() {
     rootAlbumsCache = d.albums || [];
     allAlbumsCache = d.all_albums || [];
     populateAlbumYearFilterOptions();
+    if (typeof loadCustomGroups === 'function') await loadCustomGroups('albums');
     renderAlbumsOverviewFromCache();
 }
 

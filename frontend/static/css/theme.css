@@ -47,6 +47,58 @@ html[data-theme="dark"] {
   --shadow-glass: 0 12px 36px rgba(0, 0, 0, 0.42);
   --ring-select: rgba(255, 255, 255, 0.92);
 }
+html[data-blur="off"] {
+  --bg-card: #FFFFFF;
+  --bg-pill: #ECEEF2;
+  --bg-hover: #E2E5EB;
+  --border-col: #D4D8E0;
+  --border-subtle: #DFE3EA;
+}
+html[data-theme="dark"][data-blur="off"] {
+  --bg-card: #1E1E21;
+  --bg-pill: #2A2A2F;
+  --bg-hover: #333339;
+  --border-col: #323238;
+  --border-subtle: #2C2C32;
+}
+html[data-blur="off"] .ui-card,
+html[data-blur="off"] .ui-pill,
+html[data-blur="off"] #timeline-scrubber,
+html[data-blur="off"] #timeline-scrubber:hover,
+html[data-blur="off"] [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-blur="off"] .fixed.inset-0[class*="backdrop-blur"]:not(#lightbox-modal) {
+  background-color: rgba(10, 10, 14, 0.78) !important;
+}
+html[data-blur="off"] #lightbox-modal {
+  background-color: #121214 !important;
+}
+html[data-blur="off"] #lightbox-modal .bg-white\/10,
+html[data-blur="off"] #lightbox-modal .bg-white\/15,
+html[data-blur="off"] #lightbox-modal .bg-white\/5 {
+  background-color: #252529 !important;
+}
+html[data-blur="off"] #lightbox-modal button.bg-white\/10:hover,
+html[data-blur="off"] #lightbox-modal a.bg-white\/10:hover,
+html[data-blur="off"] #lightbox-modal button.bg-white\/15:hover {
+  background-color: #34343b !important;
+}
+html[data-blur="off"] #lightbox-modal .bg-\[\#1E1E1E\]\/90 {
+  background-color: #1e1e22 !important;
+}
+html[data-blur="off"] #lightbox-modal .bg-black\/45,
+html[data-blur="off"] #lightbox-modal .bg-black\/40 {
+  background-color: #18181b !important;
+}
+html[data-blur="off"] [class*="backdrop-blur"]:not(.fixed):not(.ui-card):not(.ui-pill):not(#lightbox-modal *):not(.select-badge-checked):not(:has(:checked)),
+html[data-blur="off"] #lightbox-modal .bg-black\/60 {
+  background-color: #1b1b1f !important;
+}
+html[data-blur="off"] .bg-rose-500\/25[class*="backdrop-blur"] {
+  background-color: #9f1239 !important;
+}
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
   background-color: var(--bg-app);
@@ -93,7 +145,8 @@ body {
   font-weight: 700;
 }
 .tile-selected {
-  box-shadow: 0 0 0 2.5px #10b981, var(--shadow-glass);
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2.5px #10b981, var(--shadow-glass) !important;
   z-index: 5;
 }
 .tile-selected > img {
@@ -106,7 +159,11 @@ body {
 }
 .tile-selected-list {
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.7), var(--shadow-glass);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.75), var(--shadow-glass) !important;
+}
+.media-tile:not(.tile-selected):not(.tile-selected-list):hover {
+  border-color: rgba(16, 185, 129, 0.75) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.75), var(--shadow-glass) !important;
 }
 .select-badge-checked {
   background-color: #10b981;

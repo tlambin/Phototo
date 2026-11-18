@@ -47,6 +47,14 @@
                         <path d="M10 10v6M7 13h6"/>
                     </svg>
                 </button>
+                <!-- Ajouter à un groupe (Favoris) -->
+                <button id="gal-batch-group-btn" type="button" onclick="openCustomGroupModal('favorites', null, Array.from(selectedGalleryPaths))" title="Créer un groupe de favoris avec la sélection"
+                        class="hidden w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-amber-300 flex items-center justify-center transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                </button>
                 <!-- Partager -->
                 <button type="button" onclick="shareGalleryBatch()" title="Partager"
                         class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-sky-300 flex items-center justify-center transition cursor-pointer">
@@ -102,7 +110,7 @@
                 </div>
                 <button id="gal-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options de la galerie"
                         class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
-                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
             </div>
 
@@ -110,6 +118,11 @@
             <div id="filter-drawer" class="hidden sticky-options-drawer space-y-2.5">
             <div class="flex flex-wrap items-center justify-between gap-2.5">
                 <div class="flex flex-wrap items-center gap-2.5">
+                    <button id="gal-page-settings-btn" type="button" onclick="openCurrentMediaPageSettings()"
+                            title="Réglages de cette page (groupes et options par défaut)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
                     <!-- Pilule Trier par -->
                     <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
                         <span class="shrink-0">Trier par :</span>
@@ -256,6 +269,9 @@
             </div>
         </div>
 
+        <!-- Barre des groupes (Favoris uniquement) -->
+        <div id="favorites-groups-bar" class="hidden flex flex-wrap items-center gap-2"></div>
+
         <!-- CORPS DE LA GALERIE : Grille de médias pleine largeur + Timeline escamotable au bord droit -->
         <div class="w-full">
             <div id="gallery-media-col" class="w-full min-w-0">
@@ -306,7 +322,7 @@
                     </button>
                     <button id="alb-options-btn" type="button" onclick="toggleAlbumsOptionsBar()" title="Afficher/Masquer les options des albums"
                             class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
-                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </button>
                 </div>
               </div>
@@ -315,6 +331,11 @@
               <div id="albums-options-drawer" class="hidden sticky-options-drawer">
               <div class="flex flex-wrap items-center justify-between gap-2.5">
                 <div class="flex flex-wrap items-center gap-2.5">
+                    <button id="alb-page-settings-btn" type="button" onclick="openPageSettingsModal('albums')"
+                            title="Réglages des albums (groupes et options par défaut)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
                     <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
                         <span class="shrink-0">Trier par :</span>
                         <select id="alb-sort-by" onchange="onAlbumControlsChanged()"
@@ -439,6 +460,8 @@
               </div>
             </div>
 
+            <div id="albums-groups-bar" class="flex flex-wrap items-center gap-2"></div>
+
             <div id="albums-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"></div>
         </div>
 
@@ -482,7 +505,7 @@
                 </div>
                 <button id="album-single-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
                         class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
-                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
             </div>
             <div id="subalbums-section" class="hidden space-y-3">
@@ -525,7 +548,7 @@
                     </button>
                     <button id="faces-options-btn" type="button" onclick="toggleFacesOptionsBar()" title="Afficher/Masquer les options des personnes"
                             class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
-                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </button>
                 </div>
               </div>
@@ -534,6 +557,11 @@
               <div id="faces-options-drawer" class="hidden sticky-options-drawer">
               <div class="flex flex-wrap items-center justify-between gap-2.5">
                 <div class="flex flex-wrap items-center gap-2.5">
+                    <button id="faces-page-settings-btn" type="button" onclick="openPageSettingsModal('persons')"
+                            title="Réglages des personnes (groupes et options par défaut)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
                     <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
                         <span class="shrink-0">Trier par :</span>
                         <select id="faces-sort-by" onchange="onFacesControlsChanged()"
@@ -661,6 +689,8 @@
               </div>
             </div>
 
+            <div id="faces-groups-bar" class="flex flex-wrap items-center gap-2"></div>
+
             <div id="suggestions-panel" class="hidden ui-card rounded-[28px] p-5 space-y-3 shadow-sm">
                 <div class="flex flex-wrap justify-between items-center gap-2">
                     <span class="text-xs font-extrabold">Suggestions de visages similaires</span>
@@ -702,7 +732,7 @@
                 </div>
                 <button id="person-single-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
                         class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
-                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
             </div>
             <div id="tl-face-edit-bar" class="hidden ui-card rounded-full px-4 py-2 flex flex-wrap justify-between items-center gap-3 shadow-sm">
@@ -726,11 +756,19 @@
                     <h1 class="text-4xl font-extrabold tracking-tight leading-none">Lieux</h1>
                     <span id="map-stats-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
                 </div>
-                <button id="map-add-btn" type="button" onclick="openMetadataModalForSelection()" class="sticky-hide-on-stuck plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
-                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                    <span>Ajouter</span>
-                </button>
+                <div class="sticky-hide-on-stuck flex items-center gap-2">
+                    <button id="places-page-settings-btn" type="button" onclick="openPageSettingsModal('places')"
+                            title="Réglages des lieux (groupes)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
+                    <button id="map-add-btn" type="button" onclick="openMetadataModalForSelection()" class="plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Ajouter</span>
+                    </button>
+                </div>
             </div>
+            <div id="places-groups-bar" class="flex flex-wrap items-center gap-2"></div>
             <div id="world-map" class="w-full h-[400px] rounded-[28px] ui-card shadow-md z-10 overflow-hidden"></div>
             <div id="places-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-8"></div>
         </div>
@@ -1015,6 +1053,22 @@
                         <button id="theme-btn-system" onclick="setAppTheme('system')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                             <span>Système</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Style d'interface (Blur / Solid) -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                    <div>
+                        <div class="text-xs font-bold">Style de l'interface</div>
+                        <div class="text-[10px] opacity-60">Solid désactive l'effet frost blur pour économiser batterie et CPU/GPU.</div>
+                    </div>
+                    <div class="flex items-center gap-1 p-1 rounded-full ui-card shrink-0">
+                        <button id="blur-btn-on" type="button" onclick="setAppBlur(true)" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <span>Blur</span>
+                        </button>
+                        <button id="blur-btn-off" type="button" onclick="setAppBlur(false)" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <span>Solid</span>
                         </button>
                     </div>
                 </div>

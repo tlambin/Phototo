@@ -8,8 +8,10 @@
     "takeout_use_gps_timezone": true,
     "timezone": "Europe/Paris",
     "language": "fr",
+    "home_country": "France",
     "gpu_mode": "auto",
     "ocr_engine": "rapidocr",
     "faces_model": "antelopev2",
-    "clip_model": "vit-l-14"
+    "clip_model": "vit-l-14",
+    "ui_blur": false
 }

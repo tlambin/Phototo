@@ -17,6 +17,7 @@ from gallery_router import router as gallery_router
 from faces_router import router as faces_router
 from search_map_router import router as search_map_router
 from metadata_studio_router import router as metadata_studio_router
+from groups_router import router as groups_router
 
 
 @asynccontextmanager
@@ -34,3 +35,4 @@ app.include_router(gallery_router)
 app.include_router(faces_router)
 app.include_router(search_map_router)
 app.include_router(metadata_studio_router)
+app.include_router(groups_router)

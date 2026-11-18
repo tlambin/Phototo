@@ -69,6 +69,7 @@ class SettingsPayload(BaseModel):
     ocr_engine: str = "paddleocr"
     faces_model: str = "buffalo_l"
     clip_model: str = "vit-b-32"
+    ui_blur: bool = True
 
 
 class ReindexModelPayload(BaseModel):
@@ -403,6 +404,7 @@ def api_save_settings_route(payload: SettingsPayload):
         "ocr_engine": (payload.ocr_engine or "paddleocr").strip().lower(),
         "faces_model": (payload.faces_model or "buffalo_l").strip(),
         "clip_model": (payload.clip_model or "vit-b-32").strip().lower(),
+        "ui_blur": bool(payload.ui_blur),
     })
     if prev_faces != saved["faces_model"] or prev_clip != saved["clip_model"]:
         try:

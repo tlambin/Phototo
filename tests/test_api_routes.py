@@ -490,6 +490,7 @@ class TestApiRoutes(unittest.TestCase):
             "loadFFmpegStatus(true)", "installFFmpegNow(false)",
             "browseTakeoutExtractDir()", "clearTakeoutExtractDir()",
             "settings-power-bar", "restartApplication()", "shutdownApplication()",
+            "blur-btn-on", "blur-btn-off", "setAppBlur(true)", "setAppBlur(false)",
         ):
             self.assertIn(token, html)
 
@@ -498,9 +499,11 @@ class TestApiRoutes(unittest.TestCase):
         self.assertIn("settings-power-bar", tab_settings_html)
         theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
         self.assertIn("#settings-power-bar.is-floating", theme_css)
+        self.assertIn('html[data-blur="off"]', theme_css)
+        self.assertIn('html[data-blur="off"] #lightbox-modal', theme_css)
 
         app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
-        for tok in ("window.appSettings", "browseTakeoutExtractDir", "clearTakeoutExtractDir", "takeout_default_architecture", "_syncSettingsPowerBar"):
+        for tok in ("window.appSettings", "browseTakeoutExtractDir", "clearTakeoutExtractDir", "takeout_default_architecture", "_syncSettingsPowerBar", "function setAppBlur("):
             self.assertIn(tok, app_js)
 
         tmp_settings = self.tmp_path / "app_settings.json"
@@ -517,8 +520,10 @@ class TestApiRoutes(unittest.TestCase):
                 timezone="Europe/Paris",
                 language="fr",
                 gpu_mode="auto",
+                ui_blur=False,
             ))
             saved = save_res["settings"]
+            self.assertFalse(saved["ui_blur"])
             self.assertEqual(saved["takeout_default_architecture"], "GOOGLE_ALBUM")
             self.assertFalse(saved["takeout_default_fix_metadata"])
             self.assertTrue(saved["takeout_default_delete_zips"])
@@ -2553,6 +2558,131 @@ class TestApiRoutes(unittest.TestCase):
             with pipeline_runner.STATE._lock:
                 pipeline_runner.STATE.notifications = saved_watch_notifs
                 pipeline_runner.STATE._last_new_files_sig = None
+
+    def test_custom_software_groups_for_all_scopes(self):
+        import groups_router
+        import gallery_router
+        from fastapi import HTTPException
+
+        html = main.templates.get_template("index.html").render()
+        for token in (
+            'id="custom-group-modal"',
+            'id="page-settings-modal"',
+            'id="gal-page-settings-btn"',
+            'id="alb-page-settings-btn"',
+            'id="faces-page-settings-btn"',
+            'id="places-page-settings-btn"',
+            'id="cg-pref-hide-all"',
+            'id="cg-pref-show-count"',
+            'id="ps-def-sort-by"',
+            'id="albums-groups-bar"',
+            'id="faces-groups-bar"',
+            'id="places-groups-bar"',
+            'id="favorites-groups-bar"',
+            'id="gal-batch-group-btn"',
+            '/static/js/groups.js',
+        ):
+            self.assertIn(token, html)
+
+        groups_js = (ROOT_DIR / "frontend" / "static" / "js" / "groups.js").read_text(encoding="utf-8")
+        for fn in (
+            "async function loadCustomGroups(",
+            "function filterItemsByActiveCustomGroup(",
+            "async function openCustomGroupModal(",
+            "async function submitCustomGroupModal(",
+            "async function deleteCustomGroup(",
+            "function openPageSettingsModal(",
+            "function savePageDefaultOptions(",
+            "function applyPageDefaultOptions(",
+            "async function moveCustomGroupOrder(",
+            "async function renameCustomGroupInline(",
+        ):
+            self.assertIn(fn, groups_js)
+        self.assertNotIn("openCustomGroupsManageModal", groups_js)
+        self.assertIn("min-w-[18px] h-[18px] px-1 rounded-full", groups_js)
+
+        # Créer un groupe logiciel pour 3 albums sur 4 (sans toucher aux dossiers Windows)
+        created_alb = groups_router.api_create_group(
+            groups_router.CreateGroupPayload(scope="albums", name="Vacances", item_keys=["1", "2", "3"])
+        )
+        self.assertEqual(created_alb["status"], "created")
+        gid_alb = created_alb["group"]["group_id"]
+        self.assertEqual(created_alb["group"]["item_keys"], ["1", "2", "3"])
+
+        with self.assertRaises(HTTPException) as ctx:
+            groups_router.api_create_group(
+                groups_router.CreateGroupPayload(scope="albums", name="vacances", item_keys=[])
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+
+        # Portées persons et places
+        created_per = groups_router.api_create_group(
+            groups_router.CreateGroupPayload(scope="persons", name="Famille", item_keys=["10", "20"])
+        )
+        created_plc = groups_router.api_create_group(
+            groups_router.CreateGroupPayload(scope="places", name="Italie", item_keys=["41.9, 12.5"])
+        )
+        self.assertEqual(len(groups_router.api_list_groups(scope="albums")["groups"]), 1)
+        self.assertEqual(len(groups_router.api_list_groups(scope="persons")["groups"]), 1)
+        self.assertEqual(len(groups_router.api_list_groups(scope="places")["groups"]), 1)
+        self.assertEqual(len(groups_router.api_list_groups()["groups"]), 3)
+
+        # Renommage et mise à jour des éléments (add / remove / replace)
+        groups_router.api_rename_group(
+            groups_router.RenameGroupPayload(group_id=gid_alb, new_name="Vacances d'été")
+        )
+        groups_router.api_set_group_items(
+            groups_router.SetGroupItemsPayload(group_id=gid_alb, item_keys=["4"], mode="add")
+        )
+        groups_router.api_set_group_items(
+            groups_router.SetGroupItemsPayload(group_id=gid_alb, item_keys=["2"], mode="remove")
+        )
+        alb_groups = groups_router.api_list_groups(scope="albums")["groups"]
+        self.assertEqual(alb_groups[0]["name"], "Vacances d'été")
+        self.assertEqual(alb_groups[0]["item_keys"], ["1", "3", "4"])
+
+        # Réorganisation de l'ordre des groupes
+        created_alb2 = groups_router.api_create_group(
+            groups_router.CreateGroupPayload(scope="albums", name="Travail", item_keys=["2"])
+        )
+        gid_alb2 = created_alb2["group"]["group_id"]
+        groups_router.api_reorder_groups(
+            groups_router.ReorderGroupsPayload(scope="albums", group_ids=[gid_alb2, gid_alb])
+        )
+        reordered = groups_router.api_list_groups(scope="albums")["groups"]
+        self.assertEqual([g["group_id"] for g in reordered], [gid_alb2, gid_alb])
+        groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=gid_alb2))
+
+        # Filtrage des favoris par group_id dans /api/gallery/items
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, is_favorite) VALUES (?, ?, ?, 1)",
+                ("fav_1.jpg", "fav_1.jpg", 1700000100),
+            )
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, is_favorite) VALUES (?, ?, ?, 1)",
+                ("fav_2.jpg", "fav_2.jpg", 1700000200),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        created_fav = groups_router.api_create_group(
+            groups_router.CreateGroupPayload(scope="favorites", name="Top Favoris", item_keys=["fav_1.jpg"])
+        )
+        fav_gid = created_fav["group"]["group_id"]
+        fav_res = gallery_router.api_gallery_items(favorites_only=True, group_id=fav_gid)
+        self.assertEqual([it["source_path"] for it in fav_res["items"]], ["fav_1.jpg"])
+
+        # Suppression du groupe : ne supprime aucun média en base
+        groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=fav_gid))
+        self.assertEqual(groups_router.api_list_groups(scope="favorites")["groups"], [])
+        all_favs = gallery_router.api_gallery_items(favorites_only=True)
+        self.assertEqual(len(all_favs["items"]), 2)
+        groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=created_per["group"]["group_id"]))
+        groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=created_plc["group"]["group_id"]))
+        groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=gid_alb))
 
 
 if __name__ == "__main__":

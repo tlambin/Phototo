@@ -25,6 +25,21 @@ let autoDupPriority = 'BEST_QUALITY';
 
 // ==================== THÈME (CLAIR / SOMBRE / SYSTÈME) & BARRE MINIMISÉE ====================
 
+let currentUiBlur = true;
+
+function setAppBlur(enabled, persist = true) {
+    currentUiBlur = Boolean(enabled);
+    localStorage.setItem('phototo_ui_blur', currentUiBlur ? 'on' : 'off');
+    document.documentElement.setAttribute('data-blur', currentUiBlur ? 'on' : 'off');
+    const onBtn = document.getElementById('blur-btn-on');
+    const offBtn = document.getElementById('blur-btn-off');
+    if (onBtn) onBtn.classList.toggle('nav-item-active', currentUiBlur);
+    if (offBtn) offBtn.classList.toggle('nav-item-active', !currentUiBlur);
+    if (persist && typeof saveAppSettingsQuiet === 'function') {
+        saveAppSettingsQuiet();
+    }
+}
+
 function setAppTheme(mode) {
     localStorage.setItem('phototo_theme', mode);
     let effective = mode;
@@ -390,6 +405,8 @@ function switchTab(tab) {
     const hideTl = (tab !== 'gallery' && tab !== 'favorites' && tab !== 'recent');
     if (tlWrap) tlWrap.classList.toggle('!hidden', hideTl);
     if (tlBox) tlBox.classList.toggle('hidden', hideTl);
+    const favGroupsBar = document.getElementById('favorites-groups-bar');
+    if (favGroupsBar) favGroupsBar.classList.toggle('hidden', tab !== 'favorites');
 
     const titleEl = document.getElementById('gallery-main-title') || document.getElementById('gallery-main-heading');
     const sortByEl = document.getElementById('gal-sort-by');
@@ -401,6 +418,8 @@ function switchTab(tab) {
         if (titleEl) titleEl.textContent = 'Favoris';
         document.getElementById('gal-fav').checked = true;
         currentExtFilter = '';
+        if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('favorites', false);
+        if (typeof loadCustomGroups === 'function') loadCustomGroups('favorites');
         resetAndLoadGallery();
     } else if (tab === 'recent') {
         _wasRecentTab = true;
@@ -412,6 +431,7 @@ function switchTab(tab) {
         const arrow = document.getElementById('gal-sort-arrow');
         if (arrow) arrow.style.transform = 'rotate(0deg)';
         currentExtFilter = '';
+        if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('recent', false);
         resetAndLoadGallery();
     } else if (tab === 'gallery') {
         if (titleEl) titleEl.textContent = 'Galerie';
@@ -421,12 +441,15 @@ function switchTab(tab) {
         }
         _wasRecentTab = false;
         currentExtFilter = '';
+        if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('gallery', false);
         resetAndLoadGallery();
     } else if (tab === 'albums') {
         _mountFilterDrawerForActiveView(false);
+        if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('albums', false);
         closeSingleAlbumView();
     } else if (tab === 'faces') {
         _mountFilterDrawerForActiveView(false);
+        if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('persons', false);
         if (typeof closeTimeline === 'function' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
             closeTimeline();
         } else {
@@ -1351,6 +1374,9 @@ async function loadAppSettings() {
     currentOcrEngine = d.ocr_engine || 'paddleocr';
     currentFacesModel = d.faces_model || 'buffalo_l';
     currentClipModel = d.clip_model || 'vit-b-32';
+    if (d.ui_blur !== undefined) {
+        setAppBlur(d.ui_blur !== false, false);
+    }
     ['auto', 'cuda', 'directml', 'cpu'].forEach(g => {
         const b = document.getElementById(`gpu-btn-${g}`);
         if (b) b.classList.toggle('nav-item-active', g === currentGpuMode);
@@ -1889,7 +1915,8 @@ async function saveAppSettingsQuiet() {
         gpu_mode: currentGpuMode,
         ocr_engine: currentOcrEngine,
         faces_model: currentFacesModel,
-        clip_model: currentClipModel
+        clip_model: currentClipModel,
+        ui_blur: currentUiBlur
     };
     window.appSettings = { ...(window.appSettings || {}), ...payload };
     await fetch('/api/settings/save', {
@@ -2172,6 +2199,8 @@ setInterval(async () => {
 window.addEventListener('DOMContentLoaded', async () => {
     const savedTheme = localStorage.getItem('phototo_theme') || 'light';
     setAppTheme(savedTheme);
+    const savedBlur = localStorage.getItem('phototo_ui_blur');
+    setAppBlur(savedBlur !== 'off', false);
     await loadAppSettings();
     await loadLibrariesDropdown();
     await loadActivitiesHistory();

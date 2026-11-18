@@ -26,7 +26,8 @@ DEFAULT_SETTINGS = {
     "gpu_mode": "auto",  # "auto", "cuda" (NVIDIA), "directml"/"amd" (AMD Radeon), "intel"/"cpu"
     "ocr_engine": "paddleocr",  # "rapidocr", "easyocr", "paddleocr"
     "faces_model": "buffalo_l",  # "buffalo_s", "buffalo_l", "antelopev2"
-    "clip_model": "vit-b-32"     # "vit-b-32", "vit-b-16", "vit-l-14"
+    "clip_model": "vit-b-32",    # "vit-b-32", "vit-b-16", "vit-l-14"
+    "ui_blur": True
 }
 
 FACES_MODEL_SPECS = {
