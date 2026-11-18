@@ -290,9 +290,11 @@ def api_inspect_metadata(source_path: str):
     d["album_count"] = albums_info[0]["count"] if albums_info else 0
 
     cur.execute("""
-        SELECT f.face_id, f.thumb_path, f.person_id, COALESCE(p.name, 'Inconnu') as name
+        SELECT f.face_id, f.thumb_path, f.person_id, COALESCE(p.name, 'Inconnu') as name,
+               COALESCE(pc.thumb_path, f.thumb_path) as person_thumb_path
         FROM faces f
         LEFT JOIN persons p ON f.person_id = p.person_id
+        LEFT JOIN faces pc ON p.cover_face_id = pc.face_id
         WHERE f.source_path = ? OR f.dest_path = ?
     """, (src_clean, d.get("dest_path") or ""))
     d["faces"] = [dict(r) for r in cur.fetchall()]

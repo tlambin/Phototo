@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "takeout_use_gps_timezone": True,
     "timezone": "Europe/Paris",
     "language": "fr",
+    "home_country": "France",
     "gpu_mode": "auto",  # "auto", "cuda" (NVIDIA), "directml"/"amd" (AMD Radeon), "intel"/"cpu"
     "ocr_engine": "paddleocr",  # "rapidocr", "easyocr", "paddleocr"
     "faces_model": "buffalo_l",  # "buffalo_s", "buffalo_l", "antelopev2"

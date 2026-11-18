@@ -1,4 +1,4 @@
-<main id="main-scroll-container" class="h-full overflow-y-auto pl-5 pr-0 pt-[104px] pb-4 relative">
+<main id="main-scroll-container" class="h-full overflow-y-auto pl-5 pr-0 pt-[104px] pb-24 relative">
 
     <!-- PILULE FLOTTANTE DE GROUPE ACTIF AU SCROLL (Jour / Semaine / Mois / Année) -->
     <div id="floating-group-pill"
@@ -11,8 +11,8 @@
                 class="truncate hover:opacity-80 transition cursor-pointer"></button>
     </div>
 
-    <!-- BARRE FLOTTANTE D'ACTIONS PAR LOT (fixée en haut sous la navbar, sans empiéter sur la timeline) -->
-    <div id="gal-batch-bar" class="hidden fixed top-[5.5rem] z-[27] ui-card rounded-full px-4 py-1.5 shadow-xl">
+    <!-- BARRE FLOTTANTE D'ACTIONS PAR LOT (dock centré en bas de la zone principale) -->
+    <div id="gal-batch-bar" class="hidden fixed bottom-5 z-[29] ui-card rounded-full px-4 py-1.5 shadow-2xl">
       <div class="flex flex-wrap justify-between items-center gap-3">
         <div class="flex items-center gap-3">
             <span id="gal-batch-count" class="plum-btn text-xs font-extrabold px-3 py-1 rounded-full shrink-0">0 sélectionné(s)</span>
@@ -87,10 +87,10 @@
     </div>
 
     <!-- ==================== VUE 1 : GALERIE ==================== -->
-    <div id="tab-gallery" class="space-y-5">
+    <div id="tab-gallery" class="space-y-5 pr-3.5">
 
         <!-- En-tête sticky en pilules flottantes : Titre "Galerie" + Nombre d'éléments à gauche, Bouton Options à droite (seul au scroll) -->
-        <div id="gallery-sticky-header" class="sticky-view-header sticky-options-header space-y-3 pr-3.5">
+        <div id="gallery-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
             <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
                 <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 id="gallery-main-title" class="text-4xl font-extrabold tracking-tight leading-none">Galerie</h1>
@@ -194,7 +194,7 @@
                                     <option value="">Type</option>
                                 </select>
                             </div>
-                            <div class="pt-1 border-t border-black/5 space-y-1.5">
+                            <div class="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
                                 <div class="flex items-center justify-between">
                                     <span class="text-[11px] font-extrabold opacity-75">Périodes :</span>
                                     <button type="button" onclick="addGalleryPeriodFromInputs()" title="Ajouter cette période pour en saisir une autre"
@@ -256,10 +256,9 @@
             </div>
         </div>
 
-        <!-- CORPS DE LA GALERIE : Grille de médias à gauche + Réserve pour la timeline fixe à droite -->
-        <div class="flex items-start gap-4 w-full">
-            <!-- Zone Médias (prend l'espace restant sans jamais passer sous la timeline) -->
-            <div id="gallery-media-col" class="flex-1 min-w-0">
+        <!-- CORPS DE LA GALERIE : Grille de médias pleine largeur + Timeline escamotable au bord droit -->
+        <div class="w-full">
+            <div id="gallery-media-col" class="w-full min-w-0">
                 <div id="gallery-prev-bar" class="hidden pb-3 flex items-center justify-center gap-2">
                     <button type="button" onclick="loadPreviousGalleryItems()" class="ui-pill px-4 py-1.5 rounded-full text-xs font-extrabold hover:opacity-85 transition">
                         ↑ Charger les médias précédents
@@ -276,14 +275,11 @@
                 </div>
             </div>
 
-            <!-- Réserve horizontale pour la timeline fixe (évite que les tuiles passent dessous) -->
-            <div id="gallery-timeline-reserve" class="hidden sm:block w-14 shrink-0 pointer-events-none"></div>
-
-            <!-- Capsule Timeline flottante fixe à droite (alignée en largeur et position avec Cloche / Options) -->
+            <!-- Capsule Timeline flottante au bord droit de la fenêtre (apparaît au survol du bord ou au scroll) -->
             <div id="gallery-timeline-wrapper"
-                 class="hidden sm:flex fixed right-[20px] top-[88px] bottom-2 z-[25] items-stretch justify-end pointer-events-none">
+                 class="hidden sm:flex fixed right-2 top-[88px] bottom-2 z-[28] w-12 items-stretch justify-end pointer-events-auto">
                 <aside id="gallery-timeline-box"
-                       class="pointer-events-auto w-11 h-full ui-card rounded-[14px] p-1 flex flex-col items-center overflow-y-auto no-scrollbar select-none shadow-sm transition-all duration-200">
+                       class="w-11 h-full ui-card rounded-[14px] p-1 flex flex-col items-center overflow-y-auto no-scrollbar select-none shadow-lg">
                     <div id="timeline-items-container" class="w-full min-h-full flex flex-col items-center justify-between gap-1 text-[10px] font-extrabold"></div>
                 </aside>
             </div>
@@ -291,14 +287,22 @@
     </div>
 
     <!-- ==================== VUE 2 : ALBUMS ==================== -->
-    <div id="tab-albums" class="hidden">
-        <div id="albums-overview-panel">
-            <div id="albums-sticky-header" class="sticky-view-header sticky-options-header space-y-3 mb-6 pr-3.5">
+    <div id="tab-albums" class="hidden pr-3.5">
+        <div id="albums-overview-panel" class="space-y-5">
+            <div id="albums-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
               <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
-                <h1 class="sticky-hide-on-stuck text-4xl font-extrabold tracking-tight leading-none">Albums</h1>
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                    <h1 class="text-4xl font-extrabold tracking-tight leading-none">Albums</h1>
+                    <span id="alb-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+                    <span id="alb-active-filter-badge" class="hidden ui-card px-3.5 py-1.5 rounded-full text-xs font-extrabold leading-none translate-y-[1px] items-center gap-2 pointer-events-auto">
+                        <span id="alb-active-filter-text"></span>
+                        <button type="button" onclick="resetAllAlbumFilters()" class="hover:text-rose-500 font-bold cursor-pointer">✕</button>
+                    </span>
+                </div>
                 <div class="sticky-header-actions ml-auto flex items-center gap-2.5">
-                    <button onclick="promptCreateNewAlbum()" class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-bold shadow flex items-center gap-2">
-                        <span>+</span> <span>Nouveau</span>
+                    <button id="alb-new-btn" onclick="promptCreateNewAlbum()" class="sticky-hide-on-stuck plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Nouveau</span>
                     </button>
                     <button id="alb-options-btn" type="button" onclick="toggleAlbumsOptionsBar()" title="Afficher/Masquer les options des albums"
                             class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
@@ -385,7 +389,7 @@
                                     <option value="EMPTY">Vides</option>
                                 </select>
                             </div>
-                            <div class="pt-1 border-t border-black/5 space-y-1.5">
+                            <div class="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
                                 <div class="flex items-center justify-between">
                                     <span class="text-[11px] font-extrabold opacity-75">Périodes :</span>
                                     <button type="button" onclick="addAlbumPeriodFromInputs()" title="Ajouter cette période pour en saisir une autre"
@@ -440,24 +444,44 @@
 
         <div id="album-single-panel" class="hidden space-y-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-3">
-                    <button onclick="closeSingleAlbumView()" class="ui-card px-4 py-2 rounded-full text-xs font-bold shadow-sm">← Tous les albums</button>
-                    <div id="album-breadcrumbs" class="flex flex-wrap items-center gap-1.5 text-xs font-bold opacity-75"></div>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button onclick="closeSingleAlbumView()" class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                        <span>Tous les albums</span>
+                    </button>
+                    <div id="album-breadcrumbs" class="ui-pill px-3.5 py-1.5 rounded-full flex flex-wrap items-center gap-1.5 text-xs font-bold opacity-80"></div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="promptCreateSubalbumForCurrent()" class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">+ Sous-album</button>
-                    <button onclick="addMediaToCurrentAlbumFromGallery()" class="ui-card px-4 py-1.5 rounded-full text-xs font-bold shadow-sm hover:opacity-85">+ Ajouter des médias</button>
-                    <button onclick="promptRenameCurrentAlbum()" class="ui-card px-4 py-1.5 rounded-full text-xs font-bold shadow-sm hover:opacity-85">Renommer</button>
-                    <button onclick="confirmDeleteCurrentAlbum()" class="bg-rose-600/90 hover:bg-rose-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">Supprimer</button>
+                    <button onclick="promptCreateSubalbumForCurrent()" class="plum-btn px-4 py-2 rounded-full text-xs font-extrabold shadow-md flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Sous-album</span>
+                    </button>
+                    <div class="ui-card rounded-full p-1 flex flex-wrap items-center gap-0.5 shadow-sm">
+                        <button onclick="addMediaToCurrentAlbumFromGallery()" title="Ajouter des médias depuis la galerie"
+                                class="hover:bg-[var(--bg-hover)] px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg>
+                            <span>Ajouter des médias</span>
+                        </button>
+                        <button onclick="promptRenameCurrentAlbum()" title="Renommer cet album"
+                                class="hover:bg-[var(--bg-hover)] px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            <span>Renommer</span>
+                        </button>
+                        <button onclick="confirmDeleteCurrentAlbum()" title="Supprimer cet album"
+                                class="hover:bg-rose-500/20 hover:text-rose-400 px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                            <span>Supprimer</span>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div id="album-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3 pr-3.5">
+            <div id="album-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3">
                 <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
-                    <h1 id="single-album-title" class="text-3xl font-extrabold leading-none"></h1>
+                    <h1 id="single-album-title" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
                     <span id="single-album-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
                 </div>
-                <button type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
-                        class="ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                <button id="album-single-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
+                        class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
                     <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
                 </button>
             </div>
@@ -477,64 +501,258 @@
     </div>
 
     <!-- ==================== VUE 3 : PERSONNES ==================== -->
-    <div id="tab-faces" class="hidden">
-        <div id="persons-overview-panel">
-            <div class="sticky-view-header flex items-center justify-between mb-6 gap-3">
-                <div class="flex items-center gap-3">
+    <div id="tab-faces" class="hidden pr-3.5">
+        <div id="persons-overview-panel" class="space-y-6">
+            <div id="faces-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+              <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 class="text-4xl font-extrabold tracking-tight leading-none">Personnes</h1>
-                    <button onclick="toggleSuggestionsPanel()" title="Suggestions et fusion de personnes" class="ui-card w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold opacity-80 hover:opacity-100 transition cursor-pointer">...</button>
+                    <span id="faces-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+                    <button id="faces-suggestions-btn" type="button" onclick="toggleSuggestionsPanel()" title="Suggestions et fusion de personnes"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center opacity-85 hover:opacity-100 transition cursor-pointer shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l1.9 4.5L18.5 9l-4.6 1.5L12 15l-1.9-4.5L5.5 9l4.6-1.5L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg>
+                    </button>
+                    <span id="faces-active-filter-badge" class="hidden ui-card px-3.5 py-1.5 rounded-full text-xs font-extrabold leading-none translate-y-[1px] items-center gap-2 pointer-events-auto">
+                        <span id="faces-active-filter-text"></span>
+                        <button type="button" onclick="resetAllFacesFilters()" class="hover:text-rose-500 font-bold cursor-pointer">✕</button>
+                    </span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button id="btn-merge-selected" onclick="mergeSelectedPersons()" class="hidden ui-card px-4 py-2 rounded-full text-xs font-bold">Fusionner la sélection</button>
-                    <button onclick="runTask('FACES')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
+                <div class="sticky-header-actions ml-auto flex items-center gap-2.5">
+                    <button id="btn-merge-selected" type="button" onclick="mergeSelectedPersons()" class="hidden ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm transition cursor-pointer">Fusionner la sélection</button>
+                    <button id="faces-analyze-btn" type="button" onclick="runTask('FACES')" class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span>Analyser</span>
+                    </button>
+                    <button id="faces-options-btn" type="button" onclick="toggleFacesOptionsBar()" title="Afficher/Masquer les options des personnes"
+                            class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
                 </div>
+              </div>
+
+              <!-- Options des Personnes : Trier par + Grouper par + Filtrer + Style (Grille / Liste & Petit / Moyen / Grand) -->
+              <div id="faces-options-drawer" class="hidden sticky-options-drawer">
+              <div class="flex flex-wrap items-center justify-between gap-2.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Trier par :</span>
+                        <select id="faces-sort-by" onchange="onFacesControlsChanged()"
+                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="content">Plus de contenu</option>
+                            <option value="recent">Récent</option>
+                            <option value="added">Date d'ajout</option>
+                            <option value="name">Nom</option>
+                        </select>
+                        <input type="hidden" id="faces-sort-order" value="desc"/>
+                        <button type="button" id="faces-sort-dir-btn" onclick="toggleFacesSortOrder()"
+                                title="Ordre décroissant (cliquer pour inverser)"
+                                class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                            <svg id="faces-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Grouper par :</span>
+                        <select id="faces-group-by" onchange="onFacesControlsChanged()"
+                                class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="NONE">Aucun</option>
+                            <option value="LETTER">Initiale</option>
+                            <option value="DAY">Jour</option>
+                            <option value="WEEK">Semaine</option>
+                            <option value="MONTH">Mois</option>
+                            <option value="YEAR">Année</option>
+                        </select>
+                    </div>
+
+                    <div id="faces-filter-wrapper" class="relative">
+                        <button id="faces-filter-btn" type="button" onclick="toggleFacesFilterMenu()"
+                                class="ui-card rounded-full px-4 py-2 min-h-[42px] flex items-center gap-2 text-xs font-extrabold shadow-sm hover:opacity-90 transition cursor-pointer select-none">
+                            <svg class="w-3.5 h-3.5 opacity-80 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                            </svg>
+                            <span>Filtrer</span>
+                            <span id="faces-filter-count" class="hidden plum-btn px-1.5 py-0.5 rounded-full text-[10px] leading-none">0</span>
+                            <svg class="w-3 h-3 opacity-60 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+
+                        <div id="faces-filter-popover" class="hidden absolute left-0 top-full mt-2 z-40 w-80 ui-card rounded-3xl p-4 shadow-xl space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold">Filtrer par :</span>
+                                <button type="button" onclick="resetAllFacesFilters()" class="text-[11px] font-extrabold opacity-75 hover:opacity-100 hover:text-rose-500 transition">
+                                    tout retirer
+                                </button>
+                            </div>
+                            <div id="faces-active-filter-chips" class="hidden flex flex-wrap gap-1.5"></div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <select id="faces-year" onchange="toggleFacesMultiFilterValue('year', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                                    <option value="">Années</option>
+                                </select>
+                                <select id="faces-month" onchange="toggleFacesMultiFilterValue('month', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                                    <option value="">Mois</option>
+                                    <option value="01">Janvier</option><option value="02">Février</option>
+                                    <option value="03">Mars</option><option value="04">Avril</option>
+                                    <option value="05">Mai</option><option value="06">Juin</option>
+                                    <option value="07">Juillet</option><option value="08">Août</option>
+                                    <option value="09">Septembre</option><option value="10">Octobre</option>
+                                    <option value="11">Novembre</option><option value="12">Décembre</option>
+                                </select>
+                                <select id="faces-content-filter" onchange="toggleFacesMultiFilterValue('content', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer col-span-2 w-full">
+                                    <option value="">Toutes les personnes</option>
+                                    <option value="IDENTIFIED">Identifiées uniquement</option>
+                                    <option value="UNKNOWN">Non identifiées uniquement</option>
+                                    <option value="MULTI_MEDIA">Plusieurs médias (2+)</option>
+                                    <option value="SINGLE_MEDIA">1 seul média</option>
+                                </select>
+                            </div>
+                            <div class="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-extrabold opacity-75">Périodes :</span>
+                                    <button type="button" onclick="addFacesPeriodFromInputs()" title="Ajouter cette période pour en saisir une autre"
+                                            class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-extrabold hover:opacity-85 transition">
+                                        + Ajouter période
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="flex flex-col gap-0.5">
+                                        <span class="text-[10px] font-bold opacity-60 px-1">Du</span>
+                                        <input id="faces-date-from" type="date" onchange="onFacesControlsChanged()"
+                                               class="ui-pill rounded-full px-2.5 py-1 text-[11px] font-bold outline-none cursor-pointer w-full"/>
+                                    </label>
+                                    <label class="flex flex-col gap-0.5">
+                                        <span class="text-[10px] font-bold opacity-60 px-1">Au</span>
+                                        <input id="faces-date-to" type="date" onchange="onFacesControlsChanged()"
+                                               class="ui-pill rounded-full px-2.5 py-1 text-[11px] font-bold outline-none cursor-pointer w-full"/>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="setFacesLayout('GRID')" class="flex items-center gap-1.5 group">
+                            <div id="faces-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Grille</span>
+                        </button>
+                        <button type="button" onclick="setFacesLayout('LIST')" class="flex items-center gap-1.5 group">
+                            <div id="faces-layout-btn-LIST" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Liste</span>
+                        </button>
+                    </div>
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                        <button type="button" id="faces-size-btn-SM" onclick="setFacesSize('SM')" class="ui-pill px-2.5 py-1 rounded-full transition">Petit</button>
+                        <button type="button" id="faces-size-btn-MD" onclick="setFacesSize('MD')" class="nav-item-active px-2.5 py-1 rounded-full transition">Moyen</button>
+                        <button type="button" id="faces-size-btn-LG" onclick="setFacesSize('LG')" class="ui-pill px-2.5 py-1 rounded-full transition">Grand</button>
+                    </div>
+                </div>
+              </div>
+              </div>
             </div>
 
-            <div id="suggestions-panel" class="hidden ui-card rounded-3xl p-4 mb-6 space-y-3">
-                <div class="flex justify-between items-center">
+            <div id="suggestions-panel" class="hidden ui-card rounded-[28px] p-5 space-y-3 shadow-sm">
+                <div class="flex flex-wrap justify-between items-center gap-2">
                     <span class="text-xs font-extrabold">Suggestions de visages similaires</span>
-                    <button onclick="syncExifNow()" class="plum-btn px-4 py-1.5 rounded-full text-xs font-bold">Inscrire les noms dans l'EXIF</button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="syncExifNow()" class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold cursor-pointer">Inscrire les noms dans l'EXIF</button>
+                        <button type="button" onclick="toggleSuggestionsPanel()" title="Fermer" class="w-7 h-7 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center text-xs font-bold cursor-pointer">✕</button>
+                    </div>
                 </div>
                 <div id="suggestions-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
             </div>
 
-            <div id="persons-identified-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 mb-10"></div>
+            <div id="persons-identified-grid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-11 gap-3.5"></div>
 
-            <h2 class="text-2xl font-extrabold mb-5">Non Identifié</h2>
-            <div id="persons-unknown-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 pb-10"></div>
+            <div id="persons-unknown-section" class="space-y-4 pt-2">
+                <div class="flex items-center gap-2.5">
+                    <h2 class="text-2xl font-extrabold tracking-tight">Non Identifié</h2>
+                    <span id="faces-unknown-count" class="count-pill ui-card px-3 py-1 rounded-full text-[11px] font-extrabold opacity-80"></span>
+                </div>
+                <div id="persons-unknown-grid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-11 gap-3.5 pb-10"></div>
+            </div>
         </div>
 
-        <div id="person-timeline-modal" class="hidden ui-card rounded-3xl p-6">
-            <div class="flex justify-between items-center mb-4 pb-3 border-b border-black/10">
-                <h2 id="tl-person-name" class="text-2xl font-extrabold"></h2>
-                <button onclick="closeTimeline()" class="ui-pill px-4 py-2 rounded-full text-xs font-bold">← Retour aux personnes</button>
+        <div id="person-timeline-modal" class="hidden space-y-5 pb-10">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <button type="button" onclick="closeTimeline()" class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span>Retour aux personnes</span>
+                </button>
+                <button id="btn-toggle-person-face-edit" type="button" onclick="togglePersonFaceEditMode()"
+                        class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    <span>Corriger les visages</span>
+                </button>
             </div>
-            <div class="ui-pill rounded-2xl p-3 mb-4 flex flex-wrap justify-between items-center gap-2">
-                <span id="tl-sel-count" class="text-xs font-bold">0 sélectionné(s)</span>
-                <div class="flex flex-wrap gap-2">
-                    <select id="tl-target-person-select" class="ui-card rounded-full px-3 py-1 text-xs"></select>
-                    <button onclick="reassignSelectedFaces('EXISTING_PERSON')" class="plum-btn text-xs px-3.5 py-1 rounded-full">Réassigner</button>
-                    <button onclick="reassignSelectedFaces('NEW_GROUP')" class="plum-btn text-xs px-3.5 py-1 rounded-full">Nouveau groupe</button>
-                    <button onclick="reassignSelectedFaces('IGNORE')" class="bg-rose-600 text-white text-xs px-3.5 py-1 rounded-full">Ignorer</button>
+            <div id="person-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                    <h1 id="tl-person-name" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
+                    <span id="tl-person-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+                </div>
+                <button id="person-single-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
+                        class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
+            </div>
+            <div id="tl-face-edit-bar" class="hidden ui-card rounded-full px-4 py-2 flex flex-wrap justify-between items-center gap-3 shadow-sm">
+                <span id="tl-sel-count" class="text-xs font-extrabold px-1">0 sélectionné(s)</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="tl-target-person-select" class="ui-pill rounded-full px-3.5 py-1.5 text-xs font-bold outline-none cursor-pointer"></select>
+                    <button type="button" onclick="reassignSelectedFaces('EXISTING_PERSON')" class="plum-btn text-xs font-bold px-4 py-1.5 rounded-full cursor-pointer">Réassigner</button>
+                    <button type="button" onclick="reassignSelectedFaces('NEW_GROUP')" class="ui-pill hover:bg-[var(--bg-hover)] text-xs font-bold px-4 py-1.5 rounded-full transition cursor-pointer">Nouveau groupe</button>
+                    <button type="button" onclick="reassignSelectedFaces('IGNORE')" class="ui-pill hover:bg-rose-500/20 hover:text-rose-400 text-xs font-bold px-4 py-1.5 rounded-full transition cursor-pointer">Ignorer</button>
                 </div>
             </div>
-            <div id="tl-faces-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3"></div>
+            <div id="tl-faces-grid" class="space-y-6"></div>
         </div>
     </div>
 
     <!-- ==================== VUE 4 : LIEUX ==================== -->
-    <div id="tab-map" class="hidden">
-        <div class="flex items-center justify-between mb-5 gap-3">
-            <div class="flex items-center gap-3">
-                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Lieux</h1>
-                <span id="map-stats-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
+    <div id="tab-map" class="hidden pr-3.5">
+        <div id="map-overview-panel" class="space-y-6">
+            <div class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                    <h1 class="text-4xl font-extrabold tracking-tight leading-none">Lieux</h1>
+                    <span id="map-stats-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
+                </div>
+                <button id="map-add-btn" type="button" onclick="openMetadataModalForSelection()" class="sticky-hide-on-stuck plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    <span>Ajouter</span>
+                </button>
             </div>
-            <button onclick="openMetadataModalForSelection()" class="plum-btn px-6 py-2.5 rounded-full text-xs font-bold shadow flex items-center gap-2">
-                <span>+</span> <span>Ajouter</span>
-            </button>
+            <div id="world-map" class="w-full h-[400px] rounded-[28px] ui-card shadow-md z-10 overflow-hidden"></div>
+            <div id="places-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-8"></div>
         </div>
-        <div id="world-map" class="w-full h-[380px] rounded-3xl ui-card shadow-sm z-10 mb-6 overflow-hidden"></div>
-        <div id="places-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 pb-8"></div>
+
+        <div id="place-single-panel" class="hidden space-y-5 pb-10">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <button type="button" onclick="closeSinglePlaceView()" class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span>Tous les lieux</span>
+                </button>
+                <button id="btn-focus-place-on-map" type="button" onclick="focusOpenedPlaceOnMap()" class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span>Voir sur la carte</span>
+                </button>
+            </div>
+            <div class="sticky-view-header flex flex-wrap items-center gap-3">
+                <h1 id="single-place-title" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
+                <span id="single-place-subtitle" class="hidden count-pill ui-card px-4 py-1.5 rounded-full text-xs font-bold leading-none opacity-80"></span>
+                <span id="single-place-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+            </div>
+            <div id="place-single-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5"></div>
+        </div>
     </div>
 
     <!-- ==================== VUE 5 : CATÉGORIES / TYPES ==================== -->
@@ -801,8 +1019,8 @@
                     </div>
                 </div>
 
-                <!-- Langue & Fuseau horaire en 2 colonnes propres -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <!-- Langue, Pays d'origine & Fuseau horaire en 3 colonnes propres -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
                         <span class="text-xs font-bold shrink-0">Langue</span>
                         <div class="relative flex items-center">
@@ -810,6 +1028,32 @@
                                     class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right">
                                 <option value="fr">Français</option>
                                 <option value="en">English</option>
+                            </select>
+                            <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+
+                    <div class="ui-pill rounded-2xl px-3.5 py-2 flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold shrink-0">Pays d'origine</span>
+                        <div class="relative flex items-center min-w-0">
+                            <select id="settings-home-country" onchange="onHomeCountryChanged()"
+                                    class="appearance-none bg-transparent pr-5 pl-1 py-0.5 text-xs font-extrabold outline-none cursor-pointer text-right truncate max-w-[140px]">
+                                <option value="France">France</option>
+                                <option value="Belgique">Belgique</option>
+                                <option value="Suisse">Suisse</option>
+                                <option value="Canada">Canada</option>
+                                <option value="Luxembourg">Luxembourg</option>
+                                <option value="Espagne">Espagne</option>
+                                <option value="Italie">Italie</option>
+                                <option value="Portugal">Portugal</option>
+                                <option value="Allemagne">Allemagne</option>
+                                <option value="Royaume-Uni">Royaume-Uni</option>
+                                <option value="États-Unis">États-Unis</option>
+                                <option value="Maroc">Maroc</option>
+                                <option value="Algérie">Algérie</option>
+                                <option value="Tunisie">Tunisie</option>
+                                <option value="Japon">Japon</option>
+                                <option value="">Aucun (tout afficher)</option>
                             </select>
                             <svg class="w-3 h-3 opacity-65 pointer-events-none absolute right-0.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
                         </div>

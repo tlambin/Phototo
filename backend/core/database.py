@@ -89,6 +89,7 @@ def get_db() -> sqlite3.Connection:
                 lat_key REAL NOT NULL,
                 lon_key REAL NOT NULL,
                 city TEXT,
+                region TEXT DEFAULT '',
                 country TEXT,
                 display_label TEXT,
                 updated_at INTEGER DEFAULT (strftime('%s','now')),
@@ -113,6 +114,9 @@ def get_db() -> sqlite3.Connection:
         sc_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(smart_categories)").fetchall()}
         if "prompt_en" not in sc_cols:
             init_conn.execute("ALTER TABLE smart_categories ADD COLUMN prompt_en TEXT")
+        geo_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(geocode_cache)").fetchall()}
+        if "region" not in geo_cols:
+            init_conn.execute("ALTER TABLE geocode_cache ADD COLUMN region TEXT DEFAULT ''")
         alb_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(albums)").fetchall()}
         if "source_dir" not in alb_cols:
             init_conn.execute("ALTER TABLE albums ADD COLUMN source_dir TEXT DEFAULT NULL")

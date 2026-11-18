@@ -23,23 +23,41 @@ const SHORT_MONTHS_FR = ["", "janvier", "février", "mars", "avril", "mai", "jui
 const TIMELINE_MONTHS_FR = ["", "Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const FULL_MONTHS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
-function getSelectIconHTML(isSelected) {
+function getSelectIconHTML(isSelected, isList = false) {
     if (isSelected) {
-        return `<div class="select-badge-checked w-6 h-6 rounded-full flex items-center justify-center scale-100 transition-transform duration-150">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        return `<div class="select-badge-checked w-7 h-7 rounded-full flex items-center justify-center scale-100 transition-all duration-150">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>`;
     }
-    return `<div class="select-badge-idle w-6 h-6 rounded-full border-2 border-white/90 bg-black/25 backdrop-blur-sm flex items-center justify-center text-white/75 opacity-0 group-hover:opacity-100 hover:scale-110 transition-all duration-150 shadow-sm">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    if (isList) {
+        return `<div class="select-badge-idle w-7 h-7 rounded-full ui-pill flex items-center justify-center opacity-55 group-hover:opacity-100 hover:bg-[var(--bg-hover)] transition-all duration-150">
+                    <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>`;
+    }
+    return `<div class="select-badge-idle w-7 h-7 rounded-full border border-white/25 bg-black/40 backdrop-blur-md flex items-center justify-center text-white/85 opacity-0 group-hover:opacity-100 hover:bg-black/60 hover:scale-105 transition-all duration-150 shadow-md">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>`;
 }
 
-function getFavHeartHTML(isFav) {
-    const fill = isFav ? '#fb7185' : 'rgba(0,0,0,0.25)';
-    const stroke = isFav ? '#fb7185' : 'rgba(255,255,255,0.92)';
-    return `<svg class="w-6 h-6 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" fill="${fill}" stroke="${stroke}" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
-            </svg>`;
+function getFavHeartHTML(isFav, isList = false) {
+    if (isFav) {
+        const cls = isList
+            ? 'w-7 h-7 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-500 flex items-center justify-center shadow-sm transition-all duration-150'
+            : 'w-7 h-7 rounded-full bg-rose-500/25 backdrop-blur-md border border-rose-400/60 text-rose-400 hover:bg-rose-500/35 flex items-center justify-center shadow-md transition-all duration-150';
+        return `<div class="${cls}">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+                        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
+                    </svg>
+                </div>`;
+    }
+    const idleCls = isList
+        ? 'w-7 h-7 rounded-full ui-pill opacity-60 group-hover:opacity-100 hover:text-rose-400 flex items-center justify-center transition-all duration-150'
+        : 'w-7 h-7 rounded-full bg-black/40 backdrop-blur-md border border-white/25 text-white/90 hover:bg-black/60 hover:text-rose-400 flex items-center justify-center shadow-md transition-all duration-150';
+    return `<div class="${idleCls}">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
+                </svg>
+            </div>`;
 }
 
 function syncGalleryLayoutSizeButtons() {
@@ -138,22 +156,22 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         ? 'tile-selected'
         : 'hover:ring-2 hover:ring-current/20';
 
-    const favVisibility = it.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-85';
+    const favVisibility = it.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
 
     const selectBtn = `
         <button type="button"
                 onclick="event.stopPropagation(); handleGalleryTileSelect(event, ${idx})"
                 title="Sélectionner"
-                class="tile-select-btn absolute top-2 left-2 z-10 p-0.5">
-            ${getSelectIconHTML(isSel)}
+                class="tile-select-btn absolute top-2.5 left-2.5 z-10 cursor-pointer">
+            ${getSelectIconHTML(isSel, false)}
         </button>`;
 
     const favBtn = `
         <button type="button"
                 onclick="event.stopPropagation(); toggleTileFavoriteDirect(${idx})"
                 title="Favori"
-                class="tile-fav-btn absolute top-2 right-2 z-10 p-0.5 ${favVisibility} hover:scale-110 transition">
-            ${getFavHeartHTML(it.is_favorite)}
+                class="tile-fav-btn absolute top-2.5 right-2.5 z-10 ${favVisibility} hover:scale-105 transition cursor-pointer">
+            ${getFavHeartHTML(it.is_favorite, false)}
         </button>`;
 
     const videoBadge = isVid
@@ -185,8 +203,8 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
             <button type="button"
                     onclick="event.stopPropagation(); handleGalleryTileSelect(event, ${idx})"
                     title="Sélectionner"
-                    class="tile-select-btn shrink-0 p-1">
-                ${getSelectIconHTML(isSel)}
+                    class="tile-select-btn shrink-0 cursor-pointer">
+                ${getSelectIconHTML(isSel, true)}
             </button>
             <div class="relative shrink-0 ${thumbSizeCls} overflow-hidden bg-black/10">
                 <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-full object-cover select-none pointer-events-none"/>
@@ -200,8 +218,8 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
             <button type="button"
                     onclick="event.stopPropagation(); toggleTileFavoriteDirect(${idx})"
                     title="Favori"
-                    class="tile-fav-btn shrink-0 p-1.5 ${favVisibility} hover:scale-110 transition">
-                ${getFavHeartHTML(it.is_favorite)}
+                    class="tile-fav-btn shrink-0 ${favVisibility} hover:scale-105 transition cursor-pointer">
+                ${getFavHeartHTML(it.is_favorite, true)}
             </button>
         </div>`;
     }
@@ -507,6 +525,11 @@ document.addEventListener('click', (e) => {
     if (albWrapper && albPop && !albPop.classList.contains('hidden') && !albWrapper.contains(e.target)) {
         albPop.classList.add('hidden');
     }
+    const facesWrapper = document.getElementById('faces-filter-wrapper');
+    const facesPop = document.getElementById('faces-filter-popover');
+    if (facesWrapper && facesPop && !facesPop.classList.contains('hidden') && !facesWrapper.contains(e.target)) {
+        facesPop.classList.add('hidden');
+    }
 });
 
 function onGalleryYearOrMonthSelectChange() {
@@ -603,6 +626,7 @@ async function loadGalleryItems(append = false, customSkip = -1) {
         });
         const res = await fetch(`/api/gallery/items?${p.toString()}`);
         const d = await res.json();
+        if (currentTab !== 'gallery' && currentTab !== 'favorites' && currentTab !== 'recent') return;
         const newItems = d.items || [];
         galleryTotalPages = d.total_pages || 1;
         galleryTotalItems = d.total || 0;
@@ -712,7 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function _getActiveMediaTileEl(idx) {
-    const containerId = openedAlbumName ? 'album-single-content-area' : 'gallery-content-area';
+    let containerId = 'gallery-content-area';
+    if (currentTab === 'albums' && openedAlbumName) containerId = 'album-single-content-area';
+    else if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) containerId = 'tl-faces-grid';
     const container = document.getElementById(containerId);
     return (container && container.querySelector(`[data-tile-idx="${idx}"]`)) || document.getElementById(`media-tile-${idx}`);
 }
@@ -726,7 +752,7 @@ function updateSingleTileSelectionDOM(idx, isSelected) {
         tile.classList.toggle('tile-selected', isSelected);
     }
     const btn = tile.querySelector('.tile-select-btn');
-    if (btn) btn.innerHTML = getSelectIconHTML(isSelected);
+    if (btn) btn.innerHTML = getSelectIconHTML(isSelected, galleryLayout === 'LIST');
 }
 
 function updateSingleTileFavoriteDOM(idx, isFav) {
@@ -736,7 +762,7 @@ function updateSingleTileFavoriteDOM(idx, isFav) {
     if (!btn) return;
     btn.classList.toggle('opacity-100', !!isFav);
     btn.classList.toggle('opacity-0', !isFav);
-    btn.innerHTML = getFavHeartHTML(!!isFav);
+    btn.innerHTML = getFavHeartHTML(!!isFav, galleryLayout === 'LIST');
 }
 
 function handleGalleryTileSelect(e, idx) {
@@ -802,8 +828,8 @@ function getGroupSelectIconHTML(state) {
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" viewBox="0 0 24 24"><line x1="6" y1="12" x2="18" y2="12"/></svg>
                 </div>`;
     }
-    return `<div class="w-5 h-5 rounded-full border-2 border-current/35 opacity-55 hover:opacity-100 hover:border-current flex items-center justify-center transition-all duration-150">
-                <svg class="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    return `<div class="w-5 h-5 rounded-full border border-current/35 bg-[var(--bg-pill)] opacity-65 hover:opacity-100 hover:border-current flex items-center justify-center transition-all duration-150">
+                <svg class="w-2.5 h-2.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>`;
 }
 
@@ -867,47 +893,21 @@ function toggleActiveFloatingGroupSelection() {
 
 function syncBatchBarBounds() {
     const batchBar = document.getElementById('gal-batch-bar');
-    if (!batchBar || batchBar.classList.contains('hidden')) return;
-
-    const topbarEl = document.getElementById('floating-topbar');
-    const minTop = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().bottom + 8) : 88;
-    let topPx = minTop;
-
-    if (currentTab === 'gallery' || currentTab === 'favorites') {
-        const drawer = document.getElementById('filter-drawer');
-        const header = document.getElementById('gallery-sticky-header');
-        if (drawer && !drawer.classList.contains('hidden')) {
-            const dRect = drawer.getBoundingClientRect();
-            if (dRect.height > 0 && dRect.bottom > topPx) {
-                topPx = Math.ceil(dRect.bottom + 8);
-            }
-        } else if (header && !header.classList.contains('is-stuck')) {
-            const hRect = header.getBoundingClientRect();
-            if (hRect.height > 0 && hRect.bottom > minTop && hRect.top < minTop + 60) {
-                topPx = Math.ceil(hRect.bottom + 8);
-            }
-        }
-    } else if (currentTab === 'albums' && openedAlbumName) {
-        const albHeader = document.getElementById('album-single-sticky-header');
-        if (albHeader && !albHeader.classList.contains('is-scroll-hidden')) {
-            const aRect = albHeader.getBoundingClientRect();
-            if (aRect.height > 0 && aRect.bottom > minTop && aRect.top < minTop + 60) {
-                topPx = Math.ceil(aRect.bottom + 8);
-            }
-        }
-    }
-
-    batchBar.style.top = `${topPx}px`;
+    if (!batchBar) return;
+    batchBar.style.top = '';
 }
 
 function updateGalleryBatchBar() {
-    const mediaVisible = currentTab === 'gallery' || currentTab === 'favorites' || (currentTab === 'albums' && !!openedAlbumName);
+    const mediaVisible = currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent'
+        || (currentTab === 'albums' && !!openedAlbumName)
+        || (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null);
     const hasSelection = mediaVisible && selectedGalleryPaths.size > 0;
+    document.body.classList.toggle('has-batch-bar', hasSelection);
     document.getElementById('gal-batch-bar').classList.toggle('hidden', !hasSelection);
     document.getElementById('gal-batch-count').textContent = `${selectedGalleryPaths.size} sélectionné(s)`;
     const remBtn = document.getElementById('btn-batch-album-remove');
     if (remBtn) remBtn.classList.toggle('hidden', !openedAlbumName);
-    ['gallery-content-area', 'album-single-content-area'].forEach(id => {
+    ['gallery-content-area', 'album-single-content-area', 'tl-faces-grid'].forEach(id => {
         const area = document.getElementById(id);
         if (area) area.classList.toggle('selection-active', hasSelection);
     });
@@ -1068,6 +1068,13 @@ function _getActiveGroupedContainerAndMode() {
         }
         const albMode = document.getElementById('alb-group-by')?.value || 'NONE';
         return { container: document.getElementById('albums-grid'), mode: albMode, headerId: 'albums-sticky-header', drawerId: 'albums-options-drawer' };
+    }
+    if (currentTab === 'faces') {
+        if (typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
+            return { container: document.getElementById('tl-faces-grid'), mode: galleryGroupBy, headerId: 'person-single-sticky-header', drawerId: 'filter-drawer' };
+        }
+        const facesMode = document.getElementById('faces-group-by')?.value || 'NONE';
+        return { container: document.getElementById('persons-identified-grid'), mode: facesMode, headerId: 'faces-sticky-header', drawerId: 'faces-options-drawer' };
     }
     if (currentTab === 'gallery' || currentTab === 'favorites') {
         return { container: document.getElementById('gallery-content-area'), mode: galleryGroupBy, headerId: 'gallery-sticky-header', drawerId: 'filter-drawer' };
@@ -1355,11 +1362,17 @@ function renderAlbumCardHTML(a) {
     const safeFull = a.full_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeName = a.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const escName = _escTileText(a.name);
-    const coverHtml = a.cover_path
-        ? `<img src="/thumb?path=${encodeURIComponent(a.cover_path)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition"/>`
-        : `<div class="w-full h-full flex items-center justify-center opacity-30">
-               <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    const hasCover = Boolean(a.cover_path);
+    const coverHtml = hasCover
+        ? `<img src="/thumb?path=${encodeURIComponent(a.cover_path)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>`
+        : `<div class="w-full h-full flex flex-col items-center justify-center gap-1.5 opacity-35">
+               <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+               <span class="text-[10px] font-bold tracking-wide">Vide</span>
            </div>`;
+
+    const renameSvg = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+    const deleteSvg = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`;
+    const subSvg = `<svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="14" rx="2.5"/><path d="M7 3h11a2.5 2.5 0 0 1 2.5 2.5V16"/></svg>`;
 
     if (albumLayout === 'LIST') {
         const thumbCls = albumSize === 'SM' ? 'w-11 h-11 rounded-xl' : (albumSize === 'LG' ? 'w-24 h-24 rounded-2xl' : 'w-16 h-16 rounded-2xl');
@@ -1367,49 +1380,53 @@ function renderAlbumCardHTML(a) {
         const titleCls = albumSize === 'SM' ? 'text-xs' : (albumSize === 'LG' ? 'text-base' : 'text-sm');
         const dateStr = a.max_ts ? new Date(a.max_ts * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         const modStr = a.modified_ts ? new Date(a.modified_ts * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-        const subText = a.subalbums_count > 0 ? ` • ${a.subalbums_count} sous-album${a.subalbums_count > 1 ? 's' : ''}` : '';
-        const metaLine = [`${a.count} élément${a.count > 1 ? 's' : ''}${subText}`, dateStr ? `Date : ${dateStr}` : '', modStr ? `Modifié : ${modStr}` : ''].filter(Boolean).join(' • ');
+        const subText = a.subalbums_count > 0 ? ` · ${a.subalbums_count} sous-album${a.subalbums_count > 1 ? 's' : ''}` : '';
+        const metaLine = [`${a.count} élément${a.count > 1 ? 's' : ''}${subText}`, dateStr ? `${dateStr}` : '', modStr && modStr !== dateStr ? `Modifié : ${modStr}` : ''].filter(Boolean).join(' · ');
 
         return `
             <div onclick="openSingleAlbumView('${safeFull}')"
-                 class="ui-card ${padCls} flex items-center cursor-pointer group shadow-sm hover:shadow-md transition">
-                <div class="shrink-0 ${thumbCls} overflow-hidden bg-black/5">
+                 class="ui-card ${padCls} flex items-center cursor-pointer group shadow-sm hover:shadow-lg transition-all duration-150">
+                <div class="shrink-0 ${thumbCls} overflow-hidden ui-pill">
                     ${coverHtml}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="font-extrabold truncate ${titleCls}">${escName}</div>
-                    <div class="text-[11px] opacity-65 truncate mt-0.5">${metaLine}</div>
+                    <div class="text-[11px] opacity-60 font-semibold truncate mt-0.5">${metaLine}</div>
                 </div>
-                <div class="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                <div class="ui-pill rounded-full p-1 flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition">
                     <button type="button" onclick="event.stopPropagation(); renameAlbumById(${a.album_id}, '${safeName}')" title="Renommer"
-                            class="w-7 h-7 rounded-full bg-white/90 text-zinc-800 flex items-center justify-center text-xs font-bold shadow hover:scale-110 transition">✎</button>
+                            class="w-7 h-7 rounded-full hover:bg-[var(--bg-hover)] flex items-center justify-center transition cursor-pointer">${renameSvg}</button>
                     <button type="button" onclick="event.stopPropagation(); deleteAlbumById(${a.album_id}, '${safeName}')" title="Supprimer l'album"
-                            class="w-7 h-7 rounded-full bg-rose-600/90 text-white flex items-center justify-center text-xs font-bold shadow hover:scale-110 transition">✕</button>
+                            class="w-7 h-7 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition cursor-pointer">${deleteSvg}</button>
                 </div>
             </div>
         `;
     }
 
     const subBadge = a.subalbums_count > 0
-        ? `<span class="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${a.subalbums_count} sous-album${a.subalbums_count > 1 ? 's' : ''}</span>`
+        ? `<span class="absolute bottom-2.5 left-2.5 bg-black/50 backdrop-blur-md border border-white/15 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 z-10">${subSvg}<span>${a.subalbums_count} sous-album${a.subalbums_count > 1 ? 's' : ''}</span></span>`
         : '';
+    const dateYear = a.max_ts ? new Date(a.max_ts * 1000).getFullYear() : '';
+    const subtitleParts = [`${a.count} élément${a.count > 1 ? 's' : ''}`];
+    if (dateYear) subtitleParts.push(String(dateYear));
 
     return `
         <div onclick="openSingleAlbumView('${safeFull}')"
-             class="ui-card rounded-3xl overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition flex flex-col relative">
-            <div class="aspect-square overflow-hidden bg-black/5 relative">
+             class="album-card cursor-pointer group flex flex-col">
+            <div class="ui-card aspect-square rounded-[24px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-200">
                 ${coverHtml}
+                ${hasCover ? '<div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 via-black/15 to-transparent opacity-75 group-hover:opacity-95 transition-opacity"></div>' : ''}
                 ${subBadge}
-                <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition z-10">
+                <div class="absolute top-2.5 right-2.5 bg-black/45 backdrop-blur-md border border-white/15 rounded-full p-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg">
                     <button type="button" onclick="event.stopPropagation(); renameAlbumById(${a.album_id}, '${safeName}')" title="Renommer"
-                            class="w-7 h-7 rounded-full bg-white/90 text-zinc-800 flex items-center justify-center text-xs font-bold shadow hover:scale-110 transition">✎</button>
+                            class="w-7 h-7 rounded-full text-white hover:bg-white/20 flex items-center justify-center transition cursor-pointer">${renameSvg}</button>
                     <button type="button" onclick="event.stopPropagation(); deleteAlbumById(${a.album_id}, '${safeName}')" title="Supprimer l'album"
-                            class="w-7 h-7 rounded-full bg-rose-600/90 text-white flex items-center justify-center text-xs font-bold shadow hover:scale-110 transition">✕</button>
+                            class="w-7 h-7 rounded-full text-white hover:bg-rose-500/85 flex items-center justify-center transition cursor-pointer">${deleteSvg}</button>
                 </div>
             </div>
-            <div class="p-3 text-center">
-                <div class="text-xs font-extrabold truncate">${escName}</div>
-                <div class="text-[10px] opacity-60 font-semibold">${a.count} élément${a.count > 1 ? 's' : ''}</div>
+            <div class="pt-2.5 px-1">
+                <div class="text-sm font-extrabold truncate leading-tight">${escName}</div>
+                <div class="text-[11px] opacity-60 font-semibold mt-0.5 truncate">${subtitleParts.join(' · ')}</div>
             </div>
         </div>
     `;
@@ -1599,14 +1616,34 @@ function renderAlbumsOverviewFromCache() {
     if (!grid) return;
     _renderAlbumFilterChipsAndBadge();
 
+    const totalLbl = document.getElementById('alb-total-label');
+    const filterBadge = document.getElementById('alb-active-filter-badge');
+    const filterText = document.getElementById('alb-active-filter-text');
+
     if (!rootAlbumsCache || rootAlbumsCache.length === 0) {
+        if (totalLbl) totalLbl.textContent = '0 album';
+        if (filterBadge) filterBadge.classList.add('hidden');
         grid.className = getAlbumGridClass();
-        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun album pour le moment. Cliquez sur "+ Nouveau" pour en créer un.</div>`;
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun album pour le moment. Cliquez sur « Nouveau » pour en créer un.</div>`;
         return;
     }
 
     const filtered = _filterAlbumsList(rootAlbumsCache);
     const sorted = sortAlbumItems(filtered);
+    if (totalLbl) {
+        totalLbl.textContent = `${sorted.length} album${sorted.length > 1 ? 's' : ''}`;
+    }
+    const activeChipCount = document.getElementById('alb-filter-count')?.textContent || '0';
+    if (filterBadge && filterText) {
+        if (Number(activeChipCount) > 0) {
+            filterText.textContent = `${activeChipCount} filtre${Number(activeChipCount) > 1 ? 's' : ''}`;
+            filterBadge.classList.remove('hidden');
+            filterBadge.classList.add('inline-flex');
+        } else {
+            filterBadge.classList.add('hidden');
+            filterBadge.classList.remove('inline-flex');
+        }
+    }
     if (sorted.length === 0) {
         grid.className = getAlbumGridClass();
         grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun album ne correspond aux filtres sélectionnés.</div>`;
@@ -1914,6 +1951,7 @@ async function loadSingleAlbumItems(append = false) {
         });
         const res = await fetch(`/api/gallery/items?${p.toString()}`);
         const d = await res.json();
+        if (currentTab !== 'albums' || !openedAlbumName) return;
         const newItems = d.items || [];
         singleAlbumPage = d.page || targetPage;
         singleAlbumTotalPages = d.total_pages || 1;
@@ -2225,6 +2263,7 @@ async function openSingleCategoryView(categoryId) {
 let currentCategoryItems = [];
 function openCategoryLightbox(idx) {
     if (!currentCategoryItems.length) return;
+    lightboxIsCustomItem = false;
     currentGalleryItems = currentCategoryItems;
     openLightbox(idx);
 }
@@ -2517,7 +2556,7 @@ async function openLightbox(idx) {
         if (!lightboxIsCustomItem) {
             if (currentTab === 'albums' && openedAlbumName) {
                 displayTotal = Math.max(singleAlbumTotalItems, currentGalleryItems.length);
-            } else {
+            } else if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') {
                 displayPos = currentSkipOffset + idx + 1;
                 displayTotal = Math.max(galleryTotalItems, currentSkipOffset + currentGalleryItems.length);
             }
@@ -2535,9 +2574,9 @@ async function openLightbox(idx) {
     document.getElementById('lightbox-modal').classList.remove('hidden');
     _preloadLightboxNeighbors(idx);
 
-    if (idx >= currentGalleryItems.length - 5) {
+    if (!lightboxIsCustomItem && idx >= currentGalleryItems.length - 5) {
         if (currentTab === 'albums' && openedAlbumName) loadSingleAlbumItems(true);
-        else loadGalleryItems(true);
+        else if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') loadGalleryItems(true);
     }
 
     if (localStorage.getItem('phototo_lb_info_open') === '1') {
@@ -3399,14 +3438,34 @@ async function loadLightboxMetadataInfo() {
 
     if (facesList.length > 0) {
         if (facesCard) facesCard.classList.remove('hidden');
-        const facesHtml = facesList.map(f => `
+        const seenPersons = new Set();
+        const seenNamed = new Set();
+        const uniquePeople = [];
+        facesList.forEach(f => {
+            const pKey = f.person_id ? `p:${f.person_id}` : `f:${f.face_id}`;
+            if (seenPersons.has(pKey)) return;
+            const nm = String(f.name || '').trim();
+            const nmLow = nm.toLowerCase();
+            if (nm && nmLow !== 'inconnu') {
+                if (seenNamed.has(nmLow)) return;
+                seenNamed.add(nmLow);
+            }
+            seenPersons.add(pKey);
+            uniquePeople.push(f);
+        });
+        const facesHtml = uniquePeople.map(f => {
+            const thumb = f.person_thumb_path || f.thumb_path || '';
+            const dispName = String(f.name || 'Inconnu')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `
             <div onclick="if(${f.person_id || 0}) { closeLightbox(); switchTab('faces'); openTimeline(${f.person_id}); }"
                  class="flex flex-col items-center cursor-pointer group">
-                <img src="/media?path=${encodeURIComponent(f.thumb_path || '')}"
+                <img src="/media?path=${encodeURIComponent(thumb)}"
                      class="w-11 h-11 rounded-full object-cover bg-black/20 shadow-sm group-hover:scale-105 transition"/>
-                <span class="text-[9px] font-extrabold mt-1 max-w-[52px] truncate">${f.name}</span>
+                <span class="text-[9px] font-extrabold mt-1 max-w-[52px] truncate">${dispName}</span>
             </div>
-        `).join('');
+        `;
+        }).join('');
         document.getElementById('lb-info-faces-list').innerHTML = facesHtml;
     } else {
         if (facesCard) facesCard.classList.add('hidden');

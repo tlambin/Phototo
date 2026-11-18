@@ -64,6 +64,7 @@ class SettingsPayload(BaseModel):
     takeout_use_gps_timezone: bool = True
     timezone: str
     language: str
+    home_country: str = "France"
     gpu_mode: str
     ocr_engine: str = "paddleocr"
     faces_model: str = "buffalo_l"
@@ -397,6 +398,7 @@ def api_save_settings_route(payload: SettingsPayload):
         "takeout_use_gps_timezone": (tz_mode == "GPS_OR_SETTINGS"),
         "timezone": payload.timezone.strip(),
         "language": payload.language.strip(),
+        "home_country": (payload.home_country or "").strip(),
         "gpu_mode": payload.gpu_mode.strip(),
         "ocr_engine": (payload.ocr_engine or "paddleocr").strip().lower(),
         "faces_model": (payload.faces_model or "buffalo_l").strip(),

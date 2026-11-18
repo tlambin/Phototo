@@ -366,8 +366,77 @@ class TestApiRoutes(unittest.TestCase):
             "alb-sort-by", "alb-sort-order", "alb-sort-dir-btn", "alb-sort-arrow", "toggleAlbumSortOrder()",
             "alb-layout-btn-GRID", "alb-layout-btn-LIST",
             "alb-size-btn-SM", "alb-size-btn-MD", "alb-size-btn-LG",
+            "alb-total-label", "alb-active-filter-badge", "alb-new-btn",
+            'id="tab-albums" class="hidden pr-3.5"',
+            'id="tab-gallery" class="space-y-5 pr-3.5"',
         ):
             self.assertIn(token, html)
+        self.assertNotIn('id="gallery-timeline-reserve"', html)
+        theme_css_tl = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
+        self.assertIn("#gallery-timeline-wrapper:hover #gallery-timeline-box", theme_css_tl)
+        self.assertNotIn("timeline-visible", theme_css_tl)
+        gallery_js_alb = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        self.assertNotIn("pulseGalleryTimelinePeek", gallery_js_alb)
+        self.assertIn("bg-rose-500/25 backdrop-blur-md", gallery_js_alb)
+        self.assertNotIn("drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]", gallery_js_alb)
+        self.assertIn("#10b981", theme_css_tl)
+        self.assertIn("justify-content: space-between;", theme_css_tl)
+        self.assertNotIn("justify-content: flex-start;", theme_css_tl)
+        self.assertIn("body.has-batch-bar .sticky-options-header.is-stuck", theme_css_tl)
+        self.assertIn(".sticky-options-header.is-stuck #gal-filter-popover", theme_css_tl)
+        self.assertIn(".sticky-options-header.is-stuck #faces-filter-popover", theme_css_tl)
+        for marker_fp in (
+            'id="tab-faces" class="hidden pr-3.5"',
+            'id="faces-total-label"',
+            'id="faces-unknown-count"',
+            'id="faces-options-btn"',
+            'id="faces-options-drawer"',
+            'id="faces-sort-by"',
+            'id="faces-sort-order"',
+            'id="faces-sort-dir-btn"',
+            'id="faces-sort-arrow"',
+            "toggleFacesSortOrder()",
+            'id="faces-group-by"',
+            'id="faces-filter-btn"',
+            'id="faces-filter-popover"',
+            'id="faces-content-filter"',
+            'id="faces-layout-btn-GRID"',
+            'id="faces-layout-btn-LIST"',
+            'id="faces-size-btn-SM"',
+            'id="faces-size-btn-MD"',
+            'id="faces-size-btn-LG"',
+            'id="faces-active-filter-badge"',
+            'value="content"',
+            'value="recent"',
+            'id="tl-person-count"',
+            'id="tab-map" class="hidden pr-3.5"',
+            'id="map-add-btn"',
+            'id="place-single-panel"',
+            'id="settings-home-country"',
+        ):
+            self.assertIn(marker_fp, html)
+        ai_views_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
+        app_js_fp = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function toggleFacesOptionsBar(", app_js_fp)
+        self.assertIn("function toggleFacesSortOrder(", ai_views_js)
+        self.assertIn("function _comparePersonItems(", ai_views_js)
+        self.assertIn("function _filterPersonsList(", ai_views_js)
+        self.assertIn("function setFacesLayout(", ai_views_js)
+        self.assertIn("function setFacesSize(", ai_views_js)
+        self.assertIn("person-card", ai_views_js)
+        self.assertIn("place-card", ai_views_js)
+        self.assertIn("openSinglePlaceView", ai_views_js)
+        self.assertIn("function togglePersonFaceEditMode(", ai_views_js)
+        self.assertIn("appendMediaBatchToContainer('tl-faces-grid', items, 0, true)", ai_views_js)
+        self.assertIn("rounded-[18px]", ai_views_js)
+        self.assertIn("rounded-[24px]", ai_views_js)
+        self.assertIn("lg:grid-cols-10", html)
+        self.assertIn('id="btn-toggle-person-face-edit"', html)
+        self.assertNotIn("w-32 h-32 rounded-full", ai_views_js)
+        self.assertIn("rounded-[24px]", gallery_js_alb)
+        self.assertIn("album-card", gallery_js_alb)
+        self.assertIn("else if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') loadGalleryItems(true);", gallery_js_alb)
+        self.assertNotIn(">✎</button>", gallery_js_alb)
         self.assertNotIn("<option value=\"desc\">Décroissant</option>", html)
         self.assertNotIn("<option value=\"asc\">Croissant</option>", html)
 
@@ -1066,10 +1135,17 @@ class TestApiRoutes(unittest.TestCase):
                 "SELECT f.source_path, p.name FROM faces f JOIN persons p ON f.person_id = p.person_id WHERE f.embedding IS NOT NULL"
             ).fetchall()
         }
+        marie_row = conn.execute("SELECT person_id FROM persons WHERE name = 'Marie'").fetchone()
         marie_cnt = conn.execute("SELECT COUNT(*) FROM persons WHERE name = 'Marie'").fetchone()[0]
         conn.close()
         self.assertEqual(names_by_src.get("p1.jpg"), "Thomas")
         self.assertEqual(marie_cnt, 1)
+
+        import faces_router
+        tl = faces_router.api_person_timeline(marie_row[0])
+        self.assertIn("items", tl)
+        self.assertEqual(len(tl["items"]), 1)
+        self.assertEqual(tl["items"][0]["source_path"], "p2.jpg")
 
     def test_lightbox_faces_and_categories_editor_routes_and_ui(self):
         import types
@@ -1226,6 +1302,36 @@ class TestApiRoutes(unittest.TestCase):
             inspected = metadata_studio_router.api_inspect_metadata(source_path="p_lb.jpg")
         self.assertGreater(len(inspected["visual_suggestions"]), 0)
         self.assertEqual(inspected["visual_suggestions"][0]["name"], res["visual_candidates"][0]["name"])
+        self.assertIn("person_thumb_path", inspected["faces"][0])
+        self.assertIn("person_thumb_path", gallery_js)
+        self.assertIn("const uniquePeople = [];", gallery_js)
+
+        import faces_router
+        conn = database.get_db()
+        try:
+            marie_row = conn.execute("SELECT person_id FROM persons WHERE name = 'Marie'").fetchone()
+            thomas_row = conn.execute("SELECT person_id FROM persons WHERE name = 'Thomas'").fetchone()
+            self.assertIsNotNone(marie_row)
+            self.assertIsNotNone(thomas_row)
+            rename_res = faces_router.api_rename_person(
+                faces_router.RenamePersonPayload(person_id=marie_row["person_id"], new_name="thomas")
+            )
+            self.assertEqual(rename_res["status"], "merged")
+            self.assertEqual(rename_res["person_id"], thomas_row["person_id"])
+            persons_left = conn.execute("SELECT COUNT(*) FROM persons WHERE LOWER(name) = 'thomas'").fetchone()[0]
+            self.assertEqual(persons_left, 1)
+        finally:
+            conn.close()
+
+        persons_list = faces_router.api_get_persons()["persons"]
+        thomas_entry = next(p for p in persons_list if p["name"] == "Thomas")
+        self.assertEqual(thomas_entry["face_count"], 2)
+        self.assertEqual(thomas_entry["media_count"], 1)
+        self.assertIn("recent_ts", thomas_entry)
+        self.assertIn("added_ts", thomas_entry)
+        self.assertIn("max_face_id", thomas_entry)
+        ai_views_js_lb = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
+        self.assertIn("p.media_count", ai_views_js_lb)
 
     def test_lightbox_albums_card_and_editor(self):
         import metadata_studio_router
@@ -1429,6 +1535,24 @@ class TestApiRoutes(unittest.TestCase):
         ai_views_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
         self.assertNotIn("Zone (${key})", ai_views_js)
 
+        # Vérification pays d'origine vs étranger (région + pays à côté de la ville)
+        with (
+            patch.object(search_map_router, "load_settings", return_value={"home_country": "France"}),
+            patch.object(search_map_router, "_fetch_nominatim_city", return_value=("Rome", "Latium", "Italie", "Rome, Italie")),
+        ):
+            foreign = search_map_router.api_reverse_geocode(41.9028, 12.4964)
+        self.assertTrue(foreign["is_foreign"])
+        self.assertEqual(foreign["city"], "Rome")
+        self.assertEqual(foreign["region"], "Latium")
+        self.assertEqual(foreign["country"], "Italie")
+        self.assertEqual(foreign["place_subtitle"], "Latium, Italie")
+        self.assertEqual(foreign["place_title"], "Rome · Latium, Italie")
+
+        with patch.object(search_map_router, "load_settings", return_value={"home_country": "France"}):
+            domestic = search_map_router.api_reverse_geocode(45.7640, 4.8357)
+        self.assertFalse(domestic["is_foreign"])
+        self.assertEqual(domestic["place_subtitle"], "")
+
     def test_lightbox_location_editor_ui_and_gps_update(self):
         import metadata_studio_router
         from unittest.mock import MagicMock
@@ -1534,6 +1658,8 @@ class TestApiRoutes(unittest.TestCase):
         self.assertIn("function syncBatchBarBounds(", gallery_js)
         self.assertIn("syncBatchBarBounds();", app_js)
         self.assertIn(".sticky-options-header {\n  z-index: 28;", theme_css)
+        self.assertIn("bottom-5", batch_html)
+        self.assertIn("bottom: 1.25rem;", theme_css)
 
         dir_a = self.dest_dir / "a"
         dir_b = self.dest_dir / "b"
@@ -1637,6 +1763,17 @@ class TestApiRoutes(unittest.TestCase):
             self.assertIn(modern_tok, html)
         sidebar_html = (ROOT_DIR / "frontend" / "templates" / "components" / "sidebar.html").read_text(encoding="utf-8")
         self.assertNotIn('id="tab-btn-recent"', sidebar_html)
+        self.assertNotIn('sidebar-glass-panel', sidebar_html)
+        self.assertIn('id="sidebar-header"', sidebar_html)
+        self.assertNotIn('sidebar-header-glass', sidebar_html)
+        self.assertIn('id="topbar-logo-box"', sidebar_html)
+        self.assertIn('ui-card', sidebar_html[sidebar_html.index('id="topbar-logo-box"'):sidebar_html.index('id="topbar-logo-text"')])
+        theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
+        self.assertNotIn('.sidebar-glass-panel', theme_css)
+        self.assertNotIn('.sidebar-header-glass', theme_css)
+        self.assertIn('#sidebar-header::before', theme_css)
+        self.assertIn('position: fixed;\n  left: 0;\n  right: 6px;\n  bottom: 0;', theme_css)
+        self.assertNotIn('border-bottom: 1px solid var(--border-subtle)', theme_css)
         self.assertLess(html.index('Activités</h1>'), html.index('id="btn-recent-activities"'))
         self.assertLess(html.index('id="btn-recent-activities"'), html.index('id="activities-current-section"'))
         self.assertNotIn('id="activities-current-heading"', html)

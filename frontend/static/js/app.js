@@ -116,6 +116,7 @@ function updateGalleryMonthDropdown() {
 
 let _galOptionsManuallyClosed = false;
 let _albOptionsManuallyClosed = false;
+let _facesOptionsManuallyClosed = false;
 let _ignoreScrollUntil = 0;
 let _stickyScrollLastTop = 0;
 let _stickyScrollDownDist = 0;
@@ -153,6 +154,16 @@ function _getActiveOptionsContext() {
     if (currentTab === 'albums' && albumsOverview && !albumsOverview.classList.contains('hidden')) {
         return { headerId: 'albums-sticky-header', drawerId: 'albums-options-drawer', btnId: 'alb-options-btn' };
     }
+    if (currentTab === 'albums' && typeof openedAlbumName !== 'undefined' && openedAlbumName) {
+        return { headerId: 'album-single-sticky-header', drawerId: 'filter-drawer', btnId: 'album-single-options-btn' };
+    }
+    if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
+        return { headerId: 'person-single-sticky-header', drawerId: 'filter-drawer', btnId: 'person-single-options-btn' };
+    }
+    const personsOverview = document.getElementById('persons-overview-panel');
+    if (currentTab === 'faces' && personsOverview && !personsOverview.classList.contains('hidden')) {
+        return { headerId: 'faces-sticky-header', drawerId: 'faces-options-drawer', btnId: 'faces-options-btn' };
+    }
     if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') {
         return { headerId: 'gallery-sticky-header', drawerId: 'filter-drawer', btnId: 'gal-options-btn' };
     }
@@ -179,6 +190,7 @@ function toggleActiveOptionsBar() {
     const ctx = _getActiveOptionsContext();
     if (!ctx) return;
     if (ctx.drawerId === 'albums-options-drawer') toggleAlbumsOptionsBar();
+    else if (ctx.drawerId === 'faces-options-drawer') toggleFacesOptionsBar();
     else toggleFilterBar();
 }
 
@@ -214,13 +226,31 @@ function _openDrawerSafelyIfNearTop(headerId) {
     }
 }
 
+function _mountFilterDrawerForActiveView(willShow) {
+    const drawer = document.getElementById('filter-drawer');
+    if (!drawer) return;
+    let targetHeader = document.getElementById('gallery-sticky-header');
+    if (willShow) {
+        if (currentTab === 'albums' && typeof openedAlbumName !== 'undefined' && openedAlbumName) {
+            targetHeader = document.getElementById('album-single-sticky-header') || targetHeader;
+        } else if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
+            targetHeader = document.getElementById('person-single-sticky-header') || targetHeader;
+        }
+    }
+    if (targetHeader && drawer.parentElement !== targetHeader) {
+        targetHeader.appendChild(drawer);
+    }
+}
+
 function toggleFilterBar() {
     const drawer = document.getElementById('filter-drawer');
     if (!drawer) return;
     const willShow = drawer.classList.contains('hidden');
     _galOptionsManuallyClosed = !willShow;
-    _setOptionsDrawerState('filter-drawer', 'gal-options-btn', willShow);
-    if (willShow) _openDrawerSafelyIfNearTop('gallery-sticky-header');
+    _mountFilterDrawerForActiveView(willShow);
+    const activeCtx = _getActiveOptionsContext();
+    _setOptionsDrawerState('filter-drawer', (activeCtx && activeCtx.btnId) || 'gal-options-btn', willShow);
+    if (willShow) _openDrawerSafelyIfNearTop((activeCtx && activeCtx.headerId) || 'gallery-sticky-header');
     _syncScrollAfterLayoutToggle();
 }
 
@@ -231,6 +261,16 @@ function toggleAlbumsOptionsBar() {
     _albOptionsManuallyClosed = !willShow;
     _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', willShow);
     if (willShow) _openDrawerSafelyIfNearTop('albums-sticky-header');
+    _syncScrollAfterLayoutToggle();
+}
+
+function toggleFacesOptionsBar() {
+    const drawer = document.getElementById('faces-options-drawer');
+    if (!drawer) return;
+    const willShow = drawer.classList.contains('hidden');
+    _facesOptionsManuallyClosed = !willShow;
+    _setOptionsDrawerState('faces-options-drawer', 'faces-options-btn', willShow);
+    if (willShow) _openDrawerSafelyIfNearTop('faces-sticky-header');
     _syncScrollAfterLayoutToggle();
 }
 
@@ -281,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (curTop > 140 && _stickyScrollDownDist > 24) {
                 _setOptionsDrawerState('filter-drawer', 'gal-options-btn', false);
                 _setOptionsDrawerState('albums-options-drawer', 'alb-options-btn', false);
+                _setOptionsDrawerState('faces-options-drawer', 'faces-options-btn', false);
             }
         }
         _syncTopbarOptionsButton();
@@ -344,8 +385,11 @@ function switchTab(tab) {
         if (panel) panel.classList.toggle('hidden', t !== tab);
     });
 
+    const tlWrap = document.getElementById('gallery-timeline-wrapper');
     const tlBox = document.getElementById('gallery-timeline-box') || document.getElementById('timeline-scrubber');
-    if (tlBox) tlBox.classList.toggle('hidden', tab !== 'gallery' && tab !== 'favorites' && tab !== 'recent');
+    const hideTl = (tab !== 'gallery' && tab !== 'favorites' && tab !== 'recent');
+    if (tlWrap) tlWrap.classList.toggle('!hidden', hideTl);
+    if (tlBox) tlBox.classList.toggle('hidden', hideTl);
 
     const titleEl = document.getElementById('gallery-main-title') || document.getElementById('gallery-main-heading');
     const sortByEl = document.getElementById('gal-sort-by');
@@ -379,9 +423,15 @@ function switchTab(tab) {
         currentExtFilter = '';
         resetAndLoadGallery();
     } else if (tab === 'albums') {
+        _mountFilterDrawerForActiveView(false);
         closeSingleAlbumView();
     } else if (tab === 'faces') {
-        loadPersons();
+        _mountFilterDrawerForActiveView(false);
+        if (typeof closeTimeline === 'function' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
+            closeTimeline();
+        } else {
+            loadPersons();
+        }
     } else if (tab === 'map') {
         loadWorldMap(false);
     } else if (tab === 'types') {
@@ -421,6 +471,8 @@ function refreshActiveMediaView() {
     if (currentTab === 'albums' && openedAlbumName) {
         singleAlbumPage = 1;
         loadSingleAlbumItems();
+    } else if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
+        openTimeline(currentTimelinePersonId);
     } else {
         resetAndLoadGallery();
     }
@@ -1293,6 +1345,8 @@ async function loadAppSettings() {
     if (tDel) tDel.checked = Boolean(d.takeout_default_delete_zips);
     document.getElementById('settings-timezone').value = d.timezone || 'Europe/Paris';
     document.getElementById('settings-lang').value = d.language || 'fr';
+    const homeCountryEl = document.getElementById('settings-home-country');
+    if (homeCountryEl) homeCountryEl.value = (d.home_country !== undefined && d.home_country !== null) ? d.home_country : 'France';
     currentGpuMode = d.gpu_mode || 'auto';
     currentOcrEngine = d.ocr_engine || 'paddleocr';
     currentFacesModel = d.faces_model || 'buffalo_l';
@@ -1831,6 +1885,7 @@ async function saveAppSettingsQuiet() {
         takeout_use_gps_timezone: (document.getElementById('settings-takeout-gps-tz')?.value || 'GPS_OR_SETTINGS') === 'GPS_OR_SETTINGS',
         timezone: document.getElementById('settings-timezone').value,
         language: document.getElementById('settings-lang').value || 'fr',
+        home_country: document.getElementById('settings-home-country')?.value ?? 'France',
         gpu_mode: currentGpuMode,
         ocr_engine: currentOcrEngine,
         faces_model: currentFacesModel,
@@ -1841,6 +1896,13 @@ async function saveAppSettingsQuiet() {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
     });
+}
+
+async function onHomeCountryChanged() {
+    await saveAppSettingsQuiet();
+    if (currentTab === 'map' && typeof loadWorldMap === 'function') {
+        loadWorldMap(false);
+    }
 }
 
 async function backupDatabaseNow() {
@@ -2088,7 +2150,7 @@ setInterval(async () => {
                 const isLightboxOpen = !document.getElementById('lightbox-modal').classList.contains('hidden');
                 if (!isLightboxOpen && selectedGalleryPaths.size === 0) {
                     if ((currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') && galleryPage === 1 && currentSkipOffset === 0) loadGalleryItems(false);
-                    else if (currentTab === 'faces' && typeof selectedPersonIds !== 'undefined' && selectedPersonIds.size === 0) loadPersons();
+                    else if (currentTab === 'faces' && currentTimelinePersonId === null && typeof selectedPersonIds !== 'undefined' && selectedPersonIds.size === 0) loadPersons();
                     else if (currentTab === 'dups') loadDuplicates();
                     else if (currentTab === 'similar') loadSimilarGroups();
                 }

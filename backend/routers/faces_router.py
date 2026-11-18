@@ -64,9 +64,26 @@ def api_get_persons():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT p.person_id, p.name, p.face_count, f.thumb_path
-        FROM persons p LEFT JOIN faces f ON p.cover_face_id = f.face_id
-        ORDER BY (p.name != 'Inconnu') DESC, p.face_count DESC
+        SELECT p.person_id, p.name, p.face_count, f.thumb_path,
+               COALESCE(mc.media_count, 0) AS media_count,
+               COALESCE(mc.recent_ts, 0) AS recent_ts,
+               COALESCE(mc.added_ts, 0) AS added_ts,
+               COALESCE(mc.max_face_id, 0) AS max_face_id
+        FROM persons p
+        LEFT JOIN faces f ON p.cover_face_id = f.face_id
+        LEFT JOIN (
+            SELECT fc.person_id,
+                   COUNT(DISTINCT COALESCE(pf.source_path, fc.source_path)) AS media_count,
+                   MAX(COALESCE(pf.timestamp, fc.timestamp, 0)) AS recent_ts,
+                   MAX(COALESCE(CAST(strftime('%s', pf.processed_at) AS INTEGER), pf.timestamp, fc.timestamp, 0)) AS added_ts,
+                   MAX(fc.face_id) AS max_face_id
+            FROM faces fc
+            LEFT JOIN processed_files pf ON pf.source_path = fc.source_path
+            WHERE COALESCE(pf.is_duplicate, 0) = 0
+              AND COALESCE(pf.is_trashed, 0) = 0
+            GROUP BY fc.person_id
+        ) mc ON mc.person_id = p.person_id
+        ORDER BY (p.name != 'Inconnu') DESC, COALESCE(mc.media_count, 0) DESC, p.face_count DESC
     """)
     persons = [dict(r) for r in cur.fetchall()]
     conn.close()
@@ -77,15 +94,31 @@ def api_get_persons():
 def api_rename_person(payload: RenamePersonPayload):
     new_n = payload.new_name.strip() or "Inconnu"
     conn = get_db()
-    conn.execute("UPDATE persons SET name = ? WHERE person_id = ?", (new_n, payload.person_id))
+    cur = conn.cursor()
+    target_id = payload.person_id
+    if new_n.lower() != "inconnu":
+        existing = cur.execute(
+            "SELECT person_id FROM persons WHERE LOWER(TRIM(name)) = LOWER(?) AND person_id != ? ORDER BY face_count DESC LIMIT 1",
+            (new_n, payload.person_id),
+        ).fetchone()
+        if existing:
+            target_id = existing["person_id"]
+            cur.execute("UPDATE faces SET person_id = ?, exif_synced_name = NULL WHERE person_id = ?", (target_id, payload.person_id))
+            cur.execute("DELETE FROM persons WHERE person_id = ?", (payload.person_id,))
+            _recompute_person_stats(cur, target_id)
+            conn.commit()
+            conn.close()
+            log_library_action("PERSON_MERGE", "Personnes fusionnées", f"Personne #{payload.person_id} fusionnée dans « {new_n} » (#{target_id})")
+            return {"status": "merged", "person_id": target_id}
+    cur.execute("UPDATE persons SET name = ? WHERE person_id = ?", (new_n, payload.person_id))
     conn.commit()
     conn.close()
     log_library_action("PERSON_RENAME", "Personne renommée", f"Personne #{payload.person_id} → « {new_n} »")
-    return {"status": "renamed"}
+    return {"status": "renamed", "person_id": target_id}
 
 
 @router.get("/api/person/{person_id}/timeline")
-def api_person_timeline(person_id: int):
+def api_person_timeline(person_id: int, sort_by: str = "date", sort_order: str = "desc"):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT person_id, name, face_count FROM persons WHERE person_id = ?", (person_id,))
@@ -95,8 +128,39 @@ def api_person_timeline(person_id: int):
         raise HTTPException(404, "Personne introuvable")
     cur.execute("SELECT face_id, source_path, dest_path, timestamp, thumb_path FROM faces WHERE person_id = ? ORDER BY COALESCE(timestamp, 0) ASC", (person_id,))
     faces = [dict(r) for r in cur.fetchall()]
+
+    direction = "ASC" if str(sort_order).lower() == "asc" else "DESC"
+    if sort_by == "name":
+        order_expr = f"LOWER(COALESCE(pf.dest_path, f.dest_path)) {direction}"
+    elif sort_by == "modified":
+        order_expr = f"COALESCE(pf.modified_at, pf.timestamp, f.timestamp, 0) {direction}"
+    elif sort_by == "added":
+        order_expr = f"COALESCE(pf.rowid, f.face_id) {direction}"
+    else:
+        order_expr = f"COALESCE(pf.timestamp, f.timestamp, 0) {direction}"
+
+    cur.execute(
+        f"""
+        SELECT COALESCE(pf.source_path, f.source_path) AS source_path,
+               COALESCE(pf.dest_path, f.dest_path) AS dest_path,
+               COALESCE(pf.timestamp, f.timestamp, 0) AS timestamp,
+               pf.modified_at, pf.file_size, pf.width, pf.height,
+               pf.duration_sec, COALESCE(pf.is_favorite, 0) AS is_favorite,
+               pf.album_name,
+               MIN(f.face_id) AS face_id, MIN(f.thumb_path) AS face_thumb_path
+        FROM faces f
+        LEFT JOIN processed_files pf ON pf.source_path = f.source_path
+        WHERE f.person_id = ?
+          AND COALESCE(pf.is_duplicate, 0) = 0
+          AND COALESCE(pf.is_trashed, 0) = 0
+        GROUP BY COALESCE(pf.source_path, f.source_path)
+        ORDER BY {order_expr}
+        """,
+        (person_id,),
+    )
+    items = [dict(r) for r in cur.fetchall()]
     conn.close()
-    return {"person": dict(person), "faces": faces}
+    return {"person": dict(person), "faces": faces, "items": items}
 
 
 @router.post("/api/persons/merge")

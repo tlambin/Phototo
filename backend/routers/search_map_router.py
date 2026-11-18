@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from database import get_active_db_and_dest, get_db
+from settings_manager import load_settings
 from indexeur_semantique_gps import search_photos_by_natural_text
 
 router = APIRouter()
@@ -235,7 +236,12 @@ def api_map_points():
     return {"points": points, "count": len(points)}
 
 
-def _extract_city_from_nominatim(data: dict) -> tuple[str, str, str]:
+def _normalize_country_cmp(name: str) -> str:
+    txt = unicodedata.normalize("NFKD", str(name or "").strip().lower())
+    return "".join(ch for ch in txt if not unicodedata.combining(ch))
+
+
+def _extract_place_details_from_nominatim(data: dict) -> tuple[str, str, str, str]:
     addr = data.get("address") or {}
     city = (
         addr.get("city")
@@ -250,11 +256,52 @@ def _extract_city_from_nominatim(data: dict) -> tuple[str, str, str]:
         or addr.get("region")
         or ""
     ).strip()
+    region = (
+        addr.get("state")
+        or addr.get("region")
+        or addr.get("province")
+        or addr.get("county")
+        or ""
+    ).strip()
     country = (addr.get("country") or "").strip()
+    if region and region.lower() == city.lower():
+        region = ""
     if not city and country:
         city = country
     display_label = f"{city}, {country}" if (city and country and city != country) else (city or country or "")
+    return city, region, country, display_label
+
+
+def _extract_city_from_nominatim(data: dict) -> tuple[str, str, str]:
+    city, _region, country, display_label = _extract_place_details_from_nominatim(data)
     return city, country, display_label
+
+
+def _build_place_payload(city: str, region: str, country: str, display_label: str, cached: bool) -> dict:
+    home_country = ""
+    try:
+        home_country = str(load_settings().get("home_country", "France") or "").strip()
+    except Exception:
+        home_country = "France"
+
+    is_foreign = bool(
+        country
+        and home_country
+        and _normalize_country_cmp(country) != _normalize_country_cmp(home_country)
+    )
+    foreign_parts = [p for p in (region, country) if p and p.lower() != (city or "").lower()]
+    place_subtitle = ", ".join(foreign_parts) if is_foreign else ""
+    place_title = f"{city} · {place_subtitle}" if (city and place_subtitle) else (city or display_label or "Lieu inconnu")
+    return {
+        "city": city,
+        "region": region,
+        "country": country,
+        "is_foreign": is_foreign,
+        "place_subtitle": place_subtitle,
+        "place_title": place_title,
+        "label": display_label or city or "Lieu inconnu",
+        "cached": cached,
+    }
 
 
 def _reverse_geocode_offline_city(lat: float, lon: float) -> str:
@@ -270,7 +317,7 @@ def _reverse_geocode_offline_city(lat: float, lon: float) -> str:
     return candidates[0][1]
 
 
-def _fetch_nominatim_city(lat: float, lon: float) -> tuple[str, str, str]:
+def _fetch_nominatim_city(lat: float, lon: float) -> tuple:
     query = urllib.parse.urlencode({
         "format": "jsonv2",
         "lat": f"{lat:.6f}",
@@ -283,7 +330,7 @@ def _fetch_nominatim_city(lat: float, lon: float) -> tuple[str, str, str]:
     req = urllib.request.Request(url, headers={"User-Agent": "Phototo/1.0 (local photo library)"})
     with urllib.request.urlopen(req, timeout=3.5) as resp:
         data = json.loads(resp.read().decode("utf-8"))
-    return _extract_city_from_nominatim(data)
+    return _extract_place_details_from_nominatim(data)
 
 
 @router.get("/api/map/reverse")
@@ -293,37 +340,47 @@ def api_reverse_geocode(lat: float, lon: float):
 
     conn = get_db()
     try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(geocode_cache)").fetchall()}
+        if "region" not in cols:
+            conn.execute("ALTER TABLE geocode_cache ADD COLUMN region TEXT DEFAULT ''")
+
         row = conn.execute(
-            "SELECT city, country, display_label FROM geocode_cache WHERE lat_key = ? AND lon_key = ?",
+            "SELECT city, region, country, display_label FROM geocode_cache WHERE lat_key = ? AND lon_key = ?",
             (lat_key, lon_key),
         ).fetchone()
         if row and (row["city"] or row["display_label"]):
             city = (row["city"] or "").strip()
+            region = (row["region"] or "").strip()
             country = (row["country"] or "").strip()
             label = (row["display_label"] or city).strip()
-            return {"city": city, "country": country, "label": label, "cached": True}
+            return _build_place_payload(city, region, country, label, cached=True)
 
-        city, country, display_label = "", "", ""
+        city, region, country, display_label = "", "", "", ""
         try:
-            city, country, display_label = _fetch_nominatim_city(float(lat), float(lon))
+            res_nom = _fetch_nominatim_city(float(lat), float(lon))
+            if isinstance(res_nom, (list, tuple)):
+                if len(res_nom) >= 4:
+                    city, region, country, display_label = res_nom[:4]
+                elif len(res_nom) == 3:
+                    city, country, display_label = res_nom
         except Exception:
-            city, country, display_label = "", "", ""
+            city, region, country, display_label = "", "", "", ""
 
         if city:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO geocode_cache (lat_key, lon_key, city, country, display_label, updated_at)
-                VALUES (?, ?, ?, ?, ?, strftime('%s','now'))
+                INSERT OR REPLACE INTO geocode_cache (lat_key, lon_key, city, region, country, display_label, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, strftime('%s','now'))
                 """,
-                (lat_key, lon_key, city, country, display_label),
+                (lat_key, lon_key, city, region, country, display_label),
             )
             conn.commit()
-            return {"city": city, "country": country, "label": display_label, "cached": False}
+            return _build_place_payload(city, region, country, display_label, cached=False)
 
         fallback_city = _reverse_geocode_offline_city(float(lat), float(lon))
         if fallback_city:
-            return {"city": fallback_city, "country": "", "label": fallback_city, "cached": False}
+            return _build_place_payload(fallback_city, "", "", fallback_city, cached=False)
 
-        return {"city": "", "country": "", "label": "Lieu inconnu", "cached": False}
+        return _build_place_payload("", "", "", "Lieu inconnu", cached=False)
     finally:
         conn.close()
