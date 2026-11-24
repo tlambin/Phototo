@@ -674,7 +674,41 @@ function openAutoDuplicatesConfigStep() {
     hideAllTopPopovers();
     setAutoDupMode('KEEP_ONE');
     selectAutoDupPriority('BEST_QUALITY', 'la meilleure qualité');
+    autoDupExtraPriorities = [];
+    const exactChk = document.getElementById('autodup-chk-exact-only');
+    if (exactChk) exactChk.checked = false;
+    _renderAutoDupExtraPriorities();
     showMergeStep('merge-step-auto-config');
+}
+
+function _renderAutoDupExtraPriorities() {
+    renderExtraPriorityRows(
+        'autodup-extra-priorities',
+        'autodup-add-priority-btn',
+        autoDupExtraPriorities,
+        'onAutoDupExtraPriorityChange',
+        'removeAutoDupPriority',
+        ''
+    );
+}
+
+function addAutoDupPriority() {
+    const next = pickNextUnusedPriority([autoDupPriority, ...autoDupExtraPriorities]);
+    if (!next) return;
+    autoDupExtraPriorities.push(next);
+    _renderAutoDupExtraPriorities();
+}
+
+function onAutoDupExtraPriorityChange(selectEl) {
+    const idx = Number(selectEl?.dataset?.extraPriorityIdx);
+    if (Number.isInteger(idx) && idx >= 0 && idx < autoDupExtraPriorities.length) {
+        autoDupExtraPriorities[idx] = selectEl.value;
+    }
+}
+
+function removeAutoDupPriority(idx) {
+    autoDupExtraPriorities.splice(idx, 1);
+    _renderAutoDupExtraPriorities();
 }
 
 function setAutoDupMode(mode) {
@@ -699,12 +733,16 @@ function selectAutoDupPriority(code, label) {
 }
 
 async function submitAutoDuplicatesResolution() {
+    const priorities = [autoDupPriority, ...autoDupExtraPriorities].filter(Boolean);
+    const exactOnly = Boolean(document.getElementById('autodup-chk-exact-only')?.checked);
     const res = await fetch('/api/duplicates/auto_resolve', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             mode: autoDupMode,
-            priority: autoDupPriority,
+            priority: priorities[0] || autoDupPriority,
+            priorities,
+            exact_only: exactOnly,
             update_albums: document.getElementById('autodup-chk-albums').checked,
             move_to_trash: document.getElementById('autodup-chk-trash').checked
         })

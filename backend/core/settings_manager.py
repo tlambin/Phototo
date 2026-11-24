@@ -27,7 +27,17 @@ DEFAULT_SETTINGS = {
     "ocr_engine": "paddleocr",  # "rapidocr", "easyocr", "paddleocr"
     "faces_model": "buffalo_l",  # "buffalo_s", "buffalo_l", "antelopev2"
     "clip_model": "vit-b-32",    # "vit-b-32", "vit-b-16", "vit-l-14"
-    "ui_blur": True
+    "ui_blur": True,
+    "ui_style": "glass",         # "glass" | "solid"
+    "ui_lightbox_style": "studio", # "studio" | "classic"
+    "ui_oled": False,
+    "ui_no_shadows": False,
+    "ui_accent": "default",
+    "ui_accent_custom": "#6366f1",
+    "ui_fav_match_accent": False,
+    "ui_tile_radius": "rounded", # "rounded" | "soft" | "square"
+    "ui_grid_gap": "normal",     # "tight" | "normal" | "airy"
+    "ui_reduce_motion": False
 }
 
 FACES_MODEL_SPECS = {

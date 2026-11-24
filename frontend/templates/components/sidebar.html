@@ -1,6 +1,6 @@
-<aside id="main-sidebar" class="w-56 h-full flex flex-col shrink-0 overflow-hidden transition-all duration-200">
+<aside id="main-sidebar" class="w-52 h-full flex flex-col shrink-0 overflow-hidden transition-all duration-200">
     <!-- En-tête Logo aligné avec la navbar (h-20) -->
-    <div id="sidebar-header" class="relative z-20 h-20 px-4 flex items-center shrink-0">
+    <div id="sidebar-header" class="relative z-20 h-20 pl-4 pr-0 flex items-center shrink-0">
         <button id="topbar-logo-box" type="button" onclick="toggleSidebarMini()" title="Cliquer pour réduire / agrandir le menu latéral"
                 class="ui-card hover:bg-[var(--bg-hover)] w-full h-11 px-4 rounded-full flex items-center justify-between gap-2 cursor-pointer group shrink-0 transition-all duration-200 shadow-sm">
             <div class="flex items-center gap-2.5 min-w-0">
@@ -15,7 +15,7 @@
         </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto no-scrollbar px-4 pt-1 pb-4 flex flex-col justify-between space-y-3">
+    <div class="flex-1 overflow-y-auto no-scrollbar pl-4 pr-0 pt-1 pb-4 flex flex-col justify-between space-y-3">
     <div class="space-y-3">
         <!-- Bouton (+ Importer) -->
         <button id="btn-top-import" onclick="openImportWizard()"
@@ -36,7 +36,7 @@
             </button>
         </div>
 
-        <!-- Bloc 2 : Favoris, Lieux, Personnes, Catégories, Corbeille -->
+        <!-- Bloc 2 : Favoris, Lieux, Personnes, Catégories -->
         <div class="ui-card rounded-2xl p-2 space-y-1 shadow-sm">
             <button id="tab-btn-favorites" onclick="switchTab('favorites')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
@@ -54,34 +54,26 @@
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 <span class="nav-label">Catégories</span>
             </button>
+        </div>
+
+        <!-- Bloc 3 : Outils, Activités & Corbeille -->
+        <div class="ui-card rounded-2xl p-2 space-y-1 shadow-sm">
+            <button id="tab-btn-tools" onclick="switchTab('tools')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="nav-label">Outils</span>
+            </button>
+            <button id="tab-btn-activities" onclick="switchTab('activities')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="nav-label">Activités</span>
+            </button>
             <button id="tab-btn-trash" onclick="switchTab('trash')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 <span class="nav-label">Corbeille</span>
             </button>
         </div>
 
-        <!-- Bloc 3 : Outils (avec sous-items Doublons & Similaires) -->
+        <!-- Bloc 4 : Paramètres seul -->
         <div class="ui-card rounded-2xl p-2 space-y-1 shadow-sm">
-            <button id="tab-btn-tools" onclick="switchTab('tools')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
-                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                <span class="nav-label">Outils</span>
-            </button>
-            <div class="sub-tools-nav pl-7 space-y-1">
-                <button id="tab-btn-dups" onclick="switchTab('dups')" class="w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-[11px] font-semibold opacity-80 hover:opacity-100 transition">
-                    <span>⧉</span> <span>Doublons</span>
-                </button>
-                <button id="tab-btn-similar" onclick="switchTab('similar')" class="w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-[11px] font-semibold opacity-80 hover:opacity-100 transition">
-                    <span>⬚</span> <span>Similaires</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Bloc 4 : Activités & Paramètres -->
-        <div class="ui-card rounded-2xl p-2 space-y-1 shadow-sm">
-            <button id="tab-btn-activities" onclick="switchTab('activities')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
-                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span class="nav-label">Activités</span>
-            </button>
             <button id="tab-btn-settings" onclick="switchTab('settings')" class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition">
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 <span class="nav-label">Parametres</span>
@@ -89,8 +81,9 @@
         </div>
     </div>
 
-    <!-- Bloc 5 : Compteur Fichiers & Volume Go -->
-    <div class="ui-card rounded-2xl p-3 text-center shadow-sm relative z-[25]">
+    <!-- Bloc 5 : Compteur Fichiers & Volume Go -> Page Statistiques -->
+    <button id="tab-btn-stats" type="button" onclick="switchTab('stats')" title="Ouvrir les statistiques de la bibliothèque"
+            class="ui-card hover:bg-[var(--bg-hover)] w-full rounded-2xl p-3 text-center shadow-sm relative z-[25] transition cursor-pointer">
         <div class="storage-text-box">
             <div class="text-xs font-extrabold"><span id="st-indexed">0</span> fichiers</div>
             <div class="text-[10px] opacity-60 font-semibold"><span id="st-gb">0,00</span> go</div>
@@ -98,6 +91,6 @@
         <div class="storage-icon-only hidden justify-center items-center">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
         </div>
-    </div>
+    </button>
     </div>
 </aside>

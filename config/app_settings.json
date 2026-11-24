@@ -13,5 +13,15 @@
     "ocr_engine": "rapidocr",
     "faces_model": "antelopev2",
     "clip_model": "vit-l-14",
-    "ui_blur": false
+    "ui_blur": true,
+    "ui_style": "glass",
+    "ui_lightbox_style": "studio",
+    "ui_oled": false,
+    "ui_no_shadows": false,
+    "ui_accent": "midnight",
+    "ui_accent_custom": "#031c0a",
+    "ui_fav_match_accent": false,
+    "ui_tile_radius": "rounded",
+    "ui_grid_gap": "normal",
+    "ui_reduce_motion": false
 }

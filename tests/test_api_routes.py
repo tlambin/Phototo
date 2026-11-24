@@ -83,6 +83,119 @@ class TestApiRoutes(unittest.TestCase):
         sidebar_end = html.index('</aside>', sidebar_start)
         self.assertIn('id="topbar-logo-box"', html[sidebar_start:sidebar_end])
 
+        # Page Outils simplifiée + pages dédiées pour chaque suggestion (style Doublons / Similaires)
+        for tok in (
+            'id="tools-sticky-header"', 'id="tools-summary-pill"',
+            'id="tools-ai-open-btn"', 'id="tools-ai-modal"',
+            'id="tab-suggestion-page"', 'id="sug-sticky-header"', 'id="sug-options-drawer"',
+            'id="sug-page-settings-btn"', 'id="sug-sort-by"', 'id="sug-filter-by"',
+            'id="sug-layout-btn-GRID"', 'id="sug-layout-btn-MASONRY"', 'id="sug-layout-btn-LIST"',
+            'id="sug-progress-card"', 'id="sug-summary-bar"', 'id="sug-container"', 'id="sug-batch-bar"',
+            'id="ps-sug-settings-section"', 'id="ps-sug-blur-thresh"', 'id="ps-sug-large-min-mb"',
+            'id="tools-sug-progress-card"',
+            'id="tools-sug-card-albums"', 'id="tools-sug-card-rotation"', 'id="tools-sug-card-blurry"',
+            'id="tools-sug-card-gps"', 'id="tools-sug-card-people"', 'id="tools-sug-card-screenshots"',
+            'id="tools-sug-card-large"', 'id="tools-sug-card-missing"',
+            'id="st-dups"', 'id="st-sims"', 'id="st-missing-meta"',
+            'id="tools-cov-bar-dedup"', 'id="tools-cov-bar-similar"',
+            'id="tools-cov-bar-ocr"', 'id="tools-cov-bar-clip"', 'id="tools-cov-bar-faces"',
+            'id="tools-ocr-count"', 'id="tools-persons-count"',
+            'id="btn-retry-meta"', 'id="btn-prune-missing"',
+            'id="types-sticky-header"', 'id="types-options-drawer"', 'id="types-total-label"',
+            'id="smart-categories-grid"', 'id="category-single-sticky-header"',
+            'id="tab-btn-stats"', 'id="tab-stats"', 'id="stats-sticky-header"',
+            'id="stats-summary-pill"', 'id="types-cards-grid"', 'id="types-formats-panel"',
+            'id="types-ext-grid"', 'id="stats-type-breakdown"', 'id="stats-coverage-list"',
+            'id="stats-temporal-section"', 'id="stats-gran-years"', 'id="stats-gran-months"',
+            'id="stats-gran-weeks"', 'id="stats-gran-days"', 'id="stats-period-chart"',
+            'id="stats-period-list"', 'id="stats-weekday-chart"', 'id="stats-season-chart"',
+            'id="stats-hour-chart"', 'id="stats-meta-card"', 'id="stats-tech-card"',
+            'id="stats-top-albums-card"',
+            'id="studio-tools-drawer"', 'id="studio-center-photo-pill"', 'id="studio-center-video-pill"',
+            'id="studio-video-timeline-dock"', 'id="studio-tl-v1-rail"', 'id="studio-tl-t1-clip"',
+            'id="studio-tl-a1-clip"', 'id="studio-tl-handle-in"', 'id="studio-tl-handle-out"',
+            'id="studio-text-preview"', 'id="studio-btn-undo"', 'id="studio-btn-redo"',
+            'id="studio-filter-presets"', 'id="st-warmth"', 'id="st-vignette"', 'id="studio-dims-pill"',
+            'id="studio-tl-ruler"', 'id="studio-tl-filmstrip"', 'id="studio-tl-waveform"',
+            'id="studio-tl-curtain-left"', 'id="studio-tl-curtain-right"', 'data-crop-handle="se"',
+            'id="studio-eraser-canvas"', 'id="studio-eraser-cursor"', 'id="studio-eraser-bar"',
+            'id="st-eraser-size"', 'id="studio-btn-auto"',
+            'id="studio-left-rail"', 'id="studio-btn-split"', 'id="studio-btn-grid"',
+            'id="studio-stab-history"', 'id="studio-crop-preview-btn"',
+            'id="studio-split-orig-img"', 'id="studio-split-divider"',
+            'id="studio-histogram-canvas"',
+            'id="studio-dec-library-bin-grid"', 'id="studio-tl-v2-rail"', 'id="studio-tl-extra-clips"',
+            'id="st-straighten"', 'id="st-tint"', 'id="st-highlights"', 'id="st-shadows"',
+            'id="st-fade"', 'id="st-grain"', 'id="studio-music-player"', 'id="studio-grain-overlay"',
+            'id="st-ratio-orig"',
+            'id="studio-layer-templates-card"', 'id="studio-tpl-creator-box"',
+            'id="studio-layer-templates-list"', 'id="st-text-opacity"',
+            'id="studio-save-copy-btn"', 'id="studio-save-overwrite-btn"',
+        ):
+            self.assertIn(tok, html)
+        self.assertNotIn('id="studio-save-btn"', html)
+        # Les 5 sections Transformation, Filtre, Ton, Décoration (Dessin/Calque/Texte) & Outil (Objet, Reflets, Yeux rouges)
+        self.assertLess(html.index('id="studio-left-rail"'), html.index('id="studio-tools-drawer"'))
+        self.assertLess(html.index('id="studio-tools-drawer"'), html.index('id="studio-viewport"'))
+        for stok in (
+            'id="studio-stab-transform"', 'id="studio-stab-filter"', 'id="studio-stab-tone"',
+            'id="studio-stab-decoration"', 'id="studio-stab-layers"', 'id="studio-stab-tools"',
+            'id="studio-panel-transform"', 'id="studio-panel-filter"', 'id="studio-panel-tone"',
+            'id="studio-panel-decoration"', 'id="studio-panel-layers"', 'id="studio-panel-tools"',
+            'id="studio-dectab-draw"', 'id="studio-dectab-text"',
+            'id="studio-decsub-draw"', 'id="studio-decsub-text"',
+            'id="st-bmode-brush"', 'id="st-bmode-pen"', 'id="st-bmode-highlighter"',
+            'id="st-bmode-blur"', 'id="st-bmode-shape"', 'id="st-bmode-stroke_eraser"',
+            'id="rmode-object"' if False else 'id="st-rmode-object"', 'id="st-rmode-glare"', 'id="st-rmode-redeye"', 'id="st-rmode-blemish"',
+            'id="studio-ai-inpaint-banner"', 'id="studio-draw-canvas"', 'id="studio-blur-canvas"',
+        ):
+            self.assertIn(stok, html)
+        # Les 4 boutons (Photos, Vidéos, Images animées, Formats) sont bien sur la page Statistiques et plus dans Catégories
+        self.assertLess(html.index('id="tab-types"'), html.index('id="tab-stats"'))
+        self.assertLess(html.index('id="tab-stats"'), html.index('id="types-cards-grid"'))
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        groups_js = (ROOT_DIR / "frontend" / "static" / "js" / "groups.js").read_text(encoding="utf-8")
+        studio_js = (ROOT_DIR / "frontend" / "static" / "js" / "studio_exif.js").read_text(encoding="utf-8")
+        for fn in (
+            "function selectStudioSidebarTab(", "function setStudioCropAspect(",
+            "function applyStudioFilterPreset(", "function setStudioTrimInAtPlayhead(",
+            "function setStudioTrimOutAtPlayhead(", "function syncStudioTimelineUI(",
+            "function setStudioCompareOriginal(", "function resetStudioEdits(",
+            "function studioUndo(", "function studioRedo(",
+            "function studioAutoEnhance(", "function refreshStudioPhotoStageSource(",
+            "function toggleStudioEraserMasksOverlay(", "function toggleStudioSplitCompare(",
+            "function cycleStudioGridOverlay(", "function handleStudioLocalFilesSelected(",
+            "function loadStudioLibraryBin(", "function addExtraStudioTextLayer(",
+            "function _drawStudioHistogram(", "function resetStudioSection(",
+            "function syncStudioTabBadges(", "function onStudioAudioPathChanged(",
+            "function loadStudioLayerTemplates(", "function applyStudioLayerTemplate(",
+            "function saveStudioWatermarkQuickTemplate(", "function saveCurrentCanvasAsLayerTemplate(",
+            "function deleteStudioLayerTemplate(", "function toggleStudioDrawerCollapsed(",
+            "function selectStudioBrushMode(", "function refreshStudioAiInpaintStatus(",
+            "function installStudioAiInpaintModel(", "function _renderStudioBrushLayers(",
+            "function _exportStudioBrushPayloads(", "function undoStudioBrushStep(",
+            "function clearStudioBrushLayers(", "function selectStudioDecorationSubtab(",
+            "function selectStudioRetouchTool(",
+        ):
+            self.assertIn(fn, studio_js)
+        for fn in (
+            "function openSuggestionPage(", "function openSuggestionAndAnalyze(",
+            "function openCurrentSugPageSettings(", "function openSuggestedNewAlbumPreview(",
+            "function closeSuggestedNewAlbumPreview(", "function createSuggestedNewAlbumFromPreview(",
+            "function goBackFromSugPage(", "function toggleTypesOptionsBar(",
+            "'BLUR'", "'ROTATION'", "'SUGGESTIONS'", "'stats'",
+        ):
+            self.assertIn(fn, app_js)
+        for fn in (
+            "function loadStatsPage(", "function renderSmartCategoriesFromCache(",
+            "function renderStatsTypeBreakdown(", "function renderStatsPeriodSection(",
+            "function setStatsGranularity(", "function filterGalleryByPeriod(",
+        ):
+            self.assertIn(fn, gallery_js)
+        for pg in ("types:", "'sug-albums'", "'sug-rotation'", "'sug-blurry'", "'sug-missing_gps'", "'sug-people'", "'sug-screenshots'", "'sug-large'", "'sug-missing_meta'"):
+            self.assertIn(pg, groups_js)
+
     def test_stats_and_gallery_items_and_favorites(self):
         img = self.dest_dir / "photo1.jpg"
         img.write_bytes(b"fake-jpg")
@@ -110,6 +223,310 @@ class TestApiRoutes(unittest.TestCase):
         fav_res = gallery_router.api_toggle_favorite(gallery_router.ToggleFavoritePayload(source_path="src_1"))
         self.assertEqual(fav_res["is_favorite"], 1)
         self.assertEqual(system_router.api_stats()["favorites"], 1)
+
+        det = system_router.api_stats_detailed()
+        self.assertEqual(len(det["years"]), 1)
+        self.assertEqual(len(det["months"]), 1)
+        self.assertEqual(len(det["weeks"]), 1)
+        self.assertEqual(len(det["days"]), 1)
+        self.assertEqual(det["years"][0]["count"], 1)
+        self.assertEqual(len(det["weekdays"]), 7)
+        self.assertEqual(len(det["hours"]), 24)
+        self.assertEqual(len(det["season_months"]), 12)
+        self.assertEqual(det["top_albums"][0]["name"], "Vacances")
+        self.assertEqual(det["summary"]["albumed_count"], 1)
+
+    def test_studio_photo_edit_apply_and_db_update(self):
+        from PIL import Image
+        import metadata_studio_router
+
+        src_img = self.dest_dir / "studio_src.jpg"
+        Image.new("RGB", (120, 80), color=(40, 80, 120)).save(src_img)
+
+        conn = database.get_db()
+        conn.execute(
+            """
+            INSERT INTO processed_files
+            (source_path, dest_path, original_dest_path, status, timestamp, file_size, width, height, is_duplicate, is_trashed)
+            VALUES (?, ?, ?, 'ok', 1700000000, ?, 120, 80, 0, 0)
+            """,
+            ("src_studio_1", str(src_img), str(src_img), src_img.stat().st_size),
+        )
+        conn.commit()
+        conn.close()
+
+        strokes = [{"nr": 0.05, "points": [{"nx": 0.2, "ny": 0.2}, {"nx": 0.4, "ny": 0.4}]}]
+        preview_resp = metadata_studio_router.api_preview_studio_eraser(
+            metadata_studio_router.MediaStudioEditPayload(
+                source_path="src_studio_1",
+                rotate=90,
+                inpaint_strokes=strokes,
+            )
+        )
+        self.assertEqual(preview_resp.media_type, "image/jpeg")
+        self.assertTrue(preview_resp.body.startswith(b"\xff\xd8"))
+
+        with patch.object(metadata_studio_router, "get_active_db_and_dest", return_value=(self.db_path, self.dest_dir)):
+            import asyncio
+            import io
+            from fastapi import UploadFile
+            ov_buf = io.BytesIO()
+            Image.new("RGBA", (24, 24), (255, 0, 0, 200)).save(ov_buf, format="PNG")
+            ov_buf.seek(0)
+            up_res = asyncio.run(
+                metadata_studio_router.api_upload_studio_asset(UploadFile(filename="logo_test.png", file=ov_buf))
+            )
+            self.assertEqual(up_res["status"], "ok")
+            self.assertEqual(up_res["kind"], "image")
+            self.assertTrue(Path(up_res["path"]).exists())
+
+        # Statut Effaceur IA & calque Pinceau RGBA / Floutage
+        ai_st = metadata_studio_router.api_studio_ai_inpaint_status()
+        self.assertIn("installed", ai_st)
+        self.assertIn("device_label", ai_st)
+
+        import base64
+        draw_cv = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+        draw_cv.putpixel((20, 20), (244, 63, 94, 220))
+        draw_buf = io.BytesIO()
+        draw_cv.save(draw_buf, format="PNG")
+        draw_b64 = "data:image/png;base64," + base64.b64encode(draw_buf.getvalue()).decode("ascii")
+
+        with patch("media_editor.preserve_metadata_and_time"):
+            res = metadata_studio_router.api_apply_studio_edits(
+                metadata_studio_router.MediaStudioEditPayload(
+                    source_path="src_studio_1",
+                    overwrite=False,
+                    rotate=90,
+                    straighten=0.0,
+                    crop={"nx": 0.0, "ny": 0.0, "nw": 0.5, "nh": 0.5},
+                    brightness=1.1,
+                    saturation=1.2,
+                    warmth=0.35,
+                    tint=0.15,
+                    highlights=-0.2,
+                    shadows=0.25,
+                    fade=0.1,
+                    grain=0.15,
+                    vignette=0.4,
+                    inpaint_strokes=strokes,
+                    draw_layer_png=draw_b64,
+                    blur_strokes=[{"nr": 0.08, "points": [{"nx": 0.3, "ny": 0.3}, {"nx": 0.4, "ny": 0.4}]}],
+                    image_overlays=[{"path": up_res["path"], "nx": 0.1, "ny": 0.1, "nw": 0.3, "opacity": 0.8}],
+                    text_overlay={"text": "Test", "nx": 0.1, "ny": 0.8, "size": 24, "color": "#ffffff", "bg_color": "dark", "opacity": 0.65},
+                    text_layers=[{"text": "Watermark", "nx": 0.2, "ny": 0.3, "size": 20, "color": "#fbbf24", "opacity": 0.45}],
+                )
+            )
+        self.assertEqual(res["status"], "ok")
+        out_p = Path(res["output_files"][0])
+        self.assertTrue(out_p.exists())
+        self.assertIn("_edit", out_p.stem)
+        # Après rotation +90° (120x80 -> 80x120) puis crop 50%x50% -> 40x60
+        with Image.open(out_p) as edited:
+            self.assertEqual(edited.size, (40, 60))
+
+        # Modèles de calques (Watermarks réutilisables) : liste / création / suppression
+        tpl_file = self.tmp_path / "studio_layer_templates.json"
+        with patch.object(metadata_studio_router, "LAYER_TEMPLATES_FILE", tpl_file):
+            listed0 = metadata_studio_router.api_list_layer_templates()
+            self.assertGreaterEqual(len(listed0["templates"]), 4)
+            created = metadata_studio_router.api_save_layer_template(
+                metadata_studio_router.StudioLayerTemplatePayload(
+                    name="Mon Watermark Test",
+                    category="watermark",
+                    text_layers=[{"text": "© Moi", "nx": 0.7, "ny": 0.85, "size": 24, "color": "#ffffff", "opacity": 0.5}],
+                    image_overlays=[{"path": up_res["path"], "nx": 0.05, "ny": 0.05, "nw": 0.2, "opacity": 0.8}],
+                )
+            )
+            self.assertEqual(created["status"], "ok")
+            tid = created["template"]["id"]
+            self.assertTrue(any(t["id"] == tid and not t["builtin"] for t in created["templates"]))
+            deleted = metadata_studio_router.api_delete_layer_template(tid)
+            self.assertFalse(any(t["id"] == tid for t in deleted["templates"]))
+
+        # Vérifie aussi le redressement fin (-45° à +45°) + Effaceur reflets + Yeux rouges via aperçu JPEG
+        str_resp = metadata_studio_router.api_preview_studio_eraser(
+            metadata_studio_router.MediaStudioEditPayload(
+                source_path="src_studio_1",
+                straighten=5.0,
+                glare_strokes=[{"nr": 0.05, "points": [{"nx": 0.25, "ny": 0.25}]}],
+                redeye_strokes=[{"nr": 0.04, "points": [{"nx": 0.65, "ny": 0.55}]}],
+                blemish_strokes=[{"nr": 0.03, "points": [{"nx": 0.5, "ny": 0.5}]}],
+            )
+        )
+        self.assertEqual(str_resp.media_type, "image/jpeg")
+        self.assertTrue(str_resp.body.startswith(b"\xff\xd8"))
+        self.assertIn("x-inpaint-engine", {k.lower() for k in str_resp.headers.keys()})
+
+        # Vérifie directement que l'effaceur d'yeux rouges corrige un pixel rouge vif sans erreur
+        import media_editor
+        eye_img = Image.new("RGB", (60, 60), (40, 40, 40))
+        for yy in range(24, 36):
+            for xx in range(24, 36):
+                eye_img.putpixel((xx, yy), (220, 20, 20))
+        fixed_eye = media_editor._apply_redeye_removal(eye_img, [{"nr": 0.12, "points": [{"nx": 0.5, "ny": 0.5}]}])
+        r_after, _, _ = fixed_eye.getpixel((30, 30))
+        self.assertLess(r_after, 90)
+
+        conn = database.get_db()
+        row = conn.execute("SELECT width, height, status FROM processed_files WHERE source_path = ?", (str(out_p),)).fetchone()
+        conn.close()
+        self.assertIsNotNone(row)
+        self.assertEqual((row["width"], row["height"], row["status"]), (40, 60, "edited_copy"))
+
+    def test_tools_suggestions_endpoints(self):
+        import cv2
+        import numpy as np
+        from PIL import Image
+        import pipeline_runner
+
+        blur_img = self.dest_dir / "blurry.png"
+        dark_img = self.dest_dir / "dark.png"
+        sharp_img = self.dest_dir / "sharp.png"
+        rot_img = self.dest_dir / "rotated.jpg"
+        screen_img = self.dest_dir / "Screenshot_20220101.png"
+        short_vid = self.dest_dir / "pocket.mp4"
+        nometa_img = self.dest_dir / "nometa.png"
+
+        # Image grise uniforme (floue), image quasi noire (sous-exposée), et damier haute fréquence (net)
+        cv2.imwrite(str(blur_img), np.full((120, 120, 3), 128, dtype=np.uint8))
+        cv2.imwrite(str(dark_img), np.full((120, 120, 3), 5, dtype=np.uint8))
+        checker = np.zeros((120, 120, 3), dtype=np.uint8)
+        checker[::2, ::2] = 255
+        checker[1::2, 1::2] = 255
+        cv2.imwrite(str(sharp_img), checker)
+        cv2.imwrite(str(screen_img), checker)
+        short_vid.write_bytes(b"vid")
+        # Image JPEG 160x80 avec tag EXIF Orientation = 6 (90° horaire attendu -> deviendra 80x160)
+        pil_rot = Image.new("RGB", (160, 80), color=(40, 120, 200))
+        exif = pil_rot.getexif()
+        exif[274] = 6
+        pil_rot.save(rot_img, format="JPEG", exif=exif)
+        nometa_img.write_bytes(b"raw")
+
+        emb_a = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float16).tobytes()
+        emb_same_decor = np.array([0.98, 0.20, 0.0, 0.0], dtype=np.float16).tobytes()
+        face_vec = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32).tobytes()
+
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, album_name, clip_embedding, latitude, longitude) VALUES (?, ?, ?, 'ok', 1700000000, 1024, 'Vacances', ?, 48.8566, 2.3522)",
+            ("src_alb", str(sharp_img), str(sharp_img), emb_a),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, album_name, clip_embedding, latitude, longitude) VALUES (?, ?, ?, 'ok', 1705000000, ?, NULL, ?, 48.8570, 2.3525)",
+            ("src_blur_cand", str(blur_img), str(blur_img), 12 * 1024 * 1024, emb_same_decor),
+        )
+        # Photo sombre sans GPS à 30 min d'une photo géolocalisée + début d'une grappe de 4 photos d'événement
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, album_name) VALUES (?, ?, ?, 'ok', 1700001800, 2048, NULL)",
+            ("src_dark_gps", str(dark_img), str(dark_img)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, width, height, album_name) VALUES (?, ?, ?, 'ok', 1710000000, 2048, 160, 80, NULL)",
+            ("src_rot", str(rot_img), str(rot_img)),
+        )
+        # Grappe de 4 captures/photos anciennes en 2022 -> suggère aussi un nouvel album + captures anciennes
+        for idx_s in range(4):
+            src_ev = f"src_ev_{idx_s}"
+            dst_ev = str(screen_img if idx_s == 0 else sharp_img) if idx_s == 0 else str(self.dest_dir / f"ev_{idx_s}.png")
+            if idx_s > 0:
+                cv2.imwrite(dst_ev, checker)
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, album_name) VALUES (?, ?, ?, 'ok', ?, 1024, NULL)",
+                (src_ev, dst_ev, dst_ev, 1641000000 + idx_s * 600),
+            )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, duration_sec, album_name) VALUES (?, ?, ?, 'ok', 1715000000, 1024, 1.4, NULL)",
+            ("src_short_v", str(short_vid), str(short_vid)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, timestamp, file_size, album_name) VALUES (?, ?, ?, 'no_metadata', 0, 512, NULL)",
+            ("src_nometa", str(nometa_img), str(nometa_img)),
+        )
+        conn.execute("INSERT INTO persons (person_id, name, face_count, centroid_embedding) VALUES (1, 'Marie', 4, ?)", (face_vec,))
+        conn.execute("INSERT INTO persons (person_id, name, face_count, centroid_embedding) VALUES (2, 'Inconnu', 5, ?)", (face_vec,))
+        conn.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, person_id) VALUES (?, ?, 1700000000, '0,0,10,10', 0.99, 1)",
+            ("src_alb", str(sharp_img)),
+        )
+        conn.execute(
+            "INSERT INTO faces (source_path, dest_path, timestamp, bbox, det_score, person_id) VALUES (?, ?, 1705000000, '0,0,10,10', 0.99, 1)",
+            ("src_blur_cand", str(blur_img)),
+        )
+        conn.commit()
+        conn.close()
+
+        scan_res = gallery_router.api_tools_scan_blur()
+        self.assertGreaterEqual(scan_res["scanned_now"], 7)
+
+        rot_scan = gallery_router.api_tools_scan_rotation()
+        self.assertGreaterEqual(rot_scan["scanned_now"], 7)
+        self.assertEqual(rot_scan["rotation_count"], 1)
+
+        sum_res = gallery_router.api_tools_suggestions_summary(min_mb=10)
+        self.assertGreaterEqual(sum_res["albums_count"], 1)
+        self.assertGreaterEqual(sum_res["new_events_count"], 1)
+        self.assertEqual(sum_res["rotation_count"], 1)
+        self.assertGreaterEqual(sum_res["exposure_bad_count"], 1)
+        self.assertGreaterEqual(sum_res["missing_gps_count"], 1)
+        self.assertEqual(sum_res["people_merge_count"], 1)
+        self.assertEqual(sum_res["people_unnamed_count"], 1)
+        self.assertGreaterEqual(sum_res["screenshots_count"], 1)
+        self.assertEqual(sum_res["large_count"], 1)
+        self.assertEqual(sum_res["short_videos_count"], 1)
+        self.assertEqual(sum_res["missing_meta_count"], 1)
+
+        det_alb = gallery_router.api_tools_suggestions_details(kind="albums")
+        self.assertEqual(det_alb["items"][0]["source_path"], "src_blur_cand")
+        self.assertEqual(det_alb["items"][0]["suggested_album"], "Vacances")
+        self.assertEqual(set(det_alb["items"][0]["match_tags"]), {"Décor", "Lieu", "Personne"})
+        self.assertGreaterEqual(len(det_alb["new_events"]), 1)
+        self.assertEqual(len(det_alb["new_events"][0]["items"]), det_alb["new_events"][0]["item_count"])
+        self.assertIn("dest_path", det_alb["new_events"][0]["items"][0])
+
+        det_exp = gallery_router.api_tools_suggestions_details(kind="blurry", filter_mode="exposure")
+        exp_srcs = {it["source_path"]: it["quality_issue"] for it in det_exp["items"]}
+        self.assertIn("src_dark_gps", exp_srcs)
+        self.assertIn("Trop sombre", exp_srcs["src_dark_gps"])
+
+        det_gps = gallery_router.api_tools_suggestions_details(kind="missing_gps")
+        gps_srcs = [it["source_path"] for it in det_gps["items"]]
+        self.assertIn("src_dark_gps", gps_srcs)
+        gps_item = next(it for it in det_gps["items"] if it["source_path"] == "src_dark_gps")
+        gps_apply = gallery_router.api_tools_apply_gps(
+            gallery_router.ApplyGpsPayload(items=[
+                gallery_router.GpsApplyItem(source_path="src_dark_gps", latitude=gps_item["suggested_lat"], longitude=gps_item["suggested_lon"])
+            ])
+        )
+        self.assertEqual(gps_apply["updated"], 1)
+
+        det_ppl = gallery_router.api_tools_suggestions_details(kind="people")
+        self.assertEqual(len(det_ppl["merge_pairs"]), 1)
+        self.assertEqual(det_ppl["unnamed_persons"][0]["person_id"], 2)
+
+        det_scr = gallery_router.api_tools_suggestions_details(kind="screenshots", min_age_days=90)
+        self.assertIn("src_ev_0", [it["source_path"] for it in det_scr["items"]])
+
+        det_short = gallery_router.api_tools_suggestions_details(kind="large", mode="short_videos")
+        self.assertEqual([it["source_path"] for it in det_short["items"]], ["src_short_v"])
+
+        det_rot = gallery_router.api_tools_suggestions_details(kind="rotation")
+        self.assertEqual([it["source_path"] for it in det_rot["items"]], ["src_rot"])
+        rot_apply = gallery_router.api_tools_apply_rotation(
+            gallery_router.ApplyRotationPayload(items=[gallery_router.RotationApplyItem(source_path="src_rot", rotate=90)])
+        )
+        self.assertEqual(rot_apply["rotated"], 1)
+        with Image.open(rot_img) as rotated_im:
+            self.assertEqual(rotated_im.size, (80, 160))
+
+        # Enregistrement des tâches Suggestions dans le pipeline / activités
+        for tc in ("BLUR", "ROTATION", "SUGGESTIONS"):
+            self.assertIn(tc, pipeline_runner.TASK_REGISTRY)
+            pending, _msg = pipeline_runner._count_pending_items_for_task(
+                {"db_path": str(database.get_active_db_and_dest()[0])}, tc
+            )
+            self.assertEqual(pending, 0)
 
     def test_gallery_period_filter(self):
         from datetime import datetime
@@ -278,6 +695,313 @@ class TestApiRoutes(unittest.TestCase):
         self.assertTrue(dup_f.exists())
         self.assertEqual(gallery_router.api_get_duplicates()["groups"], [])
 
+        # UI Doublons & Similaires modernisée + Mode Auto + Options de page
+        html = main.templates.get_template("index.html").render()
+        for tok in (
+            'id="dups-sticky-header"', 'id="dups-options-btn"', 'id="dups-options-drawer"',
+            'id="dups-page-settings-btn"', 'id="dups-sort-by"', 'id="dups-sort-dir-btn"',
+            'id="dups-filter-by"', 'id="dups-layout-btn-GRID"', 'id="dups-layout-btn-MASONRY"',
+            'id="dups-size-btn-SM"', 'id="dups-auto-btn"', 'id="dups-auto-panel"',
+            'id="dups-auto-priority"', 'id="dups-add-priority-btn"', 'id="dups-extra-priorities"',
+            'id="dups-auto-chk-exact-only"', 'id="dups-auto-chk-albums"', 'id="dups-auto-chk-trash"',
+            'id="dups-progress-card"',
+            'id="similar-sticky-header"', 'id="similar-options-btn"', 'id="similar-options-drawer"',
+            'id="similar-page-settings-btn"', 'id="similar-sort-by"', 'id="similar-sort-dir-btn"',
+            'id="similar-filter-by"', 'id="similar-layout-btn-GRID"', 'id="similar-layout-btn-MASONRY"',
+            'id="similar-size-btn-SM"', 'id="similar-auto-btn"', 'id="similar-auto-panel"',
+            'id="similar-auto-priority"', 'id="similar-add-priority-btn"', 'id="similar-extra-priorities"',
+            'id="similar-auto-chk-exact-only"', 'id="similar-auto-chk-albums"', 'id="similar-auto-chk-trash"',
+            'id="similar-progress-card"', 'id="dups-summary-bar"', 'id="similar-summary-bar"',
+            'id="autodup-add-priority-btn"', 'id="autodup-extra-priorities"', 'id="autodup-chk-exact-only"',
+            'id="compare-modal"', 'id="compare-modal-grid"', 'id="lb-duplicates-bar"', 'id="lb-btn-compare"',
+        ):
+            self.assertIn(tok, html)
+
+        ai_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        groups_js = (ROOT_DIR / "frontend" / "static" / "js" / "groups.js").read_text(encoding="utf-8")
+        for fn in (
+            "function setComparisonLayout(", "function setComparisonSize(",
+            "function toggleComparisonSortOrder(", "function togglePageAutoPanel(",
+            "function previewPageAutoSelect(", "async function submitPageAutoResolve(",
+            "function addPageAutoPriority(", "function _collectWinnersAndLosers(",
+            "function openCompareModal(", "function openComparisonItemLightbox(",
+            'function renderCompareModal(', 'function _renderComparisonSummaryBar(',
+            'function _renderComparisonEmptyState(', 'function _getComparisonBestMetrics(',
+            'function _getItemTraitBadges(',
+        ):
+            self.assertIn(fn, ai_js)
+        self.assertIn('Guide de sélection', html)
+        self.assertIn("function openLightboxForComparisonGroup(", gallery_js)
+        self.assertIn("function _renderLightboxDuplicatesBar(", gallery_js)
+        self.assertIn("function toggleDupsOptionsBar(", app_js)
+        self.assertIn("function toggleSimilarOptionsBar(", app_js)
+        self.assertIn("function formatTime(", app_js)
+        self.assertIn("function formatDateTime(", app_js)
+        self.assertIn("function _syncAnalysisProgressCard(", app_js)
+        self.assertIn("function _revealAnalysisProgressCard(", app_js)
+        self.assertIn("dups:", groups_js)
+        self.assertIn("similar:", groups_js)
+
+        # Résolution automatique des similaires : conserve la meilleure résolution, fusionne les albums et met le reste à la corbeille
+        conn = database.get_db()
+        sim_hi = self.dest_dir / "sim_hi.jpg"
+        sim_lo = self.dest_dir / "sim_lo.jpg"
+        sim_hi.write_bytes(b"hi")
+        sim_lo.write_bytes(b"lo")
+        phash_hex = "0123456789abcdef"
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, phash, width, height, file_size, album_name) VALUES (?, ?, ?, 'ok', ?, 4000, 3000, 5000, 'Vacances')",
+            ("src_sim_hi", str(sim_hi), str(sim_hi), phash_hex),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, phash, width, height, file_size, album_name) VALUES (?, ?, ?, 'ok', ?, 800, 600, 500, 'Eté')",
+            ("src_sim_lo", str(sim_lo), str(sim_lo), phash_hex),
+        )
+        conn.commit()
+        conn.close()
+
+        sim_res = gallery_router.api_auto_resolve_similar(gallery_router.AutoResolveDuplicatesPayload(
+            mode="KEEP_ONE", priority="BEST_QUALITY", update_albums=True, move_to_trash=True,
+        ))
+        self.assertEqual(sim_res["status"], "resolved")
+        self.assertEqual(sim_res["resolved_count"], 1)
+        conn = database.get_db()
+        hi_row = conn.execute("SELECT is_trashed, album_name FROM processed_files WHERE source_path = 'src_sim_hi'").fetchone()
+        lo_row = conn.execute("SELECT is_trashed FROM processed_files WHERE source_path = 'src_sim_lo'").fetchone()
+        conn.close()
+        self.assertEqual(hi_row["is_trashed"], 0)
+        self.assertIn("Eté", hi_row["album_name"])
+        self.assertIn("Vacances", hi_row["album_name"])
+        self.assertEqual(lo_row["is_trashed"], 1)
+
+        # Priorités en chaîne (ex: BEST_QUALITY puis OLDEST) + règle exact_only
+        sim_old = self.dest_dir / "sim_old_tie.jpg"
+        sim_new = self.dest_dir / "sim_new_tie.jpg"
+        sim_old.write_bytes(b"old")
+        sim_new.write_bytes(b"new_bigger")
+        phash_hex_2 = "fedcba9876543210"
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, phash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', ?, 1000, 4000, 3000, 2000)",
+            ("src_sim_old_tie", str(sim_old), str(sim_old), phash_hex_2),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, phash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', ?, 2000, 4000, 3000, 9000)",
+            ("src_sim_new_tie", str(sim_new), str(sim_new), phash_hex_2),
+        )
+        conn.commit()
+        conn.close()
+
+        # exact_only=True sur ces 2 similaires aux dates et tailles distinctes : 0 traité
+        skip_exact = gallery_router.api_auto_resolve_similar(gallery_router.AutoResolveDuplicatesPayload(
+            mode="KEEP_ONE", priorities=["BEST_QUALITY", "OLDEST"], exact_only=True, move_to_trash=True,
+        ))
+        self.assertEqual(skip_exact["resolved_count"], 0)
+
+        # exact_only=False avec BEST_QUALITY puis OLDEST : le plus ancien (ts=1000) gagne malgré file_size inférieur
+        chain_res = gallery_router.api_auto_resolve_similar(gallery_router.AutoResolveDuplicatesPayload(
+            mode="KEEP_ONE", priorities=["BEST_QUALITY", "OLDEST"], exact_only=False, move_to_trash=True,
+        ))
+        self.assertEqual(chain_res["resolved_count"], 1)
+        conn = database.get_db()
+        old_r = conn.execute("SELECT is_trashed FROM processed_files WHERE source_path = 'src_sim_old_tie'").fetchone()
+        new_r = conn.execute("SELECT is_trashed FROM processed_files WHERE source_path = 'src_sim_new_tie'").fetchone()
+
+        # Doublons exacts : même hash mais dates différentes ignorés avec exact_only=True, mêmes (date, qualité, taille) résolus
+        dup_a1 = self.dest_dir / "ex_a1.jpg"
+        dup_a2 = self.dest_dir / "ex_a2.jpg"
+        dup_b1 = self.dest_dir / "ex_b1.jpg"
+        dup_b2 = self.dest_dir / "ex_b2.jpg"
+        for p in (dup_a1, dup_a2, dup_b1, dup_b2):
+            p.write_bytes(b"same")
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_diff_date', 1000, 1920, 1080, 500)",
+            ("src_ex_a1", str(dup_a1), str(dup_a1)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_diff_date', 2000, 1920, 1080, 500)",
+            ("src_ex_a2", str(dup_a2), str(dup_a2)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_exact_all', 3000, 1920, 1080, 500)",
+            ("src_ex_b1", str(dup_b1), str(dup_b1)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, timestamp, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_exact_all', 3000, 1920, 1080, 500)",
+            ("src_ex_b2", str(dup_b2), str(dup_b2)),
+        )
+        conn.commit()
+        conn.close()
+
+        dup_exact_res = gallery_router.api_auto_resolve_duplicates(gallery_router.AutoResolveDuplicatesPayload(
+            mode="KEEP_ONE", priorities=["BEST_QUALITY", "OLDEST"], exact_only=True, move_to_trash=True,
+        ))
+        self.assertEqual(dup_exact_res["resolved_count"], 1)
+        conn = database.get_db()
+        a_trashed = conn.execute("SELECT COUNT(*) FROM processed_files WHERE source_path IN ('src_ex_a1', 'src_ex_a2') AND is_trashed = 1").fetchone()[0]
+        b_trashed = conn.execute("SELECT COUNT(*) FROM processed_files WHERE source_path IN ('src_ex_b1', 'src_ex_b2') AND is_trashed = 1").fetchone()[0]
+
+        # /api/media/duplicates ne retourne que les doublons propres au média ciblé (src_ex_a1 + src_ex_a2)
+        own_dups = gallery_router.api_get_media_duplicates("src_ex_a1")
+        own_srcs = {it["source_path"] for it in own_dups["items"]}
+        self.assertEqual(own_srcs, {"src_ex_a1", "src_ex_a2"})
+        # Un fichier sans autre doublon non mis à la corbeille retourne []
+        self.assertEqual(gallery_router.api_get_media_duplicates("src_ex_b1")["items"], [])
+
+        # Hydratation automatique de la qualité (width/height) pour les vidéos même si stockée à 0 en DB
+        import cv2
+        import numpy as np
+        vid_a = self.dest_dir / "vid_dup_a.avi"
+        vid_b = self.dest_dir / "vid_dup_b.avi"
+        fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+        for vp in (vid_a, vid_b):
+            vw = cv2.VideoWriter(str(vp), fourcc, 5.0, (320, 240))
+            vw.write(np.zeros((240, 320, 3), dtype=np.uint8))
+            vw.release()
+        _, _, _, _, sig_w, sig_h = dedup.compute_file_signatures(("src_vid_a", str(vid_a), True))
+        self.assertEqual((sig_w, sig_h), (320, 240))
+
+        conn = database.get_db()
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, is_duplicate, duplicate_of, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_vid_dup', 0, NULL, 0, 0, ?)",
+            ("src_vid_a", str(vid_a), str(vid_a), vid_a.stat().st_size),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, is_duplicate, duplicate_of, width, height, file_size) VALUES (?, ?, ?, 'ok', 'b3_vid_dup', 1, 'src_vid_a', 0, 0, ?)",
+            ("src_vid_b", str(vid_b), str(vid_b), vid_b.stat().st_size),
+        )
+        conn.commit()
+        conn.close()
+
+        vid_own = gallery_router.api_get_media_duplicates("src_vid_a")
+        self.assertEqual(len(vid_own["items"]), 2)
+        for it in vid_own["items"]:
+            self.assertEqual((it["width"], it["height"]), (320, 240))
+        conn = database.get_db()
+        db_dims = conn.execute("SELECT width, height FROM processed_files WHERE source_path = 'src_vid_b'").fetchone()
+        self.assertEqual((db_dims["width"], db_dims["height"]), (320, 240))
+        conn.close()
+        self.assertEqual(old_r["is_trashed"], 0)
+        self.assertEqual(new_r["is_trashed"], 1)
+        self.assertEqual(a_trashed, 0)
+        self.assertEqual(b_trashed, 1)
+
+    def test_duplicates_vs_similar_separation_and_videos(self):
+        import pipeline_runner
+        import deduplicateur as dedup_mod
+        import indexeur_similaires as sim_ai
+
+        conn = database.get_db()
+        dedup_mod.upgrade_db(conn)
+        sim_ai.upgrade_db_for_video_similarity(conn)
+
+        # 1) Deux copies strictement identiques (même fichier, même contenu) scannées par DEDUP :
+        #    - ne doivent PAS être déplacées automatiquement en quarantaine
+        #    - doivent apparaître dans Doublons & /api/stats
+        #    - ne doivent JAMAIS apparaître dans Similaires (même avec phash identique)
+        import random
+        f_orig = self.dest_dir / "copy_orig.jpg"
+        f_copy = self.dest_dir / "copy_dup.jpg"
+        from PIL import Image
+        im = Image.new("RGB", (64, 64))
+        for y in range(64):
+            for x in range(64):
+                im.putpixel((x, y), ((x * 7) % 255, (y * 11) % 255, ((x ^ y) * 5) % 255))
+        im.save(f_orig, "JPEG")
+        f_copy.write_bytes(f_orig.read_bytes())
+
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', 0, 0)",
+            ("src_copy_orig", str(f_orig), str(f_orig)),
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, is_duplicate, is_trashed) VALUES (?, ?, ?, 'ok', 0, 0)",
+            ("src_copy_dup", str(f_copy), str(f_copy)),
+        )
+
+        # 2) Deux photos similaires éloignées (>120 fichiers d'écart) avec blake3_hash distincts mais phash proche
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, phash, timestamp, width, height, file_size, is_duplicate, is_trashed) "
+            "VALUES ('src_far_1', ?, ?, 'ok', 'b3_far_1', '0000000000000000', 2000000, 1200, 900, 1000, 0, 0)",
+            (str(f_orig), str(f_orig)),
+        )
+        rng = random.Random(42)
+        for idx in range(130):
+            filler_hash = f"{rng.getrandbits(64):016x}"
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, phash, timestamp, width, height, file_size, is_duplicate, is_trashed) "
+                "VALUES (?, ?, ?, 'ok', ?, ?, ?, 800, 600, 500, 0, 0)",
+                (f"src_filler_{idx}", str(f_orig), str(f_orig), f"b3_fill_{idx}", filler_hash, 1999000 - idx),
+            )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, phash, timestamp, width, height, file_size, is_duplicate, is_trashed) "
+            "VALUES ('src_far_2', ?, ?, 'ok', 'b3_far_2', '0000000000000003', 1000, 1200, 900, 950, 0, 0)",
+            (str(f_orig), str(f_orig)),
+        )
+
+        # 3) Deux vidéos visuellement proches (video_hash proche, blake3_hash différents)
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, video_hash, duration_sec, width, height, file_size, is_duplicate, is_trashed) "
+            "VALUES ('src_v_sim1', 'v1.mp4', 'v1.mp4', 'ok', 'b3_v1', '1111111111111111-2222222222222222-3333333333333333', 10.0, 1920, 1080, 5000, 0, 0)",
+        )
+        conn.execute(
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, blake3_hash, video_hash, duration_sec, width, height, file_size, is_duplicate, is_trashed) "
+            "VALUES ('src_v_sim2', 'v2.mp4', 'v2.mp4', 'ok', 'b3_v2', '1111111111111110-2222222222222223-3333333333333331', 10.5, 1280, 720, 2500, 0, 0)",
+        )
+        conn.commit()
+        conn.close()
+
+        # Exécuter l'étape de déduplication
+        pipeline_runner.run_step_deduplication({"db_path": str(self.db_path), "dest_dir": str(self.dest_dir)})
+
+        # Aucun fichier ne doit avoir été déplacé ni marqué is_duplicate=1 automatiquement
+        self.assertTrue(f_orig.exists())
+        self.assertTrue(f_copy.exists())
+        conn = database.get_db()
+        flags = [r["is_duplicate"] for r in conn.execute("SELECT is_duplicate FROM processed_files WHERE source_path IN ('src_copy_orig', 'src_copy_dup')").fetchall()]
+        conn.close()
+        self.assertEqual(flags, [0, 0])
+
+        # Doublons exacts bien affichés sur /api/duplicates (via blake3_hash)
+        dup_groups = gallery_router.api_get_duplicates()["groups"]
+        dup_src_sets = [
+            {g["master"]["source_path"], *(d["source_path"] for d in g["duplicates"])}
+            for g in dup_groups
+        ]
+        self.assertIn({"src_copy_orig", "src_copy_dup"}, dup_src_sets)
+
+        # Similaires : NE contient PAS la paire de doublons exacts, MAIS contient les photos éloignées et les vidéos proches
+        sim_groups = gallery_router.api_get_similar_groups()["groups"]
+        sim_src_sets = [{it["source_path"] for it in g} for g in sim_groups]
+        self.assertNotIn({"src_copy_orig", "src_copy_dup"}, sim_src_sets)
+        self.assertIn({"src_far_1", "src_far_2"}, sim_src_sets)
+        self.assertIn({"src_v_sim1", "src_v_sim2"}, sim_src_sets)
+
+        # Compteurs /api/stats cohérents
+        stats = system_router.api_stats()
+        self.assertGreaterEqual(stats["duplicates"], 1)
+        self.assertEqual(stats["similar_count"], len(sim_groups))
+
+        # Relancer DEDUP / SIMILAR alors que rien n'a changé : message explicite "nothing_to_do"
+        fake_cfg = {
+            "active_library": "test",
+            "libraries": {"test": {"name": "test", "db_path": str(self.db_path), "dest_dir": str(self.dest_dir)}},
+        }
+        with patch.object(pipeline_runner, "load_libraries", return_value=fake_cfg):
+            res_ded = pipeline_runner.start_specific_task("DEDUP")
+            self.assertEqual(res_ded["status"], "nothing_to_do")
+            self.assertIn("Aucune analyse nécessaire", res_ded["message"])
+            res_sim = pipeline_runner.start_specific_task("SIMILAR")
+            self.assertEqual(res_sim["status"], "nothing_to_do")
+            self.assertIn("Aucune analyse nécessaire", res_sim["message"])
+
+        html = main.templates.get_template("index.html").render()
+        self.assertIn('id="app-toast"', html)
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function showAppToast(", app_js)
+
     def test_trash_and_restore(self):
         img = self.dest_dir / "2024" / "photo.jpg"
         img.parent.mkdir(parents=True, exist_ok=True)
@@ -285,7 +1009,7 @@ class TestApiRoutes(unittest.TestCase):
 
         conn = database.get_db()
         conn.execute(
-            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, file_size) VALUES (?, ?, ?, 'ok', 4)",
+            "INSERT INTO processed_files (source_path, dest_path, original_dest_path, status, file_size, width, height, album_name, duration_sec) VALUES (?, ?, ?, 'ok', 4, 1920, 1080, 'Vacances', 42.5)",
             ("src_trash", str(img), str(img)),
         )
         conn.commit()
@@ -293,11 +1017,50 @@ class TestApiRoutes(unittest.TestCase):
 
         gallery_router.api_trash_action(gallery_router.TrashActionPayload(source_paths=["src_trash"], action="MOVE_TO_TRASH"))
         self.assertFalse(img.exists())
-        self.assertEqual(len(gallery_router.api_get_trash_items()["items"]), 1)
+        trash_res = gallery_router.api_get_trash_items()
+        self.assertEqual(len(trash_res["items"]), 1)
+        self.assertEqual(trash_res["items"][0]["width"], 1920)
+        self.assertEqual(trash_res["items"][0]["album_name"], "Vacances")
+        self.assertEqual(trash_res["items"][0]["duration_sec"], 42.5)
+        self.assertEqual(trash_res["retention_days"], 30)
+
+        # Réglage durée de conservation : 14 jours puis illimitée (0)
+        gallery_router.api_set_trash_policy(gallery_router.TrashPolicyPayload(retention_days=14))
+        self.assertEqual(gallery_router.api_get_trash_items()["retention_days"], 14)
+        gallery_router.api_set_trash_policy(gallery_router.TrashPolicyPayload(retention_days=0))
+        tr_manual = gallery_router.api_get_trash_items()
+        self.assertEqual(tr_manual["retention_days"], 0)
+        self.assertIsNone(tr_manual["items"][0]["days_left"])
 
         gallery_router.api_trash_action(gallery_router.TrashActionPayload(source_paths=["src_trash"], action="RESTORE"))
         self.assertTrue(img.exists())
         self.assertEqual(len(gallery_router.api_get_trash_items()["items"]), 0)
+
+        # Interface Corbeille modernisée (sélection, tout restaurer, options, réglages durée)
+        html = main.templates.get_template("index.html").render()
+        for tok in (
+            'id="trash-sticky-header"', 'id="trash-options-btn"', 'id="trash-options-drawer"',
+            'id="trash-page-settings-btn"', 'id="trash-sort-by"', 'id="trash-sort-dir-btn"',
+            'id="trash-group-by"', 'id="trash-layout-btn-GRID"', 'id="trash-layout-btn-MASONRY"',
+            'id="trash-layout-btn-LIST"', 'id="trash-size-btn-SM"', 'id="trash-restore-all-btn"',
+            'id="trash-batch-bar"', 'id="trash-retention-badge"',
+            'id="ps-trash-policy-section"', 'id="ps-trash-retention-days"',
+        ):
+            self.assertIn(tok, html)
+
+        gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        groups_js = (ROOT_DIR / "frontend" / "static" / "js" / "groups.js").read_text(encoding="utf-8")
+        self.assertIn("function toggleTrashOptionsBar(", app_js)
+        for fn in (
+            "function setTrashLayout(", "function setTrashSize(", "function toggleTrashSortOrder(",
+            "function toggleSelectAllTrash(", "async function restoreAllTrash(",
+            "async function restoreSelectedTrash(", "function renderTrashFromCache(",
+            "function updateTrashBatchBar(",
+        ):
+            self.assertIn(fn, gallery_js)
+        self.assertIn("_isTrashContext", gallery_js)
+        self.assertIn("trash:", groups_js)
 
     def test_albums_subalbums_create_rename_batch_and_delete(self):
         img1 = self.dest_dir / "tokyo.jpg"
@@ -372,17 +1135,33 @@ class TestApiRoutes(unittest.TestCase):
         ):
             self.assertIn(token, html)
         self.assertNotIn('id="gallery-timeline-reserve"', html)
+        for tl_tok in ('id="timeline-hover-indicator"', 'id="timeline-hover-pill"', 'id="timeline-hover-line"', 'id="timeline-scroll-marker"'):
+            self.assertIn(tl_tok, html)
         theme_css_tl = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
         self.assertIn("#gallery-timeline-wrapper:hover #gallery-timeline-box", theme_css_tl)
+        self.assertIn("body.has-gallery-timeline #main-scroll-container", theme_css_tl)
+        self.assertIn("body.has-gallery-timeline #tab-gallery", theme_css_tl)
+        self.assertIn("padding-right: 20px;", theme_css_tl)
+        self.assertIn("scrollbar-width: none;", theme_css_tl)
+        self.assertIn(".tl-gp-year", theme_css_tl)
+        self.assertIn(".tl-gp-dot", theme_css_tl)
+        self.assertIn("#timeline-hover-line", theme_css_tl)
         self.assertNotIn("timeline-visible", theme_css_tl)
         gallery_js_alb = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
         self.assertNotIn("pulseGalleryTimelinePeek", gallery_js_alb)
+        self.assertIn("function _initGooglePhotosTimelineScrubber(", gallery_js_alb)
+        self.assertIn("function _findTimelineSegmentAtClientY(", gallery_js_alb)
+        self.assertIn("function _scheduleScrubJump(", gallery_js_alb)
+        self.assertIn("_pendingGalleryCustomSkip", gallery_js_alb)
+        app_js_tl = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("has-gallery-timeline", app_js_tl)
         self.assertIn("bg-rose-500/25 backdrop-blur-md", gallery_js_alb)
         self.assertNotIn("drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]", gallery_js_alb)
         self.assertIn("#10b981", theme_css_tl)
         self.assertIn("justify-content: space-between;", theme_css_tl)
         self.assertNotIn("justify-content: flex-start;", theme_css_tl)
-        self.assertIn("body.has-batch-bar .sticky-options-header.is-stuck", theme_css_tl)
+        self.assertIn("body.has-stuck-options-open #gal-batch-bar", theme_css_tl)
+        self.assertIn("has-stuck-options-open", gallery_js_alb)
         self.assertIn(".sticky-options-header.is-stuck #gal-filter-popover", theme_css_tl)
         self.assertIn(".sticky-options-header.is-stuck #faces-filter-popover", theme_css_tl)
         for marker_fp in (
@@ -410,6 +1189,27 @@ class TestApiRoutes(unittest.TestCase):
             'value="recent"',
             'id="tl-person-count"',
             'id="tab-map" class="hidden pr-3.5"',
+            'id="places-sticky-header"',
+            'id="places-options-btn"',
+            'id="places-options-drawer"',
+            'id="places-sort-by"',
+            'id="places-group-by"',
+            'id="places-filter-btn"',
+            'id="places-filter-popover"',
+            'id="places-content-filter"',
+            'id="places-layout-btn-GRID"',
+            'id="places-layout-btn-LIST"',
+            'id="places-size-btn-SM"',
+            'id="places-size-btn-MD"',
+            'id="places-size-btn-LG"',
+            'id="places-active-filter-badge"',
+            'id="world-map-card"',
+            'id="map-viewport-filter-btn"',
+            'id="map-fit-btn"',
+            'id="map-height-btn-SM"',
+            'id="map-height-btn-HIDE"',
+            'id="place-single-sticky-header"',
+            'id="place-single-options-btn"',
             'id="map-add-btn"',
             'id="place-single-panel"',
             'id="settings-home-country"',
@@ -417,17 +1217,31 @@ class TestApiRoutes(unittest.TestCase):
             self.assertIn(marker_fp, html)
         ai_views_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
         app_js_fp = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        groups_js_fp = (ROOT_DIR / "frontend" / "static" / "js" / "groups.js").read_text(encoding="utf-8")
         self.assertIn("function toggleFacesOptionsBar(", app_js_fp)
+        self.assertIn("function togglePlacesOptionsBar(", app_js_fp)
         self.assertIn("function toggleFacesSortOrder(", ai_views_js)
+        self.assertIn("function togglePlacesSortOrder(", ai_views_js)
         self.assertIn("function _comparePersonItems(", ai_views_js)
+        self.assertIn("function _comparePlaceItems(", ai_views_js)
         self.assertIn("function _filterPersonsList(", ai_views_js)
+        self.assertIn("function _filterPlacesList(", ai_views_js)
         self.assertIn("function setFacesLayout(", ai_views_js)
         self.assertIn("function setFacesSize(", ai_views_js)
+        self.assertIn("function setPlacesLayout(", ai_views_js)
+        self.assertIn("function setPlacesSize(", ai_views_js)
+        self.assertIn("function setMapHeightMode(", ai_views_js)
+        self.assertIn("function toggleMapViewportFilter(", ai_views_js)
+        self.assertIn("function fitWorldMapToMarkers(", ai_views_js)
         self.assertIn("person-card", ai_views_js)
         self.assertIn("place-card", ai_views_js)
         self.assertIn("openSinglePlaceView", ai_views_js)
         self.assertIn("function togglePersonFaceEditMode(", ai_views_js)
         self.assertIn("appendMediaBatchToContainer('tl-faces-grid', items, 0, true)", ai_views_js)
+        self.assertIn("appendMediaBatchToContainer('place-single-grid', sortedItems, 0, true)", ai_views_js)
+        self.assertIn("place_single:", groups_js_fp)
+        self.assertIn(".sticky-options-header.is-stuck #places-filter-popover", theme_css_tl)
+        self.assertIn("#world-map .leaflet-tile-pane", theme_css_tl)
         self.assertIn("rounded-[18px]", ai_views_js)
         self.assertIn("rounded-[24px]", ai_views_js)
         self.assertIn("lg:grid-cols-10", html)
@@ -490,20 +1304,51 @@ class TestApiRoutes(unittest.TestCase):
             "loadFFmpegStatus(true)", "installFFmpegNow(false)",
             "browseTakeoutExtractDir()", "clearTakeoutExtractDir()",
             "settings-power-bar", "restartApplication()", "shutdownApplication()",
-            "blur-btn-on", "blur-btn-off", "setAppBlur(true)", "setAppBlur(false)",
+            "settings-appearance-preview", "theme-oled-toggle", "setAppOled(",
+            "style-btn-glass", "style-btn-solid", "shadows-off-toggle", "setAppNoShadows(",
+            "setAppStyle('glass')", "setAppStyle('solid')",
+            "lbstyle-btn-studio", "lbstyle-btn-classic",
+            "setAppLightboxStyle('studio')", "setAppLightboxStyle('classic')",
+            "accent-btn-default", "accent-btn-slate", "accent-btn-midnight", "accent-btn-blue",
+            "accent-btn-custom", "accent-custom-picker",
+            "settings-appearance-advanced",
+            "fav-accent-btn-on", "radius-btn-square", "gap-btn-tight", "motion-btn-off",
         ):
             self.assertIn(token, html)
+        for removed in ("theme-btn-oled", "accent-btn-sepia", "accent-btn-red", "accent-btn-orange", "style-btn-flat"):
+            self.assertNotIn(removed, html)
 
         tab_settings_html = html[html.index('id="tab-settings"'):html.index('id="tab-activities"')]
         self.assertNotIn("sticky-view-header", tab_settings_html)
         self.assertIn("settings-power-bar", tab_settings_html)
         theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
         self.assertIn("#settings-power-bar.is-floating", theme_css)
+        self.assertIn('html[data-theme="oled"]', theme_css)
+        self.assertIn('html[data-shadows="off"]', theme_css)
         self.assertIn('html[data-blur="off"]', theme_css)
         self.assertIn('html[data-blur="off"] #lightbox-modal', theme_css)
+        self.assertIn('html[data-lightbox-style="classic"] #lightbox-modal', theme_css)
+        self.assertIn(':is(html[data-theme="dark"], html[data-theme="oled"]):not([data-lightbox-style="classic"]):not([data-blur="off"]) #lightbox-modal', theme_css)
+        self.assertIn('html[data-fav-accent="on"] .fav-badge-active', theme_css)
+        self.assertIn('html[data-radius="square"]', theme_css)
+        self.assertIn('html[data-gap="tight"]', theme_css)
+        self.assertIn('html[data-motion="off"]', theme_css)
+        self.assertIn("--sel-color: #10b981;", theme_css)
+        for acc in ("blue", "slate", "midnight", "custom"):
+            self.assertIn(f'html[data-accent="{acc}"]', theme_css)
+        for removed_acc in ("sepia", "red", "yellow", "green", "pink", "purple", "orange"):
+            self.assertNotIn(f'html[data-accent="{removed_acc}"]', theme_css)
 
         app_js = (ROOT_DIR / "frontend" / "static" / "js" / "app.js").read_text(encoding="utf-8")
-        for tok in ("window.appSettings", "browseTakeoutExtractDir", "clearTakeoutExtractDir", "takeout_default_architecture", "_syncSettingsPowerBar", "function setAppBlur("):
+        for tok in (
+            "window.appSettings", "browseTakeoutExtractDir", "clearTakeoutExtractDir",
+            "takeout_default_architecture", "_syncSettingsPowerBar",
+            "function setAppStyle(", "function setAppOled(", "function setAppNoShadows(",
+            "function setAppLightboxStyle(",
+            "function setAppAccent(", "function setAppCustomAccentColor(",
+            "function setAppFavMatchAccent(", "function setAppTileRadius(",
+            "function setAppGridGap(", "function setAppReduceMotion(",
+        ):
             self.assertIn(tok, app_js)
 
         tmp_settings = self.tmp_path / "app_settings.json"
@@ -521,9 +1366,28 @@ class TestApiRoutes(unittest.TestCase):
                 language="fr",
                 gpu_mode="auto",
                 ui_blur=False,
+                ui_style="solid",
+                ui_lightbox_style="classic",
+                ui_oled=True,
+                ui_no_shadows=True,
+                ui_accent="custom",
+                ui_accent_custom="#e11d48",
+                ui_fav_match_accent=True,
+                ui_tile_radius="square",
+                ui_grid_gap="tight",
+                ui_reduce_motion=True,
             ))
             saved = save_res["settings"]
             self.assertFalse(saved["ui_blur"])
+            self.assertEqual(saved["ui_style"], "solid")
+            self.assertTrue(saved["ui_oled"])
+            self.assertTrue(saved["ui_no_shadows"])
+            self.assertEqual(saved["ui_accent"], "custom")
+            self.assertEqual(saved["ui_accent_custom"], "#e11d48")
+            self.assertTrue(saved["ui_fav_match_accent"])
+            self.assertEqual(saved["ui_tile_radius"], "square")
+            self.assertEqual(saved["ui_grid_gap"], "tight")
+            self.assertTrue(saved["ui_reduce_motion"])
             self.assertEqual(saved["takeout_default_architecture"], "GOOGLE_ALBUM")
             self.assertFalse(saved["takeout_default_fix_metadata"])
             self.assertTrue(saved["takeout_default_delete_zips"])
@@ -1168,6 +2032,7 @@ class TestApiRoutes(unittest.TestCase):
             "lb-btn-delete",
             "hover:bg-rose-500/20 hover:text-rose-400",
             "hover:text-orange-300",
+            "plum-btn",
             "hover:text-emerald-300",
             "hover:text-rose-400",
             "hover:text-purple-300",
@@ -1186,7 +2051,8 @@ class TestApiRoutes(unittest.TestCase):
             "lightboxOpenMetadataEditor()",
             "lb-info-map-card",
             "lb-location-edit-modal",
-            'id="lb-filmstrip" class="hidden bg-white/10 backdrop-blur-md rounded-xl',
+            'id="lb-filmstrip" class="hidden bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl',
+            "studio-stage-grid-bg",
             "Refaire l'analyse",
         ):
             self.assertIn(snippet, html)
@@ -1212,7 +2078,8 @@ class TestApiRoutes(unittest.TestCase):
             "lb-faces-persons-datalist",
             "async function rerunLightboxFacesAnalysis(",
             "function syncLightboxInfoButtonState(",
-            "icon.setAttribute('fill', '#fb7185')",
+            "const col = (typeof currentFavMatchAccent !== 'undefined' && currentFavMatchAccent) ? 'var(--sel-color)' : '#fb7185';",
+            "icon.setAttribute('fill', col);",
             "function openBatchTrashConfirm(",
             "async function downloadGalleryBatch(",
             "async function shareGalleryBatch(",
@@ -1558,6 +2425,32 @@ class TestApiRoutes(unittest.TestCase):
         self.assertFalse(domestic["is_foreign"])
         self.assertEqual(domestic["place_subtitle"], "")
 
+        # Deux villes proches dans le même carré toFixed(1) (Lyon vs Villeurbanne) doivent rester distinctes
+        with (
+            patch.object(search_map_router, "load_settings", return_value={"home_country": "France"}),
+            patch.object(search_map_router, "_fetch_nominatim_city", return_value=("Villeurbanne", "Auvergne-Rhône-Alpes", "France", "Villeurbanne, France")),
+        ):
+            villeurb = search_map_router.api_reverse_geocode(45.7719, 4.8902)
+        self.assertEqual(villeurb["city"], "Villeurbanne")
+
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO processed_files (source_path, dest_path, timestamp, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+                ("src_villeurb.jpg", "villeurb.jpg", 1700000300, 45.7719, 4.8902),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        pts_res = search_map_router.api_map_points()
+        city_keys = {p.get("source_path"): p.get("city_key") for p in pts_res["points"]}
+        self.assertEqual(city_keys.get("src_geo.jpg"), "lyon|france")
+        self.assertEqual(city_keys.get("src_villeurb.jpg"), "villeurbanne|france")
+        self.assertNotIn("latitude.toFixed(1)", ai_views_js)
+        self.assertIn("latitude.toFixed(2)", ai_views_js)
+        self.assertIn("city:${cityNorm}|${countryNorm}", ai_views_js)
+
     def test_lightbox_location_editor_ui_and_gps_update(self):
         import metadata_studio_router
         from unittest.mock import MagicMock
@@ -1644,15 +2537,18 @@ class TestApiRoutes(unittest.TestCase):
             "gal-batch-analyze-btn",
             "openMetadataModalForSelection()",
             "runGalleryBatch('TRASH')",
-            "hover:text-rose-400",
-            "hover:text-purple-300",
-            "hover:text-sky-300",
-            "hover:text-emerald-300",
-            "Analyser les médias",
-            "hover:text-orange-300",
             "hover:bg-rose-500/20 hover:text-rose-400",
+            "hover:bg-purple-500/20 hover:text-purple-400",
+            "hover:bg-amber-500/20 hover:text-amber-400",
+            "hover:bg-sky-500/20 hover:text-sky-400",
+            "hover:bg-emerald-500/20 hover:text-emerald-400",
+            "hover:bg-indigo-500/20 hover:text-indigo-400",
+            "hover:bg-orange-500/20 hover:text-orange-400",
         ):
             self.assertIn(snippet, batch_html)
+        self.assertLess(batch_html.index("downloadGalleryBatch()"), batch_html.index("openBatchAnalyzeModal()"))
+        self.assertLess(batch_html.index("openBatchAnalyzeModal()"), batch_html.index("openMetadataModalForSelection()"))
+        self.assertNotIn("<span>Analyser les médias</span>", batch_html)
 
         self.assertIn('id="lb-analyze-modal" class="hidden fixed inset-0 z-[60]', html)
         gallery_js = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
@@ -1665,6 +2561,8 @@ class TestApiRoutes(unittest.TestCase):
         self.assertIn(".sticky-options-header {\n  z-index: 28;", theme_css)
         self.assertIn("bottom-5", batch_html)
         self.assertIn("bottom: 1.25rem;", theme_css)
+        self.assertIn("left: calc(var(--sidebar-w, 13rem) + 1.75rem);", theme_css)
+        self.assertIn(".sticky-options-toggle {\n  margin-right: 0.5rem;", theme_css)
 
         dir_a = self.dest_dir / "a"
         dir_b = self.dest_dir / "b"
@@ -1768,6 +2666,13 @@ class TestApiRoutes(unittest.TestCase):
             self.assertIn(modern_tok, html)
         sidebar_html = (ROOT_DIR / "frontend" / "templates" / "components" / "sidebar.html").read_text(encoding="utf-8")
         self.assertNotIn('id="tab-btn-recent"', sidebar_html)
+        self.assertNotIn('id="tab-btn-dups"', sidebar_html)
+        self.assertNotIn('id="tab-btn-similar"', sidebar_html)
+        self.assertNotIn('sub-tools-nav', sidebar_html)
+        self.assertLess(sidebar_html.index('id="tab-btn-types"'), sidebar_html.index('id="tab-btn-tools"'))
+        self.assertLess(sidebar_html.index('id="tab-btn-tools"'), sidebar_html.index('id="tab-btn-activities"'))
+        self.assertLess(sidebar_html.index('id="tab-btn-activities"'), sidebar_html.index('id="tab-btn-trash"'))
+        self.assertLess(sidebar_html.index('id="tab-btn-trash"'), sidebar_html.index('id="tab-btn-settings"'))
         self.assertNotIn('sidebar-glass-panel', sidebar_html)
         self.assertIn('id="sidebar-header"', sidebar_html)
         self.assertNotIn('sidebar-header-glass', sidebar_html)
@@ -1776,7 +2681,10 @@ class TestApiRoutes(unittest.TestCase):
         theme_css = (ROOT_DIR / "frontend" / "static" / "css" / "theme.css").read_text(encoding="utf-8")
         self.assertNotIn('.sidebar-glass-panel', theme_css)
         self.assertNotIn('.sidebar-header-glass', theme_css)
-        self.assertIn('#sidebar-header::before', theme_css)
+        self.assertNotIn('#sidebar-header::before', theme_css)
+        self.assertIn('#floating-topbar::before', theme_css)
+        self.assertIn('mask-image:', theme_css)
+        self.assertNotIn('rgba(var(--bg-app-rgb)', theme_css)
         self.assertIn('position: fixed;\n  left: 0;\n  right: 6px;\n  bottom: 0;', theme_css)
         self.assertNotIn('border-bottom: 1px solid var(--border-subtle)', theme_css)
         self.assertLess(html.index('Activités</h1>'), html.index('id="btn-recent-activities"'))
@@ -2683,6 +3591,240 @@ class TestApiRoutes(unittest.TestCase):
         groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=created_per["group"]["group_id"]))
         groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=created_plc["group"]["group_id"]))
         groups_router.api_delete_group(groups_router.DeleteGroupPayload(group_id=gid_alb))
+
+    def test_studio_layers_menu_hex_rgb_and_windows_fonts(self):
+        modal_html = (Path(__file__).resolve().parent.parent / "frontend" / "templates" / "components" / "modals" / "studio_modal.html").read_text(encoding="utf-8")
+        studio_js = (Path(__file__).resolve().parent.parent / "frontend" / "static" / "js" / "studio_exif.js").read_text(encoding="utf-8")
+
+        for token in (
+            'id="studio-stab-layers"',
+            'id="studio-panel-layers"',
+            'id="studio-layers-stack-list"',
+            'id="studio-drawer-close-btn"',
+            'id="st-bmode-shape"',
+            'id="studio-brush-blur-style-row"',
+            'id="studio-brush-shape-row"',
+            'id="st-imgsrc-gallery"',
+            'id="st-imgsrc-pc"',
+            'id="studio-tpl-wm-draft-list"',
+            'id="studio-tpl-elements-list"',
+            'id="studio-tpl-edit-banner"',
+            'id="st-tpl-save-overwrite-btn"',
+            'id="st-tpl-save-copy-btn"',
+            'id="studio-applied-templates-layer"',
+            'id="studio-shapes-layer"',
+            '>Angle<',
+            '>Rotation<',
+            '>Retourner<',
+            'id="st-brush-pipette-btn"',
+            'id="st-text-pipette-btn"',
+            'id="st-text-bold"',
+            'id="st-text-italic"',
+            'id="st-text-shadow"',
+            'id="studio-dectab-border"',
+            'id="studio-layertab-templates"',
+            'id="studio-layertab-create"',
+            'id="studio-tpl-apply-customizer"',
+            'id="st-border-pipette-btn"',
+            'id="st-text-font"',
+        ):
+            self.assertIn(token, modal_html)
+        self.assertNotIn('id="st-bmode-pixelate"', modal_html)
+        self.assertNotIn('id="st-brush-hex"', modal_html)
+        self.assertNotIn('id="studio-dectab-layers"', modal_html)
+        self.assertNotIn('id="studio-decsub-layers"', modal_html)
+        self.assertNotIn('id="studio-overlays-list"', modal_html)
+        self.assertNotIn('id="studio-stage" class="relative inline-block overflow-hidden rounded-xl', modal_html)
+        self.assertNotIn('>◀</button>', modal_html)
+
+        for js_sym in (
+            "pickStudioColorWithPipette",
+            "setStudioBorderColor",
+            "setStudioBrushShape",
+            "setStudioBlurStyle",
+            "selectStudioImageSource",
+            "editStudioTextLayer",
+            "editStudioDraftWatermark",
+            "removeStudioDraftWatermark",
+            "editStudioLayerTemplate",
+            "_renderStudioTemplateElementsList",
+            "_renderStudioShapesOverlay",
+            "removeStudioShapeStroke",
+            "toggleStudioCropPreview",
+            "bw_high",
+            "sepia",
+            "vintage",
+            "nordic",
+            "studioAppliedTemplates",
+            "openStudioCreatorDecorationTool",
+            "toggleStudioTextStyle",
+            "selectStudioLayerSubtab",
+            "confirmApplyStudioLayerTemplate",
+            "loadStudioSystemFonts",
+            "_renderStudioLayersStackUI",
+            "toggleStudioDrawerCollapsed(false)",
+        ):
+            self.assertIn(js_sym, studio_js)
+
+        from backend.routers import metadata_studio_router
+        from backend.engines import media_editor
+        from fastapi import HTTPException
+        from PIL import Image
+
+        fonts_res = metadata_studio_router.api_studio_system_fonts()
+        self.assertIsInstance(fonts_res.get("fonts"), list)
+
+        with self.assertRaises(HTTPException) as ctx:
+            metadata_studio_router.api_studio_font_file(path="C:/Windows/System32/cmd.exe")
+        self.assertIn(ctx.exception.status_code, (403, 404))
+
+        src_img = self.dest_dir / "font_test.jpg"
+        Image.new("RGB", (200, 120), (30, 40, 50)).save(src_img)
+        font_entry = fonts_res["fonts"][0] if fonts_res["fonts"] else {"family": "Arial", "path": ""}
+        out_img = media_editor.process_image_edits(
+            src_img,
+            {
+                "text_overlay": {
+                    "text": "Test Font",
+                    "nx": 0.1,
+                    "ny": 0.2,
+                    "size": 28,
+                    "color": "#ffffff",
+                    "font_family": font_entry.get("family"),
+                    "font_path": font_entry.get("path"),
+                }
+            },
+            overwrite=False,
+        )
+        self.assertTrue(Path(out_img).exists())
+
+    def test_studio_ajuster_order_bg_remove_auto_retouch_and_history(self):
+        modal_html = (Path(__file__).resolve().parent.parent / "frontend" / "templates" / "components" / "modals" / "studio_modal.html").read_text(encoding="utf-8")
+        studio_js = (Path(__file__).resolve().parent.parent / "frontend" / "static" / "js" / "studio_exif.js").read_text(encoding="utf-8")
+
+        # 1. Ton renommé en Ajuster et placé en 2e position
+        self.assertIn("<span>Ajuster</span>", modal_html)
+        self.assertLess(modal_html.index('id="studio-stab-transform"'), modal_html.index('id="studio-stab-tone"'))
+        self.assertLess(modal_html.index('id="studio-stab-tone"'), modal_html.index('id="studio-stab-filter"'))
+
+        # 2. Curseur remplacé par Historique
+        self.assertNotIn('id="studio-tool-NONE"', modal_html)
+        for tok in (
+            'id="studio-stab-history"',
+            'id="studio-panel-history"',
+            'id="studio-history-list"',
+            'id="st-rmode-bg_remove"',
+            'id="st-bg-remove-toggle"',
+            'id="st-bg-remove-mode"',
+            'id="st-rmode-auto_retouch"',
+            'id="st-auto-retouch-toggle"',
+        ):
+            self.assertIn(tok, modal_html)
+
+        for js_sym in (
+            "toggleStudioBgRemove",
+            "toggleStudioAutoRetouch",
+            "_renderStudioHistoryListUI",
+            "removeStudioHistoryModification",
+        ):
+            self.assertIn(js_sym, studio_js)
+
+        from backend.routers import metadata_studio_router
+        from backend.engines import media_editor
+        from PIL import Image
+
+        bg_st = metadata_studio_router.api_studio_ai_bg_remove_status()
+        self.assertIn("installed", bg_st)
+
+        src_img = self.dest_dir / "tools_test.jpg"
+        Image.new("RGB", (180, 140), (180, 130, 110)).save(src_img)
+
+        out_png = media_editor.process_image_edits(
+            src_img,
+            {
+                "auto_retouch": {"enabled": True, "strength": 0.7, "skin_wrinkles": True, "redeye": True, "blemish_glare": True},
+                "bg_remove": {"enabled": True, "mode": "transparent"},
+            },
+            overwrite=False,
+        )
+        self.assertEqual(Path(out_png).suffix.lower(), ".png")
+        self.assertTrue(Path(out_png).exists())
+
+        out_blur = media_editor.process_image_edits(
+            src_img,
+            {"bg_remove": {"enabled": True, "mode": "blur"}},
+            overwrite=False,
+        )
+        self.assertTrue(Path(out_blur).exists())
+
+        # 3. Sous-onglet Image dans Décoration & Bordures dans Calques
+        self.assertIn('id="studio-dectab-image"', modal_html)
+        self.assertIn('id="studio-decsub-image"', modal_html)
+        self.assertIn('id="studio-borders-card"', modal_html)
+        for wtok in (
+            'id="st-tpl-wm-type"',
+            'id="st-tpl-wm-size"',
+            'id="st-tpl-wm-repeat"',
+            'id="st-tpl-wm-spacing"',
+            'id="st-tpl-wm-validate-btn"',
+            'id="st-tpl-wm-clear-btn"',
+            'id="studio-wm-preview-layer"',
+            'id="st-tpl-save-btn"',
+        ):
+            self.assertIn(wtok, modal_html)
+        self.assertNotIn('> + Calque</button>', modal_html)
+        self.assertNotIn('>+ Calque</button>', modal_html)
+        self.assertNotIn('Enregistrer en modèle de calque (Watermark)...', modal_html)
+        self.assertIn('setStudioBorderStyle', studio_js)
+        self.assertIn('saveStudioLayerTemplateUnified', studio_js)
+        self.assertIn('previewStudioWatermarkLive', studio_js)
+        self.assertIn('validateStudioWatermarkToScene', studio_js)
+        self.assertIn('clearStudioWatermarkDraft', studio_js)
+
+        # Test API PUT /api/studio/layer_templates/{id} (écraser un modèle existant)
+        created_tpl = metadata_studio_router.api_save_layer_template(
+            metadata_studio_router.StudioLayerTemplatePayload(
+                name="Modele Initial",
+                category="watermark",
+                text_layers=[{"text": "© Init", "nx": 0.5, "ny": 0.5, "size": 24, "color": "#ffffff"}],
+                image_overlays=[],
+            )
+        )
+        tid = created_tpl["template"]["id"]
+        updated_tpl = metadata_studio_router.api_update_layer_template(
+            tid,
+            metadata_studio_router.StudioLayerTemplatePayload(
+                name="Modele Modifie",
+                category="watermark",
+                text_layers=[{"text": "© Maj", "nx": 0.2, "ny": 0.8, "size": 30, "color": "#fbbf24"}],
+                image_overlays=[],
+                border={"style": "solid", "color": "#ffffff", "thickness": 3},
+            ),
+        )
+        self.assertEqual(updated_tpl["template"]["id"], tid)
+        self.assertEqual(updated_tpl["template"]["name"], "Modele Modifie")
+        metadata_studio_router.api_delete_layer_template(tid)
+        out_bdr = media_editor.process_image_edits(
+            src_img,
+            {
+                "border": {"style": "polaroid", "color": "#ffffff", "thickness": 4},
+                "pixel_strokes": [{"nr": 0.05, "points": [{"nx": 0.2, "ny": 0.2}, {"nx": 0.5, "ny": 0.5}]}],
+                "text_overlay": {
+                    "text": "Bold Italic",
+                    "nx": 0.1,
+                    "ny": 0.2,
+                    "size": 32,
+                    "color": "#ffffff",
+                    "bold": True,
+                    "italic": True,
+                    "shadow": False,
+                },
+            },
+            overwrite=False,
+        )
+        with Image.open(out_bdr) as bim:
+            self.assertGreater(bim.size[0], 180)
+            self.assertGreater(bim.size[1], 140)
 
 
 if __name__ == "__main__":

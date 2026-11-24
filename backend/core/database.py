@@ -135,6 +135,14 @@ def get_db() -> sqlite3.Connection:
             init_conn.execute("ALTER TABLE processed_files ADD COLUMN clip_model TEXT DEFAULT NULL")
         if "visual_suggestions_json" not in cols:
             init_conn.execute("ALTER TABLE processed_files ADD COLUMN visual_suggestions_json TEXT DEFAULT NULL")
+        if "blur_score" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN blur_score REAL DEFAULT NULL")
+        if "exposure_score" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN exposure_score REAL DEFAULT NULL")
+        if "suggested_rotation" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN suggested_rotation INTEGER DEFAULT NULL")
+        if "rotation_reason" not in cols:
+            init_conn.execute("ALTER TABLE processed_files ADD COLUMN rotation_reason TEXT DEFAULT NULL")
         sc_cols = {r[1] for r in init_conn.execute("PRAGMA table_info(smart_categories)").fetchall()}
         if "prompt_en" not in sc_cols:
             init_conn.execute("ALTER TABLE smart_categories ADD COLUMN prompt_en TEXT")

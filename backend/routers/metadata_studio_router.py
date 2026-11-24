@@ -2,20 +2,32 @@ import os
 import re
 import json
 import shutil
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from urllib.parse import unquote
 
 import exiftool
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from settings_manager import get_configured_timezone
 from library_manager import load_libraries, get_library_tech_dir
 from pipeline_runner import STATE
 from database import MISSING_META_SQL_CONDITION, get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
-from media_editor import process_image_edits, process_video_edits
-from media_frames import VIDEO_EXTS
+from media_editor import (
+    FONT_EXTS,
+    get_system_font_dirs,
+    list_system_fonts,
+    process_image_edits,
+    process_video_edits,
+    render_inpaint_preview_bytes,
+    render_inpaint_preview_with_meta,
+)
+from ai_inpaint import get_ai_inpaint_status, start_lama_install
+from ai_bg_remove import get_ai_bg_remove_status, start_bg_remove_install
+from media_frames import IMAGE_EXTS, VIDEO_EXTS, probe_media_dimensions
 import fusion_takeout_complet as fusion
 
 router = APIRouter()
@@ -59,16 +71,41 @@ class BatchMetadataStripPayload(BaseModel):
 class MediaStudioEditPayload(BaseModel):
     source_path: str
     overwrite: bool = False
+    auto_orient: bool = True
     crop: dict | None = None
     rotate: int = 0
+    straighten: float = 0.0
     flip_h: bool = False
     flip_v: bool = False
     brightness: float = 1.0
     contrast: float = 1.0
     saturation: float = 1.0
     sharpness: float = 1.0
+    warmth: float = 0.0
+    tint: float = 0.0
+    highlights: float = 0.0
+    shadows: float = 0.0
+    fade: float = 0.0
+    grain: float = 0.0
+    vignette: float = 0.0
     text_overlay: dict | None = None
+    text_layers: list[dict] = []
+    image_overlays: list[dict] = []
+    border: dict | None = None
+    extra_clips: list[dict] = []
     inpaint_boxes: list[dict] = []
+    inpaint_strokes: list[dict] = []
+    glare_strokes: list[dict] = []
+    redeye_strokes: list[dict] = []
+    blemish_strokes: list[dict] = []
+    bg_remove: dict | None = None
+    auto_retouch: dict | None = None
+    border: dict | None = None
+    draw_layer_png: str | None = None
+    blur_mask_png: str | None = None
+    blur_strokes: list[dict] = []
+    pixel_mask_png: str | None = None
+    pixel_strokes: list[dict] = []
     video_action: str = "EDIT"
     start_sec: float = 0.0
     end_sec: float = 0.0
@@ -76,6 +113,9 @@ class MediaStudioEditPayload(BaseModel):
     speed: float = 1.0
     mute_audio: bool = False
     custom_audio_path: str | None = None
+    audio_mix_mode: str = "replace"
+    audio_volume: float = 1.0
+    original_audio_volume: float = 1.0
 
 
 @router.get("/api/metadata/missing_report")
@@ -572,6 +612,226 @@ def api_batch_strip_metadata(payload: BatchMetadataStripPayload):
     return {"status": "stripped"}
 
 
+class StudioLayerTemplatePayload(BaseModel):
+    template_id: str | None = None
+    name: str
+    category: str = "watermark"
+    text_layers: list[dict] = []
+    image_overlays: list[dict] = []
+    border: dict | None = None
+
+
+LAYER_TEMPLATES_FILE = Path(__file__).resolve().parents[2] / "config" / "studio_layer_templates.json"
+
+DEFAULT_LAYER_TEMPLATES = [
+    {
+        "id": "builtin_wm_signature",
+        "name": "Watermark © Signature",
+        "category": "watermark",
+        "builtin": True,
+        "text_layers": [
+            {"text": "© Phototo Studio", "nx": 0.62, "ny": 0.88, "size": 28, "color": "#ffffff", "bg_color": "transparent", "opacity": 0.55}
+        ],
+        "image_overlays": [],
+    },
+    {
+        "id": "builtin_wm_pill",
+        "name": "Badge Discret Bas-Gauche",
+        "category": "watermark",
+        "builtin": True,
+        "text_layers": [
+            {"text": "© Mon Studio", "nx": 0.04, "ny": 0.88, "size": 24, "color": "#ffffff", "bg_color": "dark", "opacity": 0.82}
+        ],
+        "image_overlays": [],
+    },
+    {
+        "id": "builtin_wm_mosaic",
+        "name": "Filigrane Mosaïque (3x)",
+        "category": "watermark",
+        "builtin": True,
+        "text_layers": [
+            {"text": "© PROTÉGÉ", "nx": 0.08, "ny": 0.14, "size": 30, "color": "#ffffff", "bg_color": "transparent", "opacity": 0.30},
+            {"text": "© PROTÉGÉ", "nx": 0.36, "ny": 0.46, "size": 34, "color": "#ffffff", "bg_color": "transparent", "opacity": 0.34},
+            {"text": "© PROTÉGÉ", "nx": 0.64, "ny": 0.80, "size": 30, "color": "#ffffff", "bg_color": "transparent", "opacity": 0.30},
+        ],
+        "image_overlays": [],
+    },
+    {
+        "id": "builtin_title_banner",
+        "name": "Titre Légende Cinéma",
+        "category": "titre",
+        "builtin": True,
+        "text_layers": [
+            {"text": "Souvenir", "nx": 0.38, "ny": 0.86, "size": 34, "color": "#fbbf24", "bg_color": "dark", "opacity": 0.92}
+        ],
+        "image_overlays": [],
+    },
+]
+
+
+def _load_custom_layer_templates() -> list[dict]:
+    if not LAYER_TEMPLATES_FILE.exists():
+        return []
+    try:
+        data = json.loads(LAYER_TEMPLATES_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_custom_layer_templates(items: list[dict]):
+    LAYER_TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAYER_TEMPLATES_FILE.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+@router.get("/api/studio/layer_templates")
+def api_list_layer_templates():
+    custom = _load_custom_layer_templates()
+    return {"templates": custom + DEFAULT_LAYER_TEMPLATES}
+
+
+@router.post("/api/studio/layer_templates")
+def api_save_layer_template(payload: StudioLayerTemplatePayload):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Le nom du modèle est requis")
+    has_border = bool(payload.border and (payload.border.get("style") or "none") != "none")
+    if not payload.text_layers and not payload.image_overlays and not has_border:
+        raise HTTPException(400, "Ajoutez au moins un texte, une image/logo ou une bordure au modèle")
+    items = _load_custom_layer_templates()
+    tid = (payload.template_id or "").strip()
+    if tid and tid.startswith("builtin_"):
+        tid = ""
+    tpl = {
+        "id": tid or f"tpl_{uuid.uuid4().hex[:10]}",
+        "name": name,
+        "category": payload.category or "watermark",
+        "builtin": False,
+        "text_layers": list(payload.text_layers or []),
+        "image_overlays": list(payload.image_overlays or []),
+        "border": dict(payload.border) if has_border else None,
+    }
+    replaced = False
+    for idx, existing in enumerate(items):
+        if existing.get("id") == tpl["id"]:
+            items[idx] = tpl
+            replaced = True
+            break
+    if not replaced:
+        items.insert(0, tpl)
+    _save_custom_layer_templates(items)
+    return {"status": "ok", "template": tpl, "templates": items + DEFAULT_LAYER_TEMPLATES}
+
+
+@router.put("/api/studio/layer_templates/{template_id}")
+def api_update_layer_template(template_id: str, payload: StudioLayerTemplatePayload):
+    payload_copy = payload.model_copy(update={"template_id": template_id})
+    return api_save_layer_template(payload_copy)
+
+
+@router.delete("/api/studio/layer_templates/{template_id}")
+def api_delete_layer_template(template_id: str):
+    items = [it for it in _load_custom_layer_templates() if it.get("id") != template_id]
+    _save_custom_layer_templates(items)
+    return {"status": "ok", "templates": items + DEFAULT_LAYER_TEMPLATES}
+
+
+@router.post("/api/studio/upload_asset")
+async def api_upload_studio_asset(file: UploadFile = File(...)):
+    _, dest_dir = get_active_db_and_dest()
+    assets_dir = get_library_tech_dir(dest_dir, "_Studio_Assets")
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    raw_name = Path(file.filename or "asset.bin").name
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", raw_name) or "asset.bin"
+    target_path = assets_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
+    with open(target_path, "wb") as f:
+        while chunk := await file.read(1024 * 512):
+            f.write(chunk)
+    ext = target_path.suffix.lower()
+    audio_exts = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
+    kind = "audio" if ext in audio_exts else ("video" if ext in VIDEO_EXTS else "image")
+    w, h = (0, 0)
+    dur = 0.0
+    if kind in ("image", "video"):
+        w, h = probe_media_dimensions(target_path)
+    if kind == "video":
+        try:
+            import cv2
+            cap = cv2.VideoCapture(str(target_path))
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+            frames = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+            cap.release()
+            if fps > 0 and frames > 0:
+                dur = round(frames / fps, 2)
+        except Exception:
+            dur = 0.0
+    elif kind == "image":
+        dur = 3.0
+    return {
+        "status": "ok",
+        "path": str(target_path),
+        "name": raw_name,
+        "kind": kind,
+        "width": w,
+        "height": h,
+        "duration_sec": dur,
+    }
+
+
+@router.get("/api/studio/system_fonts")
+def api_studio_system_fonts():
+    return {"fonts": list_system_fonts()}
+
+
+@router.get("/api/studio/font_file")
+def api_studio_font_file(path: str):
+    fp = Path(unquote(path)).resolve()
+    if not fp.exists() or not fp.is_file() or fp.suffix.lower() not in FONT_EXTS:
+        raise HTTPException(404, "Police introuvable")
+    allowed_roots = [d.resolve() for d in get_system_font_dirs()]
+    if not any(fp == root or root in fp.parents for root in allowed_roots):
+        raise HTTPException(403, "Accès refusé hors dossier polices")
+    media_type = "font/otf" if fp.suffix.lower() == ".otf" else "font/ttf"
+    return FileResponse(str(fp), media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/api/studio/ai_inpaint/status")
+def api_studio_ai_inpaint_status():
+    return get_ai_inpaint_status()
+
+
+@router.post("/api/studio/ai_inpaint/install")
+def api_studio_ai_inpaint_install():
+    return start_lama_install()
+
+
+@router.get("/api/studio/ai_bg_remove/status")
+def api_studio_ai_bg_remove_status():
+    return get_ai_bg_remove_status()
+
+
+@router.post("/api/studio/ai_bg_remove/install")
+def api_studio_ai_bg_remove_install():
+    return start_bg_remove_install()
+
+
+@router.post("/api/studio/preview_eraser")
+def api_preview_studio_eraser(payload: MediaStudioEditPayload):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT dest_path FROM processed_files WHERE source_path = ?", (unquote(payload.source_path),))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Média introuvable")
+    media_p = resolve_actual_path(row["dest_path"]) or Path(row["dest_path"])
+    if not media_p.exists() or media_p.suffix.lower() in VIDEO_EXTS:
+        raise HTTPException(400, "Aperçu effaceur réservé aux photos existantes")
+    out_bytes, engine = render_inpaint_preview_with_meta(media_p, payload.model_dump())
+    mime = "image/png" if out_bytes[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    return Response(content=out_bytes, media_type=mime, headers={"Cache-Control": "no-store", "X-Inpaint-Engine": engine})
+
+
 @router.post("/api/studio/apply")
 def api_apply_studio_edits(payload: MediaStudioEditPayload):
     conn = get_db()
@@ -593,14 +853,30 @@ def api_apply_studio_edits(payload: MediaStudioEditPayload):
         raise HTTPException(500, f"Erreur d'édition : {e}")
 
     for out_p in out_files:
+        w, h = probe_media_dimensions(out_p)
+        dur = 0.0
+        if out_p.suffix.lower() in VIDEO_EXTS:
+            try:
+                import cv2
+                cap = cv2.VideoCapture(str(out_p))
+                fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+                frames = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+                cap.release()
+                if fps > 0 and frames > 0:
+                    dur = round(frames / fps, 2)
+            except Exception:
+                dur = 0.0
         if out_p != media_p:
             cur.execute("""
                 INSERT OR REPLACE INTO processed_files
-                (source_path, dest_path, original_dest_path, status, timestamp, is_favorite, is_trashed, album_name, latitude, longitude, file_size)
-                VALUES (?, ?, ?, 'edited_copy', ?, ?, 0, ?, ?, ?, ?)
-            """, (str(out_p), str(out_p), str(out_p), row["timestamp"], row["is_favorite"], row["album_name"], row["latitude"], row["longitude"], out_p.stat().st_size))
+                (source_path, dest_path, original_dest_path, status, timestamp, is_favorite, is_trashed, album_name, latitude, longitude, file_size, width, height, duration_sec)
+                VALUES (?, ?, ?, 'edited_copy', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+            """, (str(out_p), str(out_p), str(out_p), row["timestamp"], row["is_favorite"], row["album_name"], row["latitude"], row["longitude"], out_p.stat().st_size, w, h, dur))
         else:
-            cur.execute("UPDATE processed_files SET file_size=?, blake3_hash=NULL WHERE source_path=?", (out_p.stat().st_size, row["source_path"]))
+            cur.execute(
+                "UPDATE processed_files SET file_size=?, width=?, height=?, duration_sec=?, blake3_hash=NULL WHERE source_path=?",
+                (out_p.stat().st_size, w, h, dur, row["source_path"]),
+            )
 
     conn.commit()
     conn.close()

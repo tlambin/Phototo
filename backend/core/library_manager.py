@@ -57,6 +57,24 @@ elif "{mode}" == "audio":
         filetypes=[("Fichiers Audio", "*.mp3 *.wav *.m4a *.aac *.flac *.ogg"), ("Tous", "*.*")]
     )
     print(json.dumps([res] if res else []))
+elif "{mode}" == "images":
+    res = filedialog.askopenfilenames(
+        title="Ajouter une ou plusieurs images",
+        filetypes=[("Images", "*.jpg *.jpeg *.png *.webp *.bmp *.gif"), ("Tous", "*.*")]
+    )
+    print(json.dumps(list(res)))
+elif "{mode}" == "videos":
+    res = filedialog.askopenfilenames(
+        title="Ajouter des clips vidéo",
+        filetypes=[("Vidéos", "*.mp4 *.mov *.mkv *.avi *.webm *.m4v"), ("Tous", "*.*")]
+    )
+    print(json.dumps(list(res)))
+elif "{mode}" == "media":
+    res = filedialog.askopenfilenames(
+        title="Ajouter des fichiers média",
+        filetypes=[("Médias", "*.jpg *.jpeg *.png *.webp *.gif *.mp4 *.mov *.mkv *.avi *.webm *.mp3 *.wav *.m4a *.aac"), ("Tous", "*.*")]
+    )
+    print(json.dumps(list(res)))
 elif "{mode}" == "create_folder":
     res = filedialog.asksaveasfilename(
         title="Choisissez l'emplacement et tapez le nom du nouveau dossier",

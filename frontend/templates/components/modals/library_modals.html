@@ -338,9 +338,18 @@
                         <span>⌄</span>
                     </button>
                 </div>
+                <div id="autodup-extra-priorities" class="space-y-1.5 pl-4"></div>
+                <div class="pl-4">
+                    <button type="button" id="autodup-add-priority-btn" onclick="addAutoDupPriority()"
+                            class="text-[11px] font-extrabold text-[var(--accent)] hover:underline cursor-pointer">+ Ajouter une priorité</button>
+                </div>
 
                 <!-- Cases à cocher -->
                 <div class="space-y-1.5 pl-4 text-[10px] font-extrabold">
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input id="autodup-chk-exact-only" type="checkbox" class="w-3 h-3 accent-[var(--accent)] mt-0.5 shrink-0"/>
+                        <span>Uniquement les doublons exacts <span class="opacity-65 font-semibold">(même date, même qualité, même taille)</span></span>
+                    </label>
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input id="autodup-chk-albums" type="checkbox" checked class="w-3 h-3 accent-[var(--accent)]"/>
                         <span>Mettre à jour les albums existants</span>

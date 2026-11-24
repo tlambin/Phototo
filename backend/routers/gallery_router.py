@@ -14,9 +14,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from database import RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
+from database import MISSING_META_SQL_CONDITION, RAW_EXTS, get_active_db_and_dest, get_db, resolve_actual_path, log_library_action, build_file_entry
+import deduplicateur as dedup
+import indexeur_similaires as sim_ai
 from library_manager import load_libraries
-from media_frames import VIDEO_EXTS, IMAGE_EXTS, detect_is_animated
+from media_editor import process_image_edits
+from media_frames import VIDEO_EXTS, IMAGE_EXTS, detect_is_animated, probe_media_dimensions
+from settings_manager import load_settings
+import suggestions_engine as sug_ai
 
 router = APIRouter()
 
@@ -47,6 +52,8 @@ class GalleryBatchDownloadPayload(BaseModel):
 class AutoResolveDuplicatesPayload(BaseModel):
     mode: str = "KEEP_ONE"          # "KEEP_BOTH" | "KEEP_ONE"
     priority: str = "BEST_QUALITY"  # "BEST_QUALITY" | "NEWEST" | "OLDEST" | "LARGEST"
+    priorities: list[str] | None = None
+    exact_only: bool = False
     update_albums: bool = True
     move_to_trash: bool = True
 
@@ -1308,88 +1315,166 @@ def api_gallery_batch_download(payload: GalleryBatchDownloadPayload):
     )
 
 
+def _strip_blob_fields(row) -> dict:
+    return {k: v for k, v in dict(row).items() if not isinstance(v, (bytes, bytearray, memoryview))}
+
+
+def _hydrate_missing_dimensions(conn: sqlite3.Connection, items: list[dict]) -> None:
+    """Complète width/height/file_size manquants (ex. vidéos) depuis le fichier et persiste en DB."""
+    updates: list[tuple[int, int, int, str]] = []
+    for item in items:
+        if not item:
+            continue
+        w = int(item.get("width") or 0)
+        h = int(item.get("height") or 0)
+        sz = int(item.get("file_size") or 0)
+        if w > 0 and h > 0 and sz > 0:
+            continue
+        dest_p = item.get("dest_path")
+        if not dest_p:
+            continue
+        actual_p = resolve_actual_path(dest_p)
+        if not actual_p or not actual_p.exists():
+            continue
+        if sz <= 0:
+            try:
+                sz = int(actual_p.stat().st_size)
+                item["file_size"] = sz
+            except Exception:
+                pass
+        if w <= 0 or h <= 0:
+            pw, ph = probe_media_dimensions(actual_p)
+            if pw > 0 and ph > 0:
+                w, h = pw, ph
+                item["width"] = w
+                item["height"] = h
+        if item.get("source_path") and ((w > 0 and h > 0) or sz > 0):
+            updates.append((w, h, sz, item["source_path"]))
+    if updates:
+        try:
+            conn.executemany(
+                "UPDATE processed_files SET "
+                "width = CASE WHEN ? > 0 THEN ? ELSE width END, "
+                "height = CASE WHEN ? > 0 THEN ? ELSE height END, "
+                "file_size = CASE WHEN ? > 0 THEN ? ELSE file_size END "
+                "WHERE source_path = ?",
+                [(w, w, h, h, sz, sz, sp) for (w, h, sz, sp) in updates],
+            )
+            conn.commit()
+        except Exception:
+            pass
+
+
+@router.get("/api/media/duplicates")
+def api_get_media_duplicates(source_path: str):
+    """Retourne uniquement les doublons propres au média demandé (ou [] s'il n'en a pas)."""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM processed_files WHERE source_path = ? AND is_trashed = 0", (source_path,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return {"items": []}
+
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)")}
+    row_dict = dict(row)
+    items: list[dict] = []
+    b3 = row_dict.get("blake3_hash")
+    if b3:
+        cur.execute("SELECT * FROM processed_files WHERE blake3_hash = ? AND is_trashed = 0", (b3,))
+        items = [_strip_blob_fields(r) for r in cur.fetchall()]
+    else:
+        root_src = row_dict.get("duplicate_of") or source_path
+        cur.execute(
+            "SELECT * FROM processed_files WHERE is_trashed = 0 AND (source_path = ? OR duplicate_of = ?)",
+            (root_src, root_src),
+        )
+        items = [_strip_blob_fields(r) for r in cur.fetchall()]
+        if len(items) < 2 and "master_path" in cols:
+            root_dest = row_dict.get("master_path") or row_dict.get("dest_path")
+            if root_dest:
+                cur.execute(
+                    "SELECT * FROM processed_files WHERE is_trashed = 0 AND (dest_path = ? OR master_path = ?)",
+                    (root_dest, root_dest),
+                )
+                items = [_strip_blob_fields(r) for r in cur.fetchall()]
+    if len(items) >= 2:
+        _hydrate_missing_dimensions(conn, items)
+    conn.close()
+    return {"items": items if len(items) >= 2 else []}
+
+
 @router.get("/api/duplicates")
 def api_get_duplicates():
     conn = get_db()
-    cur = conn.cursor()
-    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)")}
-    has_master_col = "master_path" in cols
-
-    if has_master_col:
-        cur.execute("""
-            SELECT DISTINCT COALESCE(duplicate_of, master_path) AS master_ref,
-                   CASE WHEN duplicate_of IS NOT NULL THEN 'source' ELSE 'dest' END AS ref_kind
-            FROM processed_files
-            WHERE is_duplicate = 1 AND (duplicate_of IS NOT NULL OR master_path IS NOT NULL)
-        """)
-    else:
-        cur.execute("""
-            SELECT DISTINCT duplicate_of AS master_ref, 'source' AS ref_kind
-            FROM processed_files
-            WHERE is_duplicate = 1 AND duplicate_of IS NOT NULL
-        """)
-
-    masters = cur.fetchall()
-    groups = []
-    for m in masters[:60]:
-        ref = m["master_ref"]
-        if m["ref_kind"] == "source":
-            cur.execute("SELECT * FROM processed_files WHERE source_path = ?", (ref,))
-            m_row = cur.fetchone()
-            cur.execute("SELECT * FROM processed_files WHERE is_duplicate = 1 AND duplicate_of = ?", (ref,))
-        else:
-            cur.execute("SELECT * FROM processed_files WHERE dest_path = ?", (ref,))
-            m_row = cur.fetchone()
-            cur.execute("SELECT * FROM processed_files WHERE is_duplicate = 1 AND master_path = ?", (ref,))
-        d_rows = cur.fetchall()
-        if m_row and d_rows:
-            clean_m = {k: v for k, v in dict(m_row).items() if not isinstance(v, (bytes, bytearray, memoryview))}
-            clean_dups = [{k: v for k, v in dict(r).items() if not isinstance(v, (bytes, bytearray, memoryview))} for r in d_rows]
-            groups.append({"master": clean_m, "duplicates": clean_dups})
+    groups = dedup.find_exact_duplicate_groups(conn, limit_groups=200)
+    if groups:
+        all_items = [it for g in groups for it in (g["master"], *g["duplicates"])]
+        _hydrate_missing_dimensions(conn, all_items)
     conn.close()
     return {"groups": groups}
 
 
-@router.post("/api/duplicates/auto_resolve")
-def api_auto_resolve_duplicates(payload: AutoResolveDuplicatesPayload):
-    conn = get_db()
+def _single_priority_sort_key(item: dict, prio: str) -> int:
+    if prio == "NEWEST":
+        return -(int(item.get("timestamp") or 0))
+    if prio == "OLDEST":
+        ts = item.get("timestamp")
+        return int(ts) if ts else 9999999999
+    if prio == "LARGEST":
+        return -(int(item.get("file_size") or 0))
+    return -(int(item.get("width") or 0) * int(item.get("height") or 0))
+
+
+def _sort_group_by_priority(group: list[dict], priority: str | list[str] = "BEST_QUALITY") -> list[dict]:
+    """Trie un groupe selon une chaîne de priorités (puis taille décroissante en dernier recours)."""
+    prio_list = [p for p in (priority if isinstance(priority, list) else [priority]) if p] or ["BEST_QUALITY"]
+    return sorted(
+        group,
+        key=lambda x: (*(_single_priority_sort_key(x, p) for p in prio_list), -(int(x.get("file_size") or 0))),
+    )
+
+
+def _exact_match_key(item: dict) -> tuple[int, int, int, int]:
+    return (
+        int(item.get("timestamp") or item.get("modified_at") or 0),
+        int(item.get("width") or 0),
+        int(item.get("height") or 0),
+        int(item.get("file_size") or 0),
+    )
+
+
+def _expand_groups_for_resolution(groups: list[list[dict]], exact_only: bool = False) -> list[list[dict]]:
+    if not exact_only:
+        return [g for g in groups if len(g) >= 2]
+    exact_groups: list[list[dict]] = []
+    for grp in groups:
+        if len(grp) < 2:
+            continue
+        buckets: dict[tuple[int, int, int, int], list[dict]] = {}
+        for item in grp:
+            buckets.setdefault(_exact_match_key(item), []).append(item)
+        for sub in buckets.values():
+            if len(sub) >= 2:
+                exact_groups.append(sub)
+    return exact_groups
+
+
+def _resolve_grouped_media(conn, groups: list[list[dict]], payload: AutoResolveDuplicatesPayload, active_dest: Path, action_code: str, log_title: str) -> int:
     cur = conn.cursor()
-    _, active_dest = get_active_db_and_dest()
-
-    if payload.mode == "KEEP_BOTH":
-        cur.execute("UPDATE processed_files SET is_duplicate = 0, duplicate_of = NULL WHERE is_duplicate = 1")
-        conn.commit()
-        conn.close()
-        return {"status": "kept_both", "resolved_count": 0}
-
-    cur.execute("""
-        SELECT blake3_hash FROM processed_files
-        WHERE is_trashed = 0 AND blake3_hash IS NOT NULL
-        GROUP BY blake3_hash HAVING COUNT(*) > 1
-    """)
-    hashes = [r[0] for r in cur.fetchall()]
     trash_dir = active_dest / "Corbeille"
     trash_dir.mkdir(parents=True, exist_ok=True)
     now_ts = int(time.time())
     resolved_count = 0
+    prio_chain = [p for p in (payload.priorities or []) if p] or [payload.priority]
+    target_groups = _expand_groups_for_resolution(groups, exact_only=bool(payload.exact_only))
 
-    for b3 in hashes:
-        cur.execute("SELECT * FROM processed_files WHERE blake3_hash = ? AND is_trashed = 0", (b3,))
-        group = [dict(r) for r in cur.fetchall()]
-        if len(group) < 2:
+    for raw_group in target_groups:
+        if len(raw_group) < 2:
             continue
-
-        if payload.priority == "NEWEST":
-            group.sort(key=lambda x: (x.get("timestamp") or 0), reverse=True)
-        elif payload.priority == "OLDEST":
-            group.sort(key=lambda x: (x.get("timestamp") or 9999999999))
-        elif payload.priority == "LARGEST":
-            group.sort(key=lambda x: (x.get("file_size") or 0), reverse=True)
-        else:
-            group.sort(key=lambda x: ((x.get("width") or 0) * (x.get("height") or 0), (x.get("file_size") or 0)), reverse=True)
-
-        winner = group[0]
-        losers = group[1:]
+        ordered = _sort_group_by_priority(raw_group, prio_chain)
+        winner = ordered[0]
+        losers = ordered[1:]
 
         if payload.update_albums:
             albums = set(a.strip() for a in (winner.get("album_name") or "").split(",") if a.strip())
@@ -1412,68 +1497,83 @@ def api_auto_resolve_duplicates(payload: AutoResolveDuplicatesPayload):
                         pass
                 cur.execute(
                     "UPDATE processed_files SET is_trashed=1, is_duplicate=0, status='trashed', trashed_at=?, dest_path=? WHERE source_path=?",
-                    (now_ts, str(target_t), l["source_path"])
+                    (now_ts, str(target_t), l["source_path"]),
                 )
             else:
                 cur.execute(
                     "UPDATE processed_files SET is_duplicate=1, duplicate_of=? WHERE source_path=?",
-                    (winner["source_path"], l["source_path"])
+                    (winner["source_path"], l["source_path"]),
                 )
 
     conn.commit()
-    conn.close()
     if resolved_count > 0:
         log_library_action(
-            "DEDUP_RESOLVE",
-            "Doublons résolus",
-            f"{resolved_count} doublon(s) {'déplacé(s) vers la corbeille' if payload.move_to_trash else 'marqué(s)'}",
+            action_code,
+            log_title,
+            f"{resolved_count} élément(s) {'déplacé(s) vers la corbeille' if payload.move_to_trash else 'marqué(s) comme doublon(s)'}",
             total_items=resolved_count,
             success_count=resolved_count,
         )
+    return resolved_count
+
+
+@router.post("/api/duplicates/auto_resolve")
+def api_auto_resolve_duplicates(payload: AutoResolveDuplicatesPayload):
+    conn = get_db()
+    cur = conn.cursor()
+    _, active_dest = get_active_db_and_dest()
+
+    if payload.mode == "KEEP_BOTH":
+        cur.execute("UPDATE processed_files SET is_duplicate = 0, duplicate_of = NULL WHERE is_duplicate = 1")
+        conn.commit()
+        conn.close()
+        return {"status": "kept_both", "resolved_count": 0}
+
+    cur.execute("""
+        SELECT blake3_hash FROM processed_files
+        WHERE is_trashed = 0 AND blake3_hash IS NOT NULL
+        GROUP BY blake3_hash HAVING COUNT(*) > 1
+    """)
+    hashes = [r[0] for r in cur.fetchall()]
+    groups = []
+    for b3 in hashes:
+        cur.execute("SELECT * FROM processed_files WHERE blake3_hash = ? AND is_trashed = 0", (b3,))
+        grp = [dict(r) for r in cur.fetchall()]
+        if len(grp) >= 2:
+            groups.append(grp)
+
+    if groups:
+        _hydrate_missing_dimensions(conn, [it for grp in groups for it in grp])
+    resolved_count = _resolve_grouped_media(conn, groups, payload, active_dest, "DEDUP_RESOLVE", "Doublons résolus")
+    conn.close()
     return {"status": "resolved", "resolved_count": resolved_count}
+
+
+def _compute_similar_groups(conn, max_dist: int = 8, limit_groups: int = 120) -> list[list[dict]]:
+    groups = sim_ai.find_similar_groups(conn, max_dist=max_dist, limit_groups=limit_groups)
+    if groups:
+        _hydrate_missing_dimensions(conn, [it for grp in groups for it in grp])
+    return groups
 
 
 @router.get("/api/similar/groups")
 def api_get_similar_groups(max_dist: int = 8):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT source_path, dest_path, timestamp, phash, width, height, file_size
-        FROM processed_files
-        WHERE is_duplicate = 0 AND is_trashed = 0 AND phash IS NOT NULL
-        ORDER BY COALESCE(timestamp, 0) DESC LIMIT 2500
-    """)
-    rows = [dict(r) for r in cur.fetchall()]
+    groups = _compute_similar_groups(conn, max_dist=max_dist, limit_groups=60)
     conn.close()
-
-    parsed = []
-    for r in rows:
-        try:
-            parsed.append((imagehash.hex_to_hash(r["phash"]), r))
-        except Exception:
-            pass
-
-    visited = set()
-    groups = []
-    for i in range(len(parsed)):
-        if i in visited:
-            continue
-        h1, r1 = parsed[i]
-        cluster = [r1]
-        for j in range(i + 1, min(len(parsed), i + 120)):
-            if j in visited:
-                continue
-            h2, r2 = parsed[j]
-            if (h1 - h2) <= max_dist:
-                visited.add(j)
-                cluster.append(r2)
-        if len(cluster) > 1:
-            visited.add(i)
-            groups.append(cluster)
-        if len(groups) >= 40:
-            break
-
     return {"groups": groups}
+
+
+@router.post("/api/similar/auto_resolve")
+def api_auto_resolve_similar(payload: AutoResolveDuplicatesPayload, max_dist: int = 8):
+    if payload.mode == "KEEP_BOTH":
+        return {"status": "kept_both", "resolved_count": 0}
+    conn = get_db()
+    _, active_dest = get_active_db_and_dest()
+    groups = _compute_similar_groups(conn, max_dist=max_dist, limit_groups=150)
+    resolved_count = _resolve_grouped_media(conn, groups, payload, active_dest, "SIMILAR_RESOLVE", "Similaires résolus")
+    conn.close()
+    return {"status": "resolved", "resolved_count": resolved_count}
 
 
 def _purge_expired_trash(conn: sqlite3.Connection):
@@ -1497,15 +1597,36 @@ def api_get_trash_items():
     _purge_expired_trash(conn)
     cur = conn.cursor()
     cur.execute("SELECT value FROM app_settings WHERE key = 'trash_retention_days'")
-    r_days = int(cur.fetchone()["value"])
-    cur.execute("SELECT source_path, dest_path, timestamp, file_size, trashed_at FROM processed_files WHERE is_trashed = 1 ORDER BY COALESCE(trashed_at, 0) DESC")
+    row_days = cur.fetchone()
+    r_days = int(row_days["value"]) if row_days else 30
+    cur.execute("""
+        SELECT source_path, dest_path, original_dest_path, timestamp, modified_at,
+               file_size, width, height, album_name, trashed_at, duration_sec,
+               is_favorite, COALESCE(is_animated, 0) as is_animated
+        FROM processed_files
+        WHERE is_trashed = 1
+        ORDER BY COALESCE(trashed_at, 0) DESC
+    """)
     now_ts = int(time.time())
     items, total_bytes = [], 0
+    updated_dur = False
     for r in cur.fetchall():
         d = dict(r)
         total_bytes += (d["file_size"] or 0)
+        dp = d.get("dest_path") or ""
+        if Path(dp).suffix.lower() in VIDEO_EXTS and not d.get("duration_sec"):
+            actual_v = resolve_actual_path(dp)
+            if actual_v:
+                dur = _probe_video_duration_and_save(actual_v, conn)
+                if dur:
+                    d["duration_sec"] = dur
+                    if str(actual_v) != dp and d.get("source_path"):
+                        conn.execute("UPDATE processed_files SET duration_sec = ? WHERE source_path = ?", (dur, d["source_path"]))
+                    updated_dur = True
         d["days_left"] = max(0, int(round(r_days - ((now_ts - (d["trashed_at"] or now_ts)) / 86400.0)))) if r_days > 0 else None
         items.append(d)
+    if updated_dur:
+        conn.commit()
     conn.close()
     return {"items": items, "retention_days": r_days, "total_mb": round(total_bytes / (1024 * 1024), 2)}
 
@@ -1589,3 +1710,449 @@ def api_empty_all_trash():
             files=deleted_files,
         )
     return {"status": "emptied"}
+
+
+# ==================== OUTILS & SUGGESTIONS INTELLIGENTES ====================
+
+class RotationApplyItem(BaseModel):
+    source_path: str
+    rotate: int = 90
+
+
+class ApplyRotationPayload(BaseModel):
+    items: list[RotationApplyItem]
+
+
+class GpsApplyItem(BaseModel):
+    source_path: str
+    latitude: float
+    longitude: float
+
+
+class ApplyGpsPayload(BaseModel):
+    items: list[GpsApplyItem]
+
+
+@router.get("/api/tools/suggestions/summary")
+def api_tools_suggestions_summary(
+    min_mb: int = 10,
+    blur_threshold: float = sug_ai.DEFAULT_BLUR_THRESHOLD,
+    min_age_days: int = 90,
+    max_gap_hours: int = 6,
+):
+    conn = get_db()
+    cur = conn.cursor()
+
+    min_bytes = max(1, int(min_mb)) * 1024 * 1024
+    cur.execute("""
+        SELECT COUNT(*), COALESCE(SUM(file_size), 0)
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND COALESCE(file_size, 0) >= ?
+    """, (min_bytes,))
+    row_large = cur.fetchone()
+    large_count = int(row_large[0] or 0)
+    large_bytes = int(row_large[1] or 0)
+
+    vid_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(VIDEO_EXTS)])
+    cur.execute(f"""
+        SELECT COUNT(*) FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({vid_sql}) AND duration_sec IS NOT NULL AND duration_sec > 0 AND duration_sec <= 2.0
+    """)
+    short_videos_count = int(cur.fetchone()[0] or 0)
+
+    ext_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(sug_ai.SUGGESTION_PHOTO_EXTS)])
+    cur.execute(f"""
+        SELECT
+            COUNT(*) AS total_photos,
+            SUM(CASE WHEN blur_score IS NOT NULL THEN 1 ELSE 0 END) AS scanned_blur,
+            SUM(CASE WHEN blur_score IS NOT NULL AND blur_score >= 0 AND blur_score < ? THEN 1 ELSE 0 END) AS blur_only,
+            SUM(CASE WHEN exposure_score IS NOT NULL AND exposure_score >= 0 AND (exposure_score <= ? OR exposure_score >= ?) THEN 1 ELSE 0 END) AS exposure_bad,
+            SUM(CASE WHEN (blur_score IS NOT NULL AND blur_score >= 0 AND blur_score < ?)
+                       OR (exposure_score IS NOT NULL AND exposure_score >= 0 AND (exposure_score <= ? OR exposure_score >= ?))
+                THEN 1 ELSE 0 END) AS quality_bad,
+            SUM(CASE WHEN suggested_rotation IS NOT NULL THEN 1 ELSE 0 END) AS scanned_rot,
+            SUM(CASE WHEN suggested_rotation IN (90, 180, 270) THEN 1 ELSE 0 END) AS rotation_count
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({ext_sql})
+    """, (
+        float(blur_threshold),
+        sug_ai.DEFAULT_DARK_EXPOSURE, sug_ai.DEFAULT_OVEREXPOSED,
+        float(blur_threshold),
+        sug_ai.DEFAULT_DARK_EXPOSURE, sug_ai.DEFAULT_OVEREXPOSED,
+    ))
+    row_p = cur.fetchone()
+    total_photos = int(row_p["total_photos"] or 0) if row_p else 0
+    blurry_scanned = int(row_p["scanned_blur"] or 0) if row_p else 0
+    blur_only_count = int(row_p["blur_only"] or 0) if row_p else 0
+    exposure_bad_count = int(row_p["exposure_bad"] or 0) if row_p else 0
+    blurry_count = int(row_p["quality_bad"] or 0) if row_p else 0
+    rotation_scanned = int(row_p["scanned_rot"] or 0) if row_p else 0
+    rotation_count = int(row_p["rotation_count"] or 0) if row_p else 0
+
+    cur.execute(f"SELECT COUNT(*) FROM processed_files WHERE {MISSING_META_SQL_CONDITION}")
+    missing_meta_count = int(cur.fetchone()[0] or 0)
+
+    home_country = str(load_settings().get("home_country", "") or "")
+    album_suggestions = sug_ai.compute_album_suggestions(conn, limit=300)
+    matched_srcs = {it["source_path"] for it in album_suggestions}
+    new_events = sug_ai.compute_new_album_events(conn, exclude_sources=matched_srcs, home_country=home_country, limit=24)
+    missing_gps_count = len(sug_ai.compute_missing_gps_suggestions(conn, max_gap_sec=max(1, int(max_gap_hours)) * 3600, limit=300))
+    screenshots_count = len(sug_ai.compute_screenshots_suggestions(conn, min_age_days=min_age_days, limit=300))
+    people_sug = sug_ai.compute_people_suggestions(conn, limit=50)
+    people_merge_count = len(people_sug["merge_pairs"])
+    people_unnamed_count = len(people_sug["unnamed_persons"])
+    conn.close()
+    return {
+        "albums_count": len(album_suggestions),
+        "new_events_count": len(new_events),
+        "blurry_count": blurry_count,
+        "blur_only_count": blur_only_count,
+        "exposure_bad_count": exposure_bad_count,
+        "blurry_scanned": blurry_scanned,
+        "blurry_total": total_photos,
+        "blur_threshold": float(blur_threshold),
+        "rotation_count": rotation_count,
+        "rotation_scanned": rotation_scanned,
+        "rotation_total": total_photos,
+        "missing_gps_count": missing_gps_count,
+        "people_count": people_merge_count + people_unnamed_count,
+        "people_merge_count": people_merge_count,
+        "people_unnamed_count": people_unnamed_count,
+        "screenshots_count": screenshots_count,
+        "large_count": large_count,
+        "large_mb": round(large_bytes / (1024 * 1024), 1),
+        "short_videos_count": short_videos_count,
+        "min_mb": int(min_mb),
+        "missing_meta_count": missing_meta_count,
+    }
+
+
+@router.get("/api/tools/suggestions/details")
+def api_tools_suggestions_details(
+    kind: str,
+    min_mb: int = 10,
+    blur_threshold: float = sug_ai.DEFAULT_BLUR_THRESHOLD,
+    filter_mode: str = "all",
+    min_age_days: int = 90,
+    max_gap_hours: int = 6,
+    mode: str = "large",
+    limit: int = 120,
+):
+    clean_kind = (kind or "").strip().lower()
+    safe_limit = max(1, min(300, int(limit)))
+    conn = get_db()
+    cur = conn.cursor()
+
+    if clean_kind == "albums":
+        home_country = str(load_settings().get("home_country", "") or "")
+        items = sug_ai.compute_album_suggestions(conn, limit=safe_limit)
+        matched_srcs = {it["source_path"] for it in items}
+        new_events = sug_ai.compute_new_album_events(conn, exclude_sources=matched_srcs, home_country=home_country, limit=16)
+        conn.close()
+        return {"kind": "albums", "total": len(items), "items": items, "new_events": new_events}
+
+    if clean_kind == "blurry":
+        ext_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(sug_ai.SUGGESTION_PHOTO_EXTS)])
+        cur.execute(f"""
+            SELECT COUNT(*) AS total_photos,
+                   SUM(CASE WHEN blur_score IS NOT NULL THEN 1 ELSE 0 END) AS scanned_photos
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+              AND ({ext_sql})
+        """)
+        meta_row = cur.fetchone()
+        fm = (filter_mode or "all").strip().lower()
+        if fm == "blur":
+            cond = "blur_score IS NOT NULL AND blur_score >= 0 AND blur_score < ?"
+            params = (float(blur_threshold), safe_limit)
+        elif fm == "exposure":
+            cond = "exposure_score IS NOT NULL AND exposure_score >= 0 AND (exposure_score <= ? OR exposure_score >= ?)"
+            params = (sug_ai.DEFAULT_DARK_EXPOSURE, sug_ai.DEFAULT_OVEREXPOSED, safe_limit)
+        else:
+            cond = """(
+                (blur_score IS NOT NULL AND blur_score >= 0 AND blur_score < ?)
+                OR (exposure_score IS NOT NULL AND exposure_score >= 0 AND (exposure_score <= ? OR exposure_score >= ?))
+            )"""
+            params = (float(blur_threshold), sug_ai.DEFAULT_DARK_EXPOSURE, sug_ai.DEFAULT_OVEREXPOSED, safe_limit)
+        cur.execute(f"""
+            SELECT source_path, dest_path, timestamp, file_size, width, height, blur_score, exposure_score
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+              AND ({ext_sql}) AND {cond}
+            ORDER BY COALESCE(blur_score, 9999) ASC, COALESCE(exposure_score, 128) ASC
+            LIMIT ?
+        """, params)
+        items = [dict(r) for r in cur.fetchall()]
+        blur_map = {it["source_path"]: float(it["blur_score"]) for it in items if it.get("blur_score") is not None and float(it["blur_score"]) >= 0}
+        sharper_sim = sug_ai.find_sharper_similar_sources(conn, blur_map)
+        for it in items:
+            issues = []
+            if it.get("blur_score") is not None and 0 <= float(it["blur_score"]) < float(blur_threshold):
+                issues.append("Floue")
+            if it.get("exposure_score") is not None and float(it["exposure_score"]) >= 0:
+                exp = float(it["exposure_score"])
+                if exp <= sug_ai.DEFAULT_DARK_EXPOSURE:
+                    issues.append("Trop sombre")
+                elif exp >= sug_ai.DEFAULT_OVEREXPOSED:
+                    issues.append("Surexposée")
+            it["quality_issue"] = " · ".join(issues) if issues else "Qualité faible"
+            it["has_sharper_similar"] = it["source_path"] in sharper_sim
+        conn.close()
+        return {
+            "kind": "blurry",
+            "total": len(items),
+            "scanned": int(meta_row["scanned_photos"] or 0) if meta_row else 0,
+            "total_photos": int(meta_row["total_photos"] or 0) if meta_row else 0,
+            "blur_threshold": float(blur_threshold),
+            "filter_mode": fm,
+            "items": items,
+        }
+
+    if clean_kind == "rotation":
+        ext_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(sug_ai.SUGGESTION_PHOTO_EXTS)])
+        cur.execute(f"""
+            SELECT COUNT(*) AS total_photos,
+                   SUM(CASE WHEN suggested_rotation IS NOT NULL THEN 1 ELSE 0 END) AS scanned_photos
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+              AND ({ext_sql})
+        """)
+        meta_row = cur.fetchone()
+        cur.execute(f"""
+            SELECT source_path, dest_path, timestamp, file_size, width, height, suggested_rotation, rotation_reason
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+              AND ({ext_sql})
+              AND suggested_rotation IN (90, 180, 270)
+            ORDER BY COALESCE(timestamp, 0) DESC
+            LIMIT ?
+        """, (safe_limit,))
+        items = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {
+            "kind": "rotation",
+            "total": len(items),
+            "scanned": int(meta_row["scanned_photos"] or 0) if meta_row else 0,
+            "total_photos": int(meta_row["total_photos"] or 0) if meta_row else 0,
+            "items": items,
+        }
+
+    if clean_kind == "missing_gps":
+        items = sug_ai.compute_missing_gps_suggestions(conn, max_gap_sec=max(1, int(max_gap_hours)) * 3600, limit=safe_limit)
+        conn.close()
+        return {"kind": "missing_gps", "total": len(items), "max_gap_hours": int(max_gap_hours), "items": items}
+
+    if clean_kind == "people":
+        data = sug_ai.compute_people_suggestions(conn, limit=safe_limit)
+        conn.close()
+        total = len(data["merge_pairs"]) + len(data["unnamed_persons"])
+        return {"kind": "people", "total": total, "items": [], **data}
+
+    if clean_kind == "screenshots":
+        items = sug_ai.compute_screenshots_suggestions(conn, min_age_days=min_age_days, limit=safe_limit)
+        conn.close()
+        return {"kind": "screenshots", "total": len(items), "min_age_days": int(min_age_days), "items": items}
+
+    if clean_kind == "large":
+        m = (mode or "large").strip().lower()
+        if m == "short_videos":
+            vid_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(VIDEO_EXTS)])
+            cur.execute(f"""
+                SELECT source_path, dest_path, timestamp, file_size, width, height, duration_sec, album_name
+                FROM processed_files
+                WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+                  AND ({vid_sql}) AND duration_sec IS NOT NULL AND duration_sec > 0 AND duration_sec <= 2.0
+                ORDER BY duration_sec ASC, COALESCE(file_size, 0) DESC
+                LIMIT ?
+            """, (safe_limit,))
+            items = [dict(r) for r in cur.fetchall()]
+            conn.close()
+            return {"kind": "large", "mode": "short_videos", "total": len(items), "items": items}
+
+        min_bytes = max(1, int(min_mb)) * 1024 * 1024
+        cur.execute("""
+            SELECT source_path, dest_path, timestamp, file_size, width, height, duration_sec, album_name
+            FROM processed_files
+            WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+              AND COALESCE(file_size, 0) >= ?
+            ORDER BY COALESCE(file_size, 0) DESC
+            LIMIT ?
+        """, (min_bytes, safe_limit))
+        items = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {"kind": "large", "mode": "large", "total": len(items), "min_mb": int(min_mb), "items": items}
+
+    if clean_kind == "missing_meta":
+        cur.execute(f"""
+            SELECT source_path, dest_path, timestamp, modified_at, status, file_size, width, height, album_name
+            FROM processed_files
+            WHERE {MISSING_META_SQL_CONDITION}
+            ORDER BY dest_path ASC
+            LIMIT ?
+        """, (safe_limit,))
+        items = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {"kind": "missing_meta", "total": len(items), "items": items}
+
+    conn.close()
+    raise HTTPException(status_code=400, detail=f"Type de suggestion inconnu: {kind}")
+
+
+@router.post("/api/tools/suggestions/scan_blur")
+def api_tools_scan_blur(force: bool = False, limit: int = 400, blur_threshold: float = sug_ai.DEFAULT_BLUR_THRESHOLD):
+    conn = get_db()
+    cur = conn.cursor()
+    ext_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(sug_ai.SUGGESTION_PHOTO_EXTS)])
+    blur_filter = "" if force else "AND (blur_score IS NULL OR exposure_score IS NULL)"
+    cur.execute(f"""
+        SELECT source_path, dest_path
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({ext_sql}) {blur_filter}
+        ORDER BY COALESCE(timestamp, 0) DESC
+        LIMIT ?
+    """, (max(1, min(1000, int(limit))),))
+    rows = cur.fetchall()
+
+    scanned_now = 0
+    for r in rows:
+        actual = resolve_actual_path(r["dest_path"])
+        score, exp = sug_ai.compute_blur_and_exposure(actual) if actual else (-1.0, -1.0)
+        if score is None:
+            score, exp = -1.0, -1.0
+        cur.execute("UPDATE processed_files SET blur_score = ?, exposure_score = ? WHERE source_path = ?", (score, exp, r["source_path"]))
+        scanned_now += 1
+    conn.commit()
+
+    cur.execute(f"""
+        SELECT
+            SUM(CASE WHEN blur_score IS NULL OR exposure_score IS NULL THEN 1 ELSE 0 END) AS remaining,
+            SUM(CASE WHEN (blur_score IS NOT NULL AND blur_score >= 0 AND blur_score < ?)
+                       OR (exposure_score IS NOT NULL AND exposure_score >= 0 AND (exposure_score <= ? OR exposure_score >= ?))
+                THEN 1 ELSE 0 END) AS blurry_count
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({ext_sql})
+    """, (float(blur_threshold), sug_ai.DEFAULT_DARK_EXPOSURE, sug_ai.DEFAULT_OVEREXPOSED))
+    st = cur.fetchone()
+    remaining = int(st["remaining"] or 0) if st else 0
+    blurry_count = int(st["blurry_count"] or 0) if st else 0
+    conn.close()
+    return {"scanned_now": scanned_now, "remaining": remaining, "blurry_count": blurry_count}
+
+
+@router.post("/api/tools/suggestions/apply_gps")
+def api_tools_apply_gps(payload: ApplyGpsPayload):
+    conn = get_db()
+    cur = conn.cursor()
+    updated_files: list[dict] = []
+    for entry in payload.items:
+        cur.execute("SELECT dest_path FROM processed_files WHERE source_path = ?", (entry.source_path,))
+        row = cur.fetchone()
+        if not row:
+            continue
+        cur.execute(
+            "UPDATE processed_files SET latitude = ?, longitude = ? WHERE source_path = ?",
+            (float(entry.latitude), float(entry.longitude), entry.source_path),
+        )
+        updated_files.append(build_file_entry(row["dest_path"]))
+    conn.commit()
+    conn.close()
+    if updated_files:
+        log_library_action("MEDIA_GPS", "Localisation appliquée", f"{len(updated_files)} média(s) géolocalisé(s)", files=updated_files)
+    return {"status": "ok", "updated": len(updated_files)}
+
+
+@router.post("/api/tools/suggestions/scan_rotation")
+def api_tools_scan_rotation(force: bool = False, limit: int = 400):
+    conn = get_db()
+    cur = conn.cursor()
+    ext_sql = " OR ".join([f"LOWER(dest_path) LIKE '%{e}'" for e in sorted(sug_ai.SUGGESTION_PHOTO_EXTS)])
+    rot_filter = "" if force else "AND suggested_rotation IS NULL"
+    cur.execute(f"""
+        SELECT source_path, dest_path
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({ext_sql}) {rot_filter}
+        ORDER BY COALESCE(timestamp, 0) DESC
+        LIMIT ?
+    """, (max(1, min(1000, int(limit))),))
+    rows = cur.fetchall()
+
+    scanned_now = 0
+    for r in rows:
+        actual = resolve_actual_path(r["dest_path"])
+        rot, reason = sug_ai.detect_rotation_suggestion(actual) if actual else (-1, "")
+        cur.execute(
+            "UPDATE processed_files SET suggested_rotation = ?, rotation_reason = ? WHERE source_path = ?",
+            (rot, reason or None, r["source_path"]),
+        )
+        scanned_now += 1
+    conn.commit()
+
+    cur.execute(f"""
+        SELECT
+            SUM(CASE WHEN suggested_rotation IS NULL THEN 1 ELSE 0 END) AS remaining,
+            SUM(CASE WHEN suggested_rotation IN (90, 180, 270) THEN 1 ELSE 0 END) AS rotation_count
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND ({ext_sql})
+    """)
+    st = cur.fetchone()
+    remaining = int(st["remaining"] or 0) if st else 0
+    rotation_count = int(st["rotation_count"] or 0) if st else 0
+    conn.close()
+    return {"scanned_now": scanned_now, "remaining": remaining, "rotation_count": rotation_count}
+
+
+@router.post("/api/tools/suggestions/apply_rotation")
+def api_tools_apply_rotation(payload: ApplyRotationPayload):
+    conn = get_db()
+    cur = conn.cursor()
+    rotated_files: list[dict] = []
+    failed_files: list[dict] = []
+
+    for entry in payload.items:
+        rot = int(entry.rotate) % 360
+        cur.execute("SELECT source_path, dest_path, timestamp FROM processed_files WHERE source_path = ?", (entry.source_path,))
+        row = cur.fetchone()
+        if not row:
+            continue
+        actual = resolve_actual_path(row["dest_path"])
+        if not actual:
+            failed_files.append({"path": str(row["dest_path"]).replace("\\", "/"), "name": Path(row["dest_path"]).name, "reason": "Fichier introuvable"})
+            continue
+
+        if rot not in (90, 180, 270):
+            cur.execute("UPDATE processed_files SET suggested_rotation = 0, rotation_reason = NULL WHERE source_path = ?", (entry.source_path,))
+            continue
+
+        try:
+            out_p = process_image_edits(actual, {"rotate": rot}, overwrite=True, timestamp=row["timestamp"])
+            w_new, h_new = probe_media_dimensions(out_p)
+            fsize = out_p.stat().st_size if out_p.exists() else 0
+            cur.execute("""
+                UPDATE processed_files
+                SET file_size = ?, width = COALESCE(?, width), height = COALESCE(?, height),
+                    suggested_rotation = 0, rotation_reason = NULL, blake3_hash = NULL
+                WHERE source_path = ?
+            """, (fsize, w_new, h_new, entry.source_path))
+            rotated_files.append(build_file_entry(str(out_p)))
+        except Exception as e:
+            failed_files.append({"path": str(actual).replace("\\", "/"), "name": actual.name, "reason": str(e)[:240]})
+
+    conn.commit()
+    conn.close()
+    if rotated_files or failed_files:
+        log_library_action(
+            "MEDIA_ROTATE",
+            "Rotation appliquée",
+            f"{len(rotated_files)} photo(s) pivotée(s)" + (f", {len(failed_files)} échec(s)" if failed_files else ""),
+            status="error" if (failed_files and not rotated_files) else ("partial" if failed_files else "success"),
+            files=rotated_files,
+            failed_files=failed_files,
+        )
+    return {"status": "ok", "rotated": len(rotated_files), "failed": len(failed_files)}

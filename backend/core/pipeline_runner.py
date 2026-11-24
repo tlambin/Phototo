@@ -29,6 +29,7 @@ import indexeur_visages as faces_ai
 import indexeur_ocr as ocr_ai
 import indexeur_similaires as sim_ai
 import indexeur_semantique_gps as clip_gps_ai
+import suggestions_engine as sug_ai
 
 MAX_PARALLEL_ZIPS = min(4, os.cpu_count() or 4)
 
@@ -725,12 +726,10 @@ def run_step_deduplication(lib: dict):
                     conn.executemany("UPDATE processed_files SET file_size=?, blake3_hash=?, phash=?, width=?, height=? WHERE source_path=?", batch)
                     conn.commit()
                     batch.clear()
-                    _group_exact_duplicates_now(conn)
         if batch:
             conn.executemany("UPDATE processed_files SET file_size=?, blake3_hash=?, phash=?, width=?, height=? WHERE source_path=?", batch)
             conn.commit()
 
-    _group_exact_duplicates_now(conn)
     conn.close()
 
 
@@ -1101,6 +1100,186 @@ def run_step_clip(lib: dict):
         pass
 
 
+def _ensure_suggestion_columns(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(processed_files)").fetchall()}
+    if "blur_score" not in cols:
+        conn.execute("ALTER TABLE processed_files ADD COLUMN blur_score REAL DEFAULT NULL")
+    if "exposure_score" not in cols:
+        conn.execute("ALTER TABLE processed_files ADD COLUMN exposure_score REAL DEFAULT NULL")
+    if "suggested_rotation" not in cols:
+        conn.execute("ALTER TABLE processed_files ADD COLUMN suggested_rotation INTEGER DEFAULT NULL")
+    if "rotation_reason" not in cols:
+        conn.execute("ALTER TABLE processed_files ADD COLUMN rotation_reason TEXT DEFAULT NULL")
+    conn.commit()
+
+
+def run_step_blur_scan(lib: dict):
+    db_path = Path(lib["db_path"])
+    conn = _open_worker_db(db_path)
+    _ensure_suggestion_columns(conn)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT source_path, dest_path FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0
+          AND (blur_score IS NULL OR exposure_score IS NULL) AND dest_path IS NOT NULL
+    """)
+    to_scan = [
+        (r["source_path"], r["dest_path"])
+        for r in cur.fetchall()
+        if Path(r["dest_path"]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS
+    ]
+    total = len(to_scan)
+    STATE.log(f"🔎 {total} photo(s) à analyser (netteté & exposition)...")
+    STATE._step_start_ts = time.time()
+    STATE.update_progress(0, total, unit="photos/s")
+
+    if total > 0:
+        batch, done = [], 0
+        for src_p, dst_p in to_scan:
+            if STATE.stop_requested:
+                break
+            done += 1
+            p = Path(dst_p)
+            STATE.log(f"🔎 {p.name} ({done}/{total})")
+            if p.exists():
+                sc, exp = sug_ai.compute_blur_and_exposure(p)
+                if sc is None:
+                    STATE.add_failed_file(dst_p, "Image illisible lors du calcul de qualité")
+                    sc, exp = -1.0, -1.0
+            else:
+                STATE.add_failed_file(dst_p, "Fichier introuvable sur le disque")
+                sc, exp = -1.0, -1.0
+            batch.append((sc, exp, src_p))
+            if done % 15 == 0 or done == total:
+                STATE.update_progress(done, total, unit="photos/s")
+            if len(batch) >= 50:
+                conn.executemany("UPDATE processed_files SET blur_score = ?, exposure_score = ? WHERE source_path = ?", batch)
+                conn.commit()
+                batch.clear()
+        if batch:
+            conn.executemany("UPDATE processed_files SET blur_score = ?, exposure_score = ? WHERE source_path = ?", batch)
+            conn.commit()
+    conn.close()
+
+
+def run_step_rotation_scan(lib: dict):
+    db_path = Path(lib["db_path"])
+    conn = _open_worker_db(db_path)
+    _ensure_suggestion_columns(conn)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT source_path, dest_path FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND suggested_rotation IS NULL AND dest_path IS NOT NULL
+    """)
+    to_scan = [
+        (r["source_path"], r["dest_path"])
+        for r in cur.fetchall()
+        if Path(r["dest_path"]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS
+    ]
+    total = len(to_scan)
+    STATE.log(f"🔄 {total} photo(s) à analyser (orientation / rotation)...")
+    STATE._step_start_ts = time.time()
+    STATE.update_progress(0, total, unit="photos/s")
+
+    if total > 0:
+        batch, done = [], 0
+        for src_p, dst_p in to_scan:
+            if STATE.stop_requested:
+                break
+            done += 1
+            p = Path(dst_p)
+            STATE.log(f"🔄 {p.name} ({done}/{total})")
+            if p.exists():
+                rot, reason = sug_ai.detect_rotation_suggestion(p)
+            else:
+                STATE.add_failed_file(dst_p, "Fichier introuvable sur le disque")
+                rot, reason = -1, ""
+            batch.append((rot, reason or None, src_p))
+            if done % 10 == 0 or done == total:
+                STATE.update_progress(done, total, unit="photos/s")
+            if len(batch) >= 40:
+                conn.executemany(
+                    "UPDATE processed_files SET suggested_rotation = ?, rotation_reason = ? WHERE source_path = ?",
+                    batch,
+                )
+                conn.commit()
+                batch.clear()
+        if batch:
+            conn.executemany(
+                "UPDATE processed_files SET suggested_rotation = ?, rotation_reason = ? WHERE source_path = ?",
+                batch,
+            )
+            conn.commit()
+    conn.close()
+
+
+def run_step_suggestions_scan(lib: dict):
+    db_path = Path(lib["db_path"])
+    conn = _open_worker_db(db_path)
+    _ensure_suggestion_columns(conn)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT source_path, dest_path, blur_score, exposure_score, suggested_rotation
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+          AND (blur_score IS NULL OR exposure_score IS NULL OR suggested_rotation IS NULL)
+    """)
+    to_scan = [
+        dict(r) for r in cur.fetchall()
+        if Path(r["dest_path"]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS
+    ]
+    total = len(to_scan)
+    STATE.log(f"💡 {total} photo(s) à analyser (qualité & rotation)...")
+    STATE._step_start_ts = time.time()
+    STATE.update_progress(0, total, unit="photos/s")
+
+    if total > 0:
+        batch, done = [], 0
+        for row in to_scan:
+            if STATE.stop_requested:
+                break
+            done += 1
+            dst_p = row["dest_path"]
+            p = Path(dst_p)
+            STATE.log(f"💡 {p.name} ({done}/{total})")
+            blur_val = row["blur_score"]
+            exp_val = row["exposure_score"]
+            rot_val = row["suggested_rotation"]
+            reason_val = None
+            if p.exists():
+                if blur_val is None or exp_val is None:
+                    sc, exp = sug_ai.compute_blur_and_exposure(p)
+                    blur_val = sc if sc is not None else -1.0
+                    exp_val = exp if exp is not None else -1.0
+                if rot_val is None:
+                    rot_val, reason_val = sug_ai.detect_rotation_suggestion(p)
+            else:
+                STATE.add_failed_file(dst_p, "Fichier introuvable sur le disque")
+                if blur_val is None:
+                    blur_val = -1.0
+                if exp_val is None:
+                    exp_val = -1.0
+                if rot_val is None:
+                    rot_val, reason_val = -1, None
+            batch.append((blur_val, exp_val, rot_val, reason_val or None, row["source_path"]))
+            if done % 10 == 0 or done == total:
+                STATE.update_progress(done, total, unit="photos/s")
+            if len(batch) >= 40:
+                conn.executemany(
+                    "UPDATE processed_files SET blur_score = ?, exposure_score = ?, suggested_rotation = ?, rotation_reason = COALESCE(?, rotation_reason) WHERE source_path = ?",
+                    batch,
+                )
+                conn.commit()
+                batch.clear()
+        if batch:
+            conn.executemany(
+                "UPDATE processed_files SET blur_score = ?, exposure_score = ?, suggested_rotation = ?, rotation_reason = COALESCE(?, rotation_reason) WHERE source_path = ?",
+                batch,
+            )
+            conn.commit()
+    conn.close()
+
+
 TASK_REGISTRY = {
     "INGEST": ("Decompression en cours...", run_step_ingestion),
     "FACES": ("Analyse des visages en cours...", run_step_faces),
@@ -1108,6 +1287,9 @@ TASK_REGISTRY = {
     "DEDUP": ("Analyse des doublons en cours...", run_step_deduplication),
     "SIMILAR": ("Analyse des similarités en cours...", run_step_similarity),
     "CLIP": ("Indexation IA CLIP en cours...", run_step_clip),
+    "BLUR": ("Analyse de netteté (fichiers flous) en cours...", run_step_blur_scan),
+    "ROTATION": ("Analyse d'orientation (rotations) en cours...", run_step_rotation_scan),
+    "SUGGESTIONS": ("Analyse des suggestions en cours...", run_step_suggestions_scan),
 }
 
 
@@ -1188,6 +1370,104 @@ def _worker_single_task_thread(lib: dict, task_code: str):
         STATE.active_task = "IDLE"
 
 
+_TASK_NOTHING_TO_DO_MSGS = {
+    "DEDUP": "Aucune analyse nécessaire : tous vos médias ont déjà été vérifiés pour les doublons (aucun nouveau fichier).",
+    "SIMILAR": "Aucune analyse nécessaire : toutes vos photos et vidéos ont déjà été analysées pour les similarités (aucun nouveau fichier).",
+    "FACES": "Aucune analyse nécessaire : tous vos médias ont déjà été scannés pour les visages (aucun nouveau fichier).",
+    "OCR": "Aucune analyse nécessaire : le texte de tous vos médias a déjà été analysé (aucun nouveau fichier).",
+    "CLIP": "Aucune analyse nécessaire : tous vos médias ont déjà été indexés par l'IA (aucun nouveau fichier).",
+    "BLUR": "Aucune analyse nécessaire : la netteté de toutes vos photos a déjà été analysée (aucun nouveau fichier).",
+    "ROTATION": "Aucune analyse nécessaire : l'orientation de toutes vos photos a déjà été vérifiée (aucun nouveau fichier).",
+    "SUGGESTIONS": "Aucune analyse nécessaire : toutes vos photos ont déjà été analysées pour les suggestions (aucun nouveau fichier).",
+}
+
+_TASK_SCAN_COLUMN = {
+    "FACES": "faces_scanned",
+    "OCR": "ocr_scanned",
+    "CLIP": "clip_scanned",
+}
+
+
+def _count_pending_items_for_task(lib: dict, task_code: str) -> tuple[int, str]:
+    """Retourne (nb_elements_a_traiter, message_si_aucun) sans modifier la base ni lancer de thread."""
+    db_path = Path(lib["db_path"])
+    if not db_path.exists():
+        return 0, "Aucune analyse nécessaire : aucun média importé dans votre bibliothèque pour le moment."
+
+    conn = _open_worker_db(db_path)
+    try:
+        cur = conn.cursor()
+        has_table = cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='processed_files'"
+        ).fetchone()
+        if not has_table:
+            return 0, "Aucune analyse nécessaire : aucun média importé dans votre bibliothèque pour le moment."
+
+        total_rows = int(cur.execute(
+            "SELECT COUNT(*) FROM processed_files WHERE status NOT IN ('error', 'trashed') AND dest_path IS NOT NULL"
+        ).fetchone()[0] or 0)
+        if total_rows == 0:
+            return 0, "Aucune analyse nécessaire : aucun média importé dans votre bibliothèque pour le moment."
+
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)")}
+        empty_msg = _TASK_NOTHING_TO_DO_MSGS.get(
+            task_code, "Aucune analyse nécessaire : tous vos médias sont déjà à jour."
+        )
+
+        if task_code in ("DEDUP", "SIMILAR"):
+            if "blake3_hash" in cols:
+                cur.execute(
+                    "SELECT COUNT(*) FROM processed_files WHERE status NOT IN ('error', 'trashed') AND blake3_hash IS NULL AND dest_path IS NOT NULL"
+                )
+                pending = int(cur.fetchone()[0] or 0)
+            else:
+                pending = total_rows
+            if task_code == "SIMILAR":
+                vid_where = "is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL"
+                if "video_hash" in cols:
+                    vid_where += " AND video_hash IS NULL"
+                cur.execute(f"SELECT dest_path FROM processed_files WHERE {vid_where}")
+                pending += sum(1 for r in cur.fetchall() if Path(r[0]).suffix.lower() in VIDEO_EXTS)
+            return pending, empty_msg
+
+        scan_col = _TASK_SCAN_COLUMN.get(task_code)
+        if scan_col:
+            where_sql = "is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL"
+            if scan_col in cols:
+                where_sql += f" AND {scan_col} = 0"
+            cur.execute(f"SELECT dest_path FROM processed_files WHERE {where_sql}")
+            pending = sum(1 for r in cur.fetchall() if Path(r[0]).suffix.lower() in ALL_MEDIA_EXTS)
+            return pending, empty_msg
+
+        if task_code == "BLUR":
+            where_sql = "is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL"
+            if "blur_score" in cols and "exposure_score" in cols:
+                where_sql += " AND (blur_score IS NULL OR exposure_score IS NULL)"
+            cur.execute(f"SELECT dest_path FROM processed_files WHERE {where_sql}")
+            pending = sum(1 for r in cur.fetchall() if Path(r[0]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS)
+            return pending, empty_msg
+
+        if task_code == "ROTATION":
+            where_sql = "is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL"
+            if "suggested_rotation" in cols:
+                where_sql += " AND suggested_rotation IS NULL"
+            cur.execute(f"SELECT dest_path FROM processed_files WHERE {where_sql}")
+            pending = sum(1 for r in cur.fetchall() if Path(r[0]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS)
+            return pending, empty_msg
+
+        if task_code == "SUGGESTIONS":
+            where_sql = "is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL"
+            if "blur_score" in cols and "exposure_score" in cols and "suggested_rotation" in cols:
+                where_sql += " AND (blur_score IS NULL OR exposure_score IS NULL OR suggested_rotation IS NULL)"
+            cur.execute(f"SELECT dest_path FROM processed_files WHERE {where_sql}")
+            pending = sum(1 for r in cur.fetchall() if Path(r[0]).suffix.lower() in sug_ai.SUGGESTION_PHOTO_EXTS)
+            return pending, empty_msg
+
+        return 1, empty_msg
+    finally:
+        conn.close()
+
+
 def start_specific_task(task_code: str = "INGEST") -> dict:
     if STATE.is_running:
         return {"status": "already_running", "active_task": STATE.active_task}
@@ -1198,6 +1478,10 @@ def start_specific_task(task_code: str = "INGEST") -> dict:
     if not active_name or active_name not in cfg.get("libraries", {}):
         raise ValueError("Ajoutez d'abord un dossier ou un import Google Takeout.")
     lib = cfg["libraries"][active_name]
+    if task_code in _TASK_NOTHING_TO_DO_MSGS:
+        pending, msg = _count_pending_items_for_task(lib, task_code)
+        if pending == 0:
+            return {"status": "nothing_to_do", "task": task_code, "message": msg}
     threading.Thread(target=_worker_single_task_thread, args=(lib, task_code), daemon=True).start()
     return {"status": "started", "task": task_code, "library": active_name}
 
@@ -1219,7 +1503,7 @@ def request_stop_pipeline(cancel: bool = False) -> dict:
     return {"status": "not_running"}
 
 
-_STARTUP_RESUMABLE_TYPES = {"INGEST", "UNZIP", "IMPORT", "METADATA", "FACES", "OCR", "DEDUP", "SIMILAR", "CLIP"}
+_STARTUP_RESUMABLE_TYPES = {"INGEST", "UNZIP", "IMPORT", "METADATA", "FACES", "OCR", "DEDUP", "SIMILAR", "CLIP", "BLUR", "ROTATION", "SUGGESTIONS"}
 
 
 def record_interrupted_active_task() -> None:

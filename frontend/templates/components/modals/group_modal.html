@@ -74,6 +74,65 @@
                 <div id="cg-manage-list" class="space-y-2"></div>
             </div>
 
+            <!-- Section Politique de conservation (Corbeille uniquement) -->
+            <div id="ps-trash-policy-section" class="hidden space-y-2.5 pt-2 border-t border-[var(--border-subtle)]">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider opacity-70">Durée de conservation</h4>
+                <label class="flex flex-col gap-1">
+                    <span class="text-[11px] font-bold opacity-75 px-1">Suppression automatique après mise à la corbeille</span>
+                    <select id="ps-trash-retention-days" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                        <option value="7">7 jours</option>
+                        <option value="14">14 jours</option>
+                        <option value="30">30 jours (par défaut)</option>
+                        <option value="60">60 jours</option>
+                        <option value="90">90 jours</option>
+                        <option value="0">Illimitée (suppression manuelle uniquement)</option>
+                    </select>
+                </label>
+                <p class="text-[10px] opacity-60 px-1">Les éléments ayant dépassé cette durée sont purgés automatiquement à l'ouverture de la corbeille.</p>
+            </div>
+
+            <!-- Section Réglages spécifiques d'un outil de suggestion -->
+            <div id="ps-sug-settings-section" class="hidden space-y-2.5 pt-2 border-t border-[var(--border-subtle)]">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider opacity-70">Paramètres de détection</h4>
+                <label id="ps-sug-field-blur" class="hidden flex flex-col gap-1">
+                    <span class="text-[11px] font-bold opacity-75 px-1">Sensibilité de détection du flou</span>
+                    <select id="ps-sug-blur-thresh" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                        <option value="30">Strict (seulement très floues · &lt; 30)</option>
+                        <option value="45">Équilibré (par défaut · &lt; 45)</option>
+                        <option value="65">Large (légèrement floues incluses · &lt; 65)</option>
+                    </select>
+                </label>
+                <label id="ps-sug-field-large" class="hidden flex flex-col gap-1">
+                    <span class="text-[11px] font-bold opacity-75 px-1">Taille minimale des fichiers volumineux</span>
+                    <select id="ps-sug-large-min-mb" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                        <option value="5">≥ 5 Mo</option>
+                        <option value="10">≥ 10 Mo (par défaut)</option>
+                        <option value="25">≥ 25 Mo</option>
+                        <option value="50">≥ 50 Mo</option>
+                        <option value="100">≥ 100 Mo</option>
+                    </select>
+                </label>
+                <label id="ps-sug-field-age" class="hidden flex flex-col gap-1">
+                    <span class="text-[11px] font-bold opacity-75 px-1">Ancienneté minimale des captures &amp; documents</span>
+                    <select id="ps-sug-age-days" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                        <option value="0">Toutes les captures (sans limite d'âge)</option>
+                        <option value="30">Plus de 30 jours</option>
+                        <option value="90">Plus de 3 mois (par défaut)</option>
+                        <option value="365">Plus d'un an</option>
+                    </select>
+                </label>
+                <label id="ps-sug-field-gps" class="hidden flex flex-col gap-1">
+                    <span class="text-[11px] font-bold opacity-75 px-1">Fenêtre horaire pour estimer le lieu GPS</span>
+                    <select id="ps-sug-gps-gap" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                        <option value="1">± 1 heure (très précis)</option>
+                        <option value="3">± 3 heures</option>
+                        <option value="6">± 6 heures (par défaut)</option>
+                        <option value="12">± 12 heures (même journée)</option>
+                        <option value="24">± 24 heures</option>
+                    </select>
+                </label>
+            </div>
+
             <!-- Section Options par défaut de la page -->
             <div id="ps-defaults-section" class="space-y-3 pt-2 border-t border-[var(--border-subtle)]">
                 <div class="flex items-center justify-between">
@@ -102,7 +161,7 @@
                         </div>
                     </div>
                     <label class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold opacity-70 px-1">Regroupement</span>
+                        <span id="ps-def-group-label" class="text-[11px] font-bold opacity-70 px-1">Regroupement</span>
                         <select id="ps-def-group-by" class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full"></select>
                     </label>
                     <label class="flex flex-col gap-1">

@@ -1,4 +1,4 @@
-<header id="floating-topbar" class="absolute top-0 left-0 right-0 h-20 pl-5 pr-[20px] flex items-center justify-between gap-4 z-30 pointer-events-none">
+<header id="floating-topbar" class="absolute top-0 left-0 right-0 h-20 pl-7 pr-7 flex items-center justify-between gap-4 z-30 pointer-events-none">
     <!-- Barre de recherche flottante + bouton Options au scroll à gauche -->
     <div class="flex-1 flex items-center gap-2.5 min-w-0 pointer-events-auto">
         <div class="w-full max-w-md relative flex items-center">
@@ -7,17 +7,17 @@
             </svg>
             <input id="global-search-input" type="text" placeholder="Rechercher..."
                    onkeydown="if(event.key==='Enter') runGlobalSearch()"
-                   class="ui-card w-full rounded-full pl-11 pr-4 py-2.5 text-sm outline-none shadow-sm focus:ring-2 focus:ring-current/25"/>
+                   class="ui-card w-full rounded-full pl-11 pr-4 py-2.5 text-sm outline-none shadow-lg focus:ring-2 focus:ring-current/25"/>
         </div>
         <button id="topbar-options-btn" type="button" onclick="toggleActiveOptionsBar()" title="Afficher/Masquer les options"
-                class="hidden ui-card w-10 h-10 rounded-full items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                class="hidden ui-card w-10 h-10 rounded-full items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer shadow-lg">
             <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
     </div>
 
     <div class="relative flex items-center gap-3 pointer-events-auto">
         <!-- Pilule Activité en cours (visible uniquement quand une tâche tourne/est en pause) + Notifications -->
-        <div id="activity-notif-pill" class="ui-card rounded-full p-0.5 flex items-center shadow-sm transition-all">
+        <div id="activity-notif-pill" class="ui-card rounded-full p-0.5 flex items-center shadow-lg transition-all">
             <button id="activity-status-btn" type="button" onclick="toggleTaskPopover(event)" title="Détails de l'activité en cours"
                     class="hidden items-center gap-1.5 text-[11px] font-semibold opacity-85 hover:opacity-100 pr-1 max-w-[175px] transition cursor-pointer">
                 <span id="pulse-badge" class="hidden w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
@@ -35,7 +35,7 @@
 
             <!-- Bouton Bibliothèque (1ère lettre par défaut ou image personnalisée, aligné verticalement avec Options et Timeline) -->
             <button id="lib-avatar-btn" type="button" onclick="toggleLibMenuPopover(event)" title="Gérer les bibliothèques"
-                    class="ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-90 transition relative shadow-sm shrink-0 overflow-hidden cursor-pointer">
+                    class="ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-90 transition relative shadow-lg shrink-0 overflow-hidden cursor-pointer">
                 <span id="lib-avatar-letter" class="text-base font-extrabold uppercase select-none leading-none">B</span>
                 <img id="lib-avatar-img" src="" alt="" class="hidden w-full h-full object-cover"/>
             </button>

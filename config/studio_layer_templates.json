@@ -1,0 +1,121 @@
+[
+  {
+    "id": "tpl_bfe8d5e6cb",
+    "name": "test4",
+    "category": "custom",
+    "builtin": false,
+    "text_layers": [],
+    "image_overlays": [
+      {
+        "path": "D:\\Rapido\\Nouvelle_Bibliotheque\\2021\\01 - Janvier\\2021-01-19_19-45-14_images.jpeg-5.jpg",
+        "name": "2021-01-19_19-45-14_images.jpeg-5.jpg",
+        "nx": 0.35088236811382795,
+        "ny": 0.280812703535253,
+        "nw": 0.13046432281725423,
+        "opacity": 1,
+        "start_sec": 0,
+        "end_sec": 0
+      }
+    ],
+    "border": null
+  },
+  {
+    "id": "tpl_98465c133f",
+    "name": "test",
+    "category": "watermark",
+    "builtin": false,
+    "text_layers": [
+      {
+        "text": "Test",
+        "nx": 0.06,
+        "ny": 0.08,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.36,
+        "ny": 0.08,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.66,
+        "ny": 0.08,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.21,
+        "ny": 0.38,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.51,
+        "ny": 0.38,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.81,
+        "ny": 0.38,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.06,
+        "ny": 0.68,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.36,
+        "ny": 0.68,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      },
+      {
+        "text": "Test",
+        "nx": 0.66,
+        "ny": 0.68,
+        "size": 28,
+        "color": "#ffffff",
+        "bg_color": "transparent",
+        "opacity": 0.55
+      }
+    ],
+    "image_overlays": [
+      {
+        "path": "C:/Users/Thomas/Pictures/IMG_20260106_231225_783(1).jpg",
+        "name": "IMG_20260106_231225_783(1).jpg",
+        "nx": 0.04,
+        "ny": 0.86,
+        "nw": 0.2,
+        "opacity": 0.3
+      }
+    ]
+  }
+]

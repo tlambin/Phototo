@@ -226,13 +226,66 @@ def api_map_points():
     conn.create_function("BASENAME", 1, lambda p: Path(p).name.lower() if p else "")
     cur = conn.cursor()
     cur.execute("""
-        SELECT source_path, dest_path, timestamp, latitude, longitude, album_name, is_favorite
+        SELECT source_path, dest_path, timestamp, modified_at, modified_at AS modified_ts,
+               file_size, width, height, duration_sec,
+               latitude, longitude, album_name, is_favorite, rowid AS added_id
         FROM processed_files
         WHERE is_duplicate = 0 AND is_trashed = 0
           AND latitude IS NOT NULL AND longitude IS NOT NULL AND (latitude != 0.0 OR longitude != 0.0)
     """)
     points = [dict(r) for r in cur.fetchall()]
-    conn.close()
+
+    geo_map = {}
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(geocode_cache)").fetchall()}
+        sel_region = "region" if "region" in cols else "'' AS region"
+        for gr in conn.execute(f"SELECT lat_key, lon_key, city, {sel_region}, country, display_label FROM geocode_cache").fetchall():
+            if gr["city"] or gr["display_label"]:
+                geo_map[(round(float(gr["lat_key"]), 2), round(float(gr["lon_key"]), 2))] = {
+                    "city": (gr["city"] or "").strip(),
+                    "region": (gr["region"] or "").strip(),
+                    "country": (gr["country"] or "").strip(),
+                    "display_label": (gr["display_label"] or gr["city"] or "").strip(),
+                }
+    except Exception:
+        geo_map = {}
+    finally:
+        conn.close()
+
+    try:
+        home_country = str(load_settings().get("home_country", "France") or "").strip()
+    except Exception:
+        home_country = "France"
+    home_cmp = _normalize_country_cmp(home_country)
+
+    for pt in points:
+        lk = round(float(pt["latitude"]), 2)
+        lo = round(float(pt["longitude"]), 2)
+        pt["coord_key"] = f"{lk:.2f}, {lo:.2f}"
+        cached = geo_map.get((lk, lo))
+        if cached:
+            city = cached["city"]
+            region = cached["region"]
+            country = cached["country"]
+            is_foreign = bool(country and home_cmp and _normalize_country_cmp(country) != home_cmp)
+            foreign_parts = [p for p in (region, country) if p and p.lower() != (city or "").lower()]
+            place_subtitle = ", ".join(foreign_parts) if is_foreign else ""
+            pt["city"] = city
+            pt["region"] = region
+            pt["country"] = country
+            pt["is_foreign"] = is_foreign
+            pt["place_subtitle"] = place_subtitle
+            pt["place_label"] = cached["display_label"] or city
+            pt["city_key"] = f"{_normalize_country_cmp(city)}|{_normalize_country_cmp(country)}" if city else ""
+        else:
+            pt["city"] = ""
+            pt["region"] = ""
+            pt["country"] = ""
+            pt["is_foreign"] = False
+            pt["place_subtitle"] = ""
+            pt["place_label"] = ""
+            pt["city_key"] = ""
+
     return {"points": points, "count": len(points)}
 
 
@@ -322,7 +375,7 @@ def _fetch_nominatim_city(lat: float, lon: float) -> tuple:
         "format": "jsonv2",
         "lat": f"{lat:.6f}",
         "lon": f"{lon:.6f}",
-        "zoom": "10",
+        "zoom": "12",
         "addressdetails": "1",
         "accept-language": "fr",
     })

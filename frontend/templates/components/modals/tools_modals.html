@@ -1,0 +1,131 @@
+<!-- ==================== MODALE OUTILS IA ==================== -->
+<div id="tools-ai-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+     onclick="if(event.target===this) closeToolsAiModal()">
+    <div class="ui-card w-full max-w-2xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-extrabold leading-tight">Outils IA</h2>
+                <p class="text-xs opacity-65 mt-0.5">Indexation texte, recherche visuelle sémantique, visages et classement automatique.</p>
+            </div>
+            <button type="button" onclick="closeToolsAiModal()" title="Fermer"
+                    class="w-8 h-8 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center text-xs font-bold transition cursor-pointer shrink-0">
+                ✕
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="ui-pill rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold">Texte dans les images (OCR)</div>
+                        <div class="text-[11px] opacity-60 mt-0.5">Indexe le texte des photos et captures</div>
+                    </div>
+                    <span class="ui-card px-2.5 py-1 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-ocr-count">0</span> texte(s)</span>
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-bold opacity-70">
+                        <span>Couverture</span>
+                        <span id="tools-cov-text-ocr" class="tabular-nums">0 / 0 (0 %)</span>
+                    </div>
+                    <div class="w-full ui-card rounded-full h-2 overflow-hidden">
+                        <div id="tools-cov-bar-ocr" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" onclick="closeToolsAiModal(); runTask('OCR')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                        Analyser OCR
+                    </button>
+                </div>
+            </div>
+
+            <div class="ui-pill rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold">Recherche visuelle IA (CLIP)</div>
+                        <div class="text-[11px] opacity-60 mt-0.5">Recherche par descriptions naturelles</div>
+                    </div>
+                    <span id="tools-cov-pct-clip" class="ui-card px-2.5 py-1 rounded-full text-[11px] font-extrabold tabular-nums shrink-0">0 %</span>
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-bold opacity-70">
+                        <span>Couverture</span>
+                        <span id="tools-cov-text-clip" class="tabular-nums">0 / 0 (0 %)</span>
+                    </div>
+                    <div class="w-full ui-card rounded-full h-2 overflow-hidden">
+                        <div id="tools-cov-bar-clip" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" onclick="closeToolsAiModal(); runTask('CLIP')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                        Indexer IA
+                    </button>
+                </div>
+            </div>
+
+            <div class="ui-pill rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold">Personnes &amp; Visages</div>
+                        <div class="text-[11px] opacity-60 mt-0.5">Détection et regroupement des personnes</div>
+                    </div>
+                    <span class="ui-card px-2.5 py-1 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-persons-count">0</span> personne(s)</span>
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-bold opacity-70">
+                        <span>Couverture</span>
+                        <span id="tools-cov-text-faces" class="tabular-nums">0 / 0 (0 %)</span>
+                    </div>
+                    <div class="w-full ui-card rounded-full h-2 overflow-hidden">
+                        <div id="tools-cov-bar-faces" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeToolsAiModal(); switchTab('faces')"
+                            class="ui-card hover:bg-[var(--bg-hover)] px-3.5 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                        Voir
+                    </button>
+                    <button type="button" onclick="closeToolsAiModal(); runTask('FACES')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                        Analyser
+                    </button>
+                </div>
+            </div>
+
+            <div class="ui-pill rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold">Catégories intelligentes</div>
+                        <div class="text-[11px] opacity-60 mt-0.5">Classement automatique par thèmes visuels</div>
+                    </div>
+                    <span class="ui-card px-2.5 py-1 rounded-full text-[11px] font-extrabold shrink-0">CLIP</span>
+                </div>
+                <div class="text-[11px] opacity-65 leading-relaxed">
+                    Organise automatiquement vos photos par sujets (paysages, documents, animaux…) sans déplacer les fichiers.
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeToolsAiModal(); switchTab('types')"
+                            class="ui-card hover:bg-[var(--bg-hover)] px-3.5 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                        Voir
+                    </button>
+                    <button type="button" onclick="closeToolsAiModal(); switchTab('types'); analyzeSmartCategories()"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                        Classer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="pt-2 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2">
+            <button id="btn-prune-missing" type="button" onclick="pruneMissingFiles()"
+                    class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer">
+                Nettoyer les fichiers introuvables
+            </button>
+            <button type="button" onclick="closeToolsAiModal(); switchTab('settings')"
+                    class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                Gérer les modèles IA →
+            </button>
+        </div>
+    </div>
+</div>

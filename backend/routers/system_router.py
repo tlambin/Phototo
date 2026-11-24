@@ -11,8 +11,9 @@ import importlib.metadata
 import json
 import zipfile
 import urllib.request
+import calendar
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import unquote, urljoin
 
 import cv2
@@ -26,10 +27,14 @@ from settings_manager import (
     FACES_MODEL_SPECS, CLIP_MODEL_SPECS
 )
 from library_manager import open_native_dialog, get_library_tech_dir
+from media_frames import IMAGE_EXTS, VIDEO_EXTS
+import deduplicateur as dedup
+import indexeur_similaires as sim_ai
 from pipeline_runner import STATE, start_specific_task, request_stop_pipeline, record_interrupted_active_task, notify_unadded_source_files
 from database import (
     EMPTY_SVG,
     MISSING_META_SQL_CONDITION,
+    RAW_EXTS,
     get_active_db_and_dest,
     get_db,
     resolve_actual_path,
@@ -70,6 +75,16 @@ class SettingsPayload(BaseModel):
     faces_model: str = "buffalo_l"
     clip_model: str = "vit-b-32"
     ui_blur: bool = True
+    ui_style: str | None = None
+    ui_lightbox_style: str = "studio"
+    ui_oled: bool = False
+    ui_no_shadows: bool = False
+    ui_accent: str = "default"
+    ui_accent_custom: str = "#6366f1"
+    ui_fav_match_accent: bool = False
+    ui_tile_radius: str = "rounded"
+    ui_grid_gap: str = "normal"
+    ui_reduce_motion: bool = False
 
 
 class ReindexModelPayload(BaseModel):
@@ -108,17 +123,8 @@ def api_stats():
     cur.execute("SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 0 AND is_trashed = 0 AND (phash IS NOT NULL OR video_hash IS NOT NULL)")
     sim_done = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM processed_files WHERE is_duplicate = 1")
-    dups_found = cur.fetchone()[0]
-
-    cur.execute("""
-        SELECT COUNT(*) FROM (
-            SELECT phash FROM processed_files
-            WHERE is_duplicate = 0 AND is_trashed = 0 AND phash IS NOT NULL
-            GROUP BY phash HAVING COUNT(*) > 1
-        )
-    """)
-    sim_count = cur.fetchone()[0] or 0
+    dups_found = dedup.count_exact_duplicates(conn)
+    sim_count = len(sim_ai.find_similar_groups(conn, max_dist=8, limit_groups=200))
 
     cur.execute("SELECT COUNT(*) FROM persons")
     persons_count = cur.fetchone()[0]
@@ -154,6 +160,246 @@ def api_stats():
             "dedup": {"done": dedup_done, "total": total_active, "percent": _pct(dedup_done, total_active)},
             "similar": {"done": sim_done, "total": total_active, "percent": _pct(sim_done, total_active)}
         }
+    }
+
+
+_MOIS_FULL_FR = ("", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre")
+_MOIS_SHORT_FR = ("", "Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc")
+_DAYS_FR = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche")
+_DAYS_SHORT_FR = ("Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim")
+
+
+def _acc_period_bucket(store: dict, key: str, label: str, sub: str, date_from: str, date_to: str, sz: int, kind: str) -> None:
+    b = store.get(key)
+    if b is None:
+        b = {
+            "key": key,
+            "label": label,
+            "sub": sub,
+            "date_from": date_from,
+            "date_to": date_to,
+            "count": 0,
+            "photos": 0,
+            "videos": 0,
+            "animated": 0,
+            "bytes": 0,
+        }
+        store[key] = b
+    b["count"] += 1
+    b[kind] += 1
+    b["bytes"] += sz
+
+
+def _finalize_period_buckets(store: dict, max_recent: int = 0, top_busy: int = 0) -> list[dict]:
+    items = list(store.values())
+    for b in items:
+        b["mb"] = round(b["bytes"] / (1024 * 1024), 1)
+        b["gb"] = round(b["bytes"] / (1024**3), 2)
+    items.sort(key=lambda x: x["key"], reverse=True)
+    if max_recent > 0 and len(items) > max_recent:
+        chosen = {x["key"]: x for x in items[:max_recent]}
+        if top_busy > 0:
+            for x in sorted(items, key=lambda it: (-it["count"], -it["bytes"], it["key"]))[:top_busy]:
+                chosen.setdefault(x["key"], x)
+        items = sorted(chosen.values(), key=lambda x: x["key"], reverse=True)
+    return items
+
+
+@router.get("/api/stats/detailed")
+def api_stats_detailed():
+    """Agrégations temporelles (années, mois, semaines, jours, jours de semaine, heures) et métriques détaillées."""
+    conn = get_db()
+    cur = conn.cursor()
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)").fetchall()}
+    anim_sel = "COALESCE(is_animated, 0) AS is_animated" if "is_animated" in cols else "0 AS is_animated"
+    dur_sel = "COALESCE(duration_sec, 0) AS duration_sec" if "duration_sec" in cols else "0 AS duration_sec"
+
+    cur.execute(f"""
+        SELECT source_path, dest_path, file_size, timestamp, {anim_sel},
+               latitude, longitude, album_name, width, height, {dur_sel}
+        FROM processed_files
+        WHERE is_duplicate = 0 AND is_trashed = 0 AND dest_path IS NOT NULL
+    """)
+
+    years: dict[str, dict] = {}
+    months: dict[str, dict] = {}
+    weeks: dict[str, dict] = {}
+    days: dict[str, dict] = {}
+    albums_map: dict[str, dict] = {}
+
+    weekdays = [{"idx": i, "label": _DAYS_FR[i], "short": _DAYS_SHORT_FR[i], "count": 0, "bytes": 0} for i in range(7)]
+    hours = [{"hour": h, "label": f"{h:02d}h", "count": 0} for h in range(24)]
+    season_months = [{"month": m, "label": _MOIS_SHORT_FR[m], "full": _MOIS_FULL_FR[m], "count": 0, "bytes": 0} for m in range(1, 13)]
+    resolutions = {"4k": 0, "full_hd": 0, "hd": 0, "sd": 0, "unknown": 0}
+
+    total_files = 0
+    total_bytes = 0
+    dated_count = 0
+    undated_count = 0
+    geotagged_count = 0
+    albumed_count = 0
+    total_video_dur = 0.0
+    first_ts = None
+    last_ts = None
+    largest = None
+
+    for r in cur.fetchall():
+        total_files += 1
+        sz = int(r["file_size"] or 0)
+        total_bytes += sz
+        dp = str(r["dest_path"] or "")
+        ext = Path(dp).suffix.lower()
+        is_anim = int(r["is_animated"] or 0) == 1
+        if is_anim:
+            kind = "animated"
+        elif ext in VIDEO_EXTS:
+            kind = "videos"
+        else:
+            kind = "photos"
+
+        if kind == "videos":
+            total_video_dur += max(0.0, float(r["duration_sec"] or 0.0))
+
+        if largest is None or sz > largest["bytes"]:
+            largest = {
+                "name": Path(dp).name,
+                "dest_path": dp,
+                "source_path": r["source_path"],
+                "bytes": sz,
+                "mb": round(sz / (1024 * 1024), 1),
+            }
+
+        lat, lon = r["latitude"], r["longitude"]
+        if lat is not None and lon is not None and (abs(float(lat)) > 0.001 or abs(float(lon)) > 0.001):
+            geotagged_count += 1
+
+        alb = (r["album_name"] or "").strip()
+        if alb:
+            albumed_count += 1
+            ab = albums_map.get(alb)
+            if ab is None:
+                ab = {"name": alb, "count": 0, "bytes": 0}
+                albums_map[alb] = ab
+            ab["count"] += 1
+            ab["bytes"] += sz
+
+        w = int(r["width"] or 0)
+        h = int(r["height"] or 0)
+        max_dim = max(w, h)
+        if max_dim >= 3840:
+            resolutions["4k"] += 1
+        elif max_dim >= 1920:
+            resolutions["full_hd"] += 1
+        elif max_dim >= 1280:
+            resolutions["hd"] += 1
+        elif max_dim > 0:
+            resolutions["sd"] += 1
+        else:
+            resolutions["unknown"] += 1
+
+        ts = int(r["timestamp"] or 0)
+        if ts <= 0:
+            undated_count += 1
+            continue
+
+        dated_count += 1
+        if first_ts is None or ts < first_ts:
+            first_ts = ts
+        if last_ts is None or ts > last_ts:
+            last_ts = ts
+
+        try:
+            dt = datetime.fromtimestamp(ts)
+        except Exception:
+            undated_count += 1
+            dated_count -= 1
+            continue
+
+        y_str = f"{dt.year}"
+        _acc_period_bucket(years, y_str, y_str, "", f"{y_str}-01-01", f"{y_str}-12-31", sz, kind)
+
+        m_key = f"{dt.year}-{dt.month:02d}"
+        m_last = calendar.monthrange(dt.year, dt.month)[1]
+        _acc_period_bucket(
+            months,
+            m_key,
+            f"{_MOIS_FULL_FR[dt.month]} {dt.year}",
+            _MOIS_SHORT_FR[dt.month],
+            f"{m_key}-01",
+            f"{m_key}-{m_last:02d}",
+            sz,
+            kind,
+        )
+
+        iso_y, iso_w, _ = dt.isocalendar()
+        w_key = f"{iso_y}-S{iso_w:02d}"
+        d_only = dt.date()
+        mon = d_only - timedelta(days=d_only.weekday())
+        sun = mon + timedelta(days=6)
+        w_sub = f"{mon.day} {_MOIS_SHORT_FR[mon.month]} – {sun.day} {_MOIS_SHORT_FR[sun.month]}"
+        _acc_period_bucket(
+            weeks,
+            w_key,
+            f"Sem. {iso_w:02d} · {iso_y}",
+            w_sub,
+            mon.isoformat(),
+            sun.isoformat(),
+            sz,
+            kind,
+        )
+
+        d_key = d_only.isoformat()
+        _acc_period_bucket(
+            days,
+            d_key,
+            f"{dt.day} {_MOIS_FULL_FR[dt.month]} {dt.year}",
+            _DAYS_SHORT_FR[d_only.weekday()],
+            d_key,
+            d_key,
+            sz,
+            kind,
+        )
+
+        weekdays[d_only.weekday()]["count"] += 1
+        weekdays[d_only.weekday()]["bytes"] += sz
+        hours[dt.hour]["count"] += 1
+        season_months[dt.month - 1]["count"] += 1
+        season_months[dt.month - 1]["bytes"] += sz
+
+    conn.close()
+
+    top_albums = sorted(albums_map.values(), key=lambda x: (-x["count"], -x["bytes"], x["name"]))[:8]
+    for ab in top_albums:
+        ab["mb"] = round(ab["bytes"] / (1024 * 1024), 1)
+        ab["gb"] = round(ab["bytes"] / (1024**3), 2)
+
+    return {
+        "years": _finalize_period_buckets(years),
+        "months": _finalize_period_buckets(months),
+        "weeks": _finalize_period_buckets(weeks, max_recent=104, top_busy=30),
+        "days": _finalize_period_buckets(days, max_recent=90, top_busy=30),
+        "weekdays": weekdays,
+        "hours": hours,
+        "season_months": season_months,
+        "top_albums": top_albums,
+        "resolutions": resolutions,
+        "summary": {
+            "total_files": total_files,
+            "total_bytes": total_bytes,
+            "total_gb": round(total_bytes / (1024**3), 2),
+            "avg_mb": round((total_bytes / total_files) / (1024 * 1024), 2) if total_files > 0 else 0.0,
+            "dated_count": dated_count,
+            "undated_count": undated_count,
+            "geotagged_count": geotagged_count,
+            "no_gps_count": max(0, total_files - geotagged_count),
+            "albumed_count": albumed_count,
+            "unorganized_count": max(0, total_files - albumed_count),
+            "albums_used_count": len(albums_map),
+            "total_video_duration_sec": round(total_video_dur, 1),
+            "first_ts": first_ts,
+            "last_ts": last_ts,
+            "largest_file": largest,
+        },
     }
 
 
@@ -389,6 +635,31 @@ def api_save_settings_route(payload: SettingsPayload):
     tz_mode = str(payload.takeout_timezone_mode or "").strip().upper()
     if tz_mode not in {"GPS_OR_SETTINGS", "SETTINGS_ONLY", "UTC"}:
         tz_mode = "GPS_OR_SETTINGS" if payload.takeout_use_gps_timezone else "SETTINGS_ONLY"
+    raw_style = (payload.ui_style or ("glass" if payload.ui_blur else "solid")).strip().lower()
+    ui_no_shadows = bool(payload.ui_no_shadows) or (raw_style == "flat")
+    if raw_style in {"blur", "glass"}:
+        ui_style = "glass"
+    elif raw_style == "solid":
+        ui_style = "solid"
+    elif raw_style == "flat":
+        ui_style = "glass" if payload.ui_blur else "solid"
+    else:
+        ui_style = "glass" if payload.ui_blur else "solid"
+    ui_accent = (payload.ui_accent or "default").strip().lower()
+    if ui_accent not in {"default", "blue", "slate", "midnight", "custom"}:
+        ui_accent = "default"
+    ui_accent_custom = (payload.ui_accent_custom or "#6366f1").strip()
+    if not (ui_accent_custom.startswith("#") and len(ui_accent_custom) == 7):
+        ui_accent_custom = "#6366f1"
+    ui_tile_radius = (payload.ui_tile_radius or "rounded").strip().lower()
+    if ui_tile_radius not in {"rounded", "soft", "square"}:
+        ui_tile_radius = "rounded"
+    ui_grid_gap = (payload.ui_grid_gap or "normal").strip().lower()
+    if ui_grid_gap not in {"tight", "normal", "airy"}:
+        ui_grid_gap = "normal"
+    ui_lightbox_style = (payload.ui_lightbox_style or "studio").strip().lower()
+    if ui_lightbox_style not in {"studio", "classic"}:
+        ui_lightbox_style = "studio"
     saved = save_settings({
         "scanned_folders": [p.strip() for p in payload.scanned_folders if p.strip()],
         "takeout_extract_dir": payload.takeout_extract_dir.strip(),
@@ -404,7 +675,17 @@ def api_save_settings_route(payload: SettingsPayload):
         "ocr_engine": (payload.ocr_engine or "paddleocr").strip().lower(),
         "faces_model": (payload.faces_model or "buffalo_l").strip(),
         "clip_model": (payload.clip_model or "vit-b-32").strip().lower(),
-        "ui_blur": bool(payload.ui_blur),
+        "ui_blur": (ui_style == "glass"),
+        "ui_style": ui_style,
+        "ui_lightbox_style": ui_lightbox_style,
+        "ui_oled": bool(payload.ui_oled),
+        "ui_no_shadows": ui_no_shadows,
+        "ui_accent": ui_accent,
+        "ui_accent_custom": ui_accent_custom,
+        "ui_fav_match_accent": bool(payload.ui_fav_match_accent),
+        "ui_tile_radius": ui_tile_radius,
+        "ui_grid_gap": ui_grid_gap,
+        "ui_reduce_motion": bool(payload.ui_reduce_motion),
     })
     if prev_faces != saved["faces_model"] or prev_clip != saved["clip_model"]:
         try:

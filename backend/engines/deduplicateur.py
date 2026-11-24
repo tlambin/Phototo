@@ -5,7 +5,7 @@ from pathlib import Path
 import blake3
 from PIL import Image
 import imagehash
-from media_frames import IMAGE_EXTS
+from media_frames import IMAGE_EXTS, probe_media_dimensions
 
 DB_PATH = Path("progression_takeout.db")
 DEST_DIR = Path("Photos_Propres")
@@ -47,11 +47,13 @@ def compute_file_signatures(task: tuple) -> tuple:
                 hasher.update(chunk)
         b3_hex = hasher.hexdigest()
 
-        ph_str, w, h = None, 0, 0
+        ph_str = None
+        w, h = probe_media_dimensions(p)
         if compute_phash and p.suffix.lower() in IMAGE_EXTS:
             try:
                 with Image.open(p) as im:
-                    w, h = im.size
+                    if not w or not h:
+                        w, h = im.size
                     ph_str = str(imagehash.phash(im))
             except Exception:
                 pass
@@ -112,3 +114,98 @@ def merge_metadata_and_clean(conn: sqlite3.Connection, winner: dict, losers: lis
         UPDATE processed_files SET is_favorite = ?, album_name = ? WHERE source_path = ?
     """, (merged_fav, final_albums, winner["source_path"])
     )
+
+
+def _strip_blob_fields(row) -> dict:
+    return {k: v for k, v in dict(row).items() if not isinstance(v, (bytes, bytearray, memoryview))}
+
+
+def find_exact_duplicate_groups(conn: sqlite3.Connection, limit_groups: int = 200) -> list[dict]:
+    """Retourne tous les groupes de doublons stricts (même blake3_hash ou is_duplicate=1 existants)."""
+    cur = conn.cursor()
+    groups: list[dict] = []
+    seen_sources: set[str] = set()
+
+    cur.execute("""
+        SELECT blake3_hash FROM processed_files
+        WHERE is_trashed = 0 AND blake3_hash IS NOT NULL
+        GROUP BY blake3_hash HAVING COUNT(*) > 1
+        LIMIT ?
+    """, (limit_groups,))
+    for (b3_hash,) in cur.fetchall():
+        cur.execute("SELECT * FROM processed_files WHERE blake3_hash = ? AND is_trashed = 0", (b3_hash,))
+        raw_rows = [_strip_blob_fields(r) for r in cur.fetchall()]
+        if len(raw_rows) < 2:
+            continue
+        non_dups = [r for r in raw_rows if not r.get("is_duplicate")]
+        if len(non_dups) == 1:
+            master = non_dups[0]
+            dups = [r for r in raw_rows if r["source_path"] != master["source_path"]]
+        else:
+            master, dups = choose_winner(raw_rows, "BLAKE3")
+        seen_sources.update(r["source_path"] for r in raw_rows if r.get("source_path"))
+        groups.append({"master": master, "duplicates": dups})
+
+    if len(groups) < limit_groups:
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(processed_files)")}
+        has_master_col = "master_path" in cols
+        if has_master_col:
+            cur.execute("""
+                SELECT DISTINCT COALESCE(duplicate_of, master_path) AS master_ref,
+                       CASE WHEN duplicate_of IS NOT NULL THEN 'source' ELSE 'dest' END AS ref_kind
+                FROM processed_files
+                WHERE is_duplicate = 1 AND is_trashed = 0 AND (duplicate_of IS NOT NULL OR master_path IS NOT NULL)
+            """)
+        else:
+            cur.execute("""
+                SELECT DISTINCT duplicate_of AS master_ref, 'source' AS ref_kind
+                FROM processed_files
+                WHERE is_duplicate = 1 AND is_trashed = 0 AND duplicate_of IS NOT NULL
+            """)
+        for m in cur.fetchall():
+            if len(groups) >= limit_groups:
+                break
+            ref = m["master_ref"]
+            if m["ref_kind"] == "source":
+                cur.execute("SELECT * FROM processed_files WHERE source_path = ? AND is_trashed = 0", (ref,))
+                m_row = cur.fetchone()
+                cur.execute("SELECT * FROM processed_files WHERE is_duplicate = 1 AND is_trashed = 0 AND duplicate_of = ?", (ref,))
+            else:
+                cur.execute("SELECT * FROM processed_files WHERE dest_path = ? AND is_trashed = 0", (ref,))
+                m_row = cur.fetchone()
+                cur.execute("SELECT * FROM processed_files WHERE is_duplicate = 1 AND is_trashed = 0 AND master_path = ?", (ref,))
+            d_rows = cur.fetchall()
+            if m_row and d_rows:
+                clean_m = _strip_blob_fields(m_row)
+                clean_dups = [_strip_blob_fields(r) for r in d_rows]
+                all_grp_srcs = {clean_m.get("source_path"), *(d.get("source_path") for d in clean_dups)}
+                if all_grp_srcs & seen_sources:
+                    continue
+                seen_sources.update(s for s in all_grp_srcs if s)
+                groups.append({"master": clean_m, "duplicates": clean_dups})
+
+    return groups
+
+
+def count_exact_duplicates(conn: sqlite3.Connection) -> int:
+    """Compte les fichiers en doublon exact (copies en trop par blake3_hash + legacy is_duplicate=1)."""
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COALESCE(SUM(cnt - 1), 0) FROM (
+            SELECT COUNT(*) AS cnt FROM processed_files
+            WHERE is_trashed = 0 AND blake3_hash IS NOT NULL
+            GROUP BY blake3_hash HAVING COUNT(*) > 1
+        )
+    """)
+    b3_excess = int(cur.fetchone()[0] or 0)
+    cur.execute("""
+        SELECT COUNT(*) FROM processed_files
+        WHERE is_duplicate = 1 AND is_trashed = 0
+          AND (blake3_hash IS NULL OR blake3_hash NOT IN (
+              SELECT blake3_hash FROM processed_files
+              WHERE is_trashed = 0 AND blake3_hash IS NOT NULL
+              GROUP BY blake3_hash HAVING COUNT(*) > 1
+          ))
+    """)
+    legacy_dups = int(cur.fetchone()[0] or 0)
+    return b3_excess + legacy_dups

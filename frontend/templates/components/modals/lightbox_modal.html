@@ -1,23 +1,23 @@
-<!-- ==================== VISIONNEUSE PLEIN ÉCRAN (LIGHTBOX) ==================== -->
-<div id="lightbox-modal" class="hidden fixed inset-0 z-50 bg-[#141414]/60 backdrop-blur-2xl flex flex-row gap-4 p-3 sm:p-4 select-none" ondblclick="if(event.target===this) closeLightbox()">
+<!-- ==================== VISIONNEUSE PLEIN ÉCRAN (STYLE UNIFIÉ THÈME STUDIO) ==================== -->
+<div id="lightbox-modal" class="hidden fixed inset-0 z-50 bg-[#121214]/80 backdrop-blur-2xl flex flex-row gap-3 p-2.5 sm:p-3.5 select-none text-white" ondblclick="if(event.target===this) closeLightbox()">
 
-    <!-- COLONNE PRINCIPALE : Barre supérieure + Média + Flèches + Pellicule -->
-    <div class="flex-1 min-w-0 h-full flex flex-col justify-between relative" ondblclick="if(event.target===this) closeLightbox()">
+    <!-- COLONNE PRINCIPALE : Barre supérieure + Scène Studio + Pellicule -->
+    <div class="flex-1 min-w-0 h-full flex flex-col justify-between gap-2.5 relative" ondblclick="if(event.target===this) closeLightbox()">
 
-    <!-- BARRE SUPÉRIEURE : Actions à gauche | Compteur + Zoom au centre | Actions à droite -->
+    <!-- BARRE SUPÉRIEURE FLOTTANTE -->
     <div class="w-full flex items-center justify-between gap-2 shrink-0 z-40" ondblclick="if(event.target===this) closeLightbox()">
-        <div class="flex items-center gap-2">
-            <!-- Fermer (croix séparée des actions d'édition) -->
+        <div class="flex items-center gap-1.5">
+            <!-- Fermer (croix séparée des actions) -->
             <button id="lb-btn-close" type="button" onclick="closeLightbox()" title="Fermer (Échap)"
-                    class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white flex items-center justify-center transition">
+                    class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white flex items-center justify-center transition cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
             </button>
-            <div class="flex items-center gap-1 bg-white/10 backdrop-blur-md text-white p-1 rounded-full">
-                <!-- Modifier (image + pinceau pour photo, timeline montage pour vidéo) -->
+            <div class="flex items-center gap-0.5 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full">
+                <!-- Modifier (style classique : icône orange au survol) -->
                 <button id="lb-btn-edit" onclick="lightboxOpenStudio()" title="Modifier la photo"
-                        class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-orange-300 flex items-center justify-center transition">
+                        class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-orange-300 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
                         <path d="M3 16.5l4-3.5 4 3.5"/>
@@ -27,7 +27,7 @@
                 </button>
                 <!-- Corbeille / Supprimer -->
                 <button id="lb-btn-delete" onclick="lightboxDeleteMedia()" title="Mettre à la corbeille (Suppr)"
-                        class="w-7 h-7 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition">
+                        class="w-7 h-7 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M3 6h18"/>
                         <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -37,56 +37,64 @@
                 </button>
                 <!-- Télécharger -->
                 <button id="lb-btn-download" onclick="lightboxDownloadMedia()" title="Télécharger"
-                        class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-emerald-300 flex items-center justify-center transition">
+                        class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-emerald-300 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
                         <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
                     </svg>
                 </button>
+                <!-- Comparer côte à côte (visible si doublons associés) -->
+                <button id="lb-btn-compare" onclick="openCompareModalFromLightbox()" title="Comparer les doublons côte à côte"
+                        class="hidden px-2.5 h-7 rounded-full plum-btn text-[11px] font-extrabold flex items-center gap-1.5 shadow transition cursor-pointer ml-0.5">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span>Comparer</span>
+                </button>
             </div>
         </div>
 
         <!-- Centre : Compteur + Zoom + Diaporama -->
-        <div id="lb-center-pill" class="hidden sm:flex items-center gap-0.5 bg-white/10 backdrop-blur-md text-white px-2 py-0.5 rounded-full text-[11px] font-bold">
-            <span id="lb-counter" class="px-1.5 opacity-90">1 / 1</span>
+        <div id="lb-center-pill" class="hidden sm:flex items-center gap-0.5 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full text-[11px] font-bold">
+            <span id="lb-counter" class="px-2 opacity-90 tabular-nums">1 / 1</span>
             <span class="opacity-25 px-0.5 text-[10px]">|</span>
-            <button type="button" onclick="adjustLightboxZoom(-0.25)" title="Dézoomer (-)" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition">
+            <button type="button" onclick="adjustLightboxZoom(-0.25)" title="Dézoomer (-)" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" viewBox="0 0 24 24">
                     <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
             </button>
-            <button type="button" id="lb-zoom-label" onclick="resetLightboxZoom()" title="Réinitialiser le zoom (0)" class="px-1 h-6 hover:bg-white/20 rounded-full transition">100%</button>
-            <button type="button" onclick="adjustLightboxZoom(0.25)" title="Zoomer (+)" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition">
+            <button type="button" id="lb-zoom-label" onclick="resetLightboxZoom()" title="Réinitialiser le zoom (0)" class="px-1.5 h-7 hover:bg-white/20 rounded-full tabular-nums transition cursor-pointer">100%</button>
+            <button type="button" onclick="adjustLightboxZoom(0.25)" title="Zoomer (+)" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" viewBox="0 0 24 24">
                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
             </button>
             <span class="opacity-25 px-0.5 text-[10px]">|</span>
-            <button type="button" id="lb-btn-slideshow" onclick="toggleLightboxSlideshow()" title="Diaporama (Espace)" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition">
+            <button type="button" id="lb-btn-slideshow" onclick="toggleLightboxSlideshow()" title="Diaporama (Espace)" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
                 <span id="lb-slideshow-icon" class="flex items-center justify-center">
                     <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                         <polygon points="6 4 20 12 6 20 6 4"/>
                     </svg>
                 </span>
             </button>
-            <button type="button" id="lb-btn-fullscreen" onclick="toggleLightboxFullscreen()" title="Plein écran" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition">
+            <button type="button" id="lb-btn-fullscreen" onclick="toggleLightboxFullscreen()" title="Plein écran" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
                 </svg>
             </button>
         </div>
 
-        <div class="flex items-center gap-1 bg-white/10 backdrop-blur-md text-white p-1 rounded-full">
+        <div class="flex items-center gap-0.5 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full">
             <!-- Favori -->
             <button id="lb-btn-fav" onclick="lightboxToggleFavorite()" title="Mettre en favori (F)"
-                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-rose-400 flex items-center justify-center transition">
+                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-rose-400 flex items-center justify-center transition cursor-pointer">
                 <svg id="lb-fav-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
                 </svg>
             </button>
             <!-- Ajouter à un album (pile d'albums avec +) -->
             <button id="lb-btn-add-album" onclick="lightboxAddToAlbum()" title="Ajouter à un album"
-                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-purple-300 flex items-center justify-center transition">
+                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-purple-300 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <rect x="3" y="6" width="14" height="14" rx="2.5"/>
                     <path d="M7 3h11a2.5 2.5 0 0 1 2.5 2.5V16"/>
@@ -95,7 +103,7 @@
             </button>
             <!-- Partager -->
             <button id="lb-btn-share" onclick="lightboxShareMedia()" title="Partager"
-                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-sky-300 flex items-center justify-center transition">
+                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-sky-300 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <circle cx="18" cy="5" r="2.75"/><circle cx="6" cy="12" r="2.75"/><circle cx="18" cy="19" r="2.75"/>
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
@@ -103,7 +111,7 @@
             </button>
             <!-- Informations -->
             <button id="lb-btn-info" onclick="toggleLightboxInfoDrawer()" title="Afficher les informations (I)"
-                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-amber-300 flex items-center justify-center transition">
+                    class="w-7 h-7 rounded-full hover:bg-white/20 hover:text-amber-300 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="9.5"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8.5" x2="12.01" y2="8.5"/>
                 </svg>
@@ -111,72 +119,71 @@
         </div>
     </div>
 
-    <!-- Flèches Navigation -->
-    <button id="lb-prev-btn" type="button" onclick="event.stopPropagation(); navigateLightbox(-1)" title="Précédent (←)"
-            class="absolute left-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 text-white flex items-center justify-center transition z-40">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-            <polyline points="14.5 18 8.5 12 14.5 6"/>
-        </svg>
-    </button>
-    <button id="lb-next-btn" type="button" onclick="event.stopPropagation(); navigateLightbox(1)" title="Suivant (→)"
-            class="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 text-white flex items-center justify-center transition z-40">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-            <polyline points="9.5 18 15.5 12 9.5 6"/>
-        </svg>
-    </button>
+    <!-- ZONE CENTRALE : Scène encadrée façon Studio + Navigation -->
+    <div id="lb-media-stage" class="flex-1 min-h-0 w-full rounded-2xl bg-black/35 border border-white/10 studio-stage-grid-bg flex items-center justify-center py-2 px-10 sm:px-12 overflow-hidden relative" ondblclick="if(event.target===this) closeLightbox()">
+        <button id="lb-prev-btn" type="button" onclick="event.stopPropagation(); navigateLightbox(-1)" title="Précédent (←)"
+                class="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white flex items-center justify-center transition z-40 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <polyline points="14.5 18 8.5 12 14.5 6"/>
+            </svg>
+        </button>
+        <button id="lb-next-btn" type="button" onclick="event.stopPropagation(); navigateLightbox(1)" title="Suivant (→)"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white flex items-center justify-center transition z-40 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <polyline points="9.5 18 15.5 12 9.5 6"/>
+            </svg>
+        </button>
 
-    <!-- ZONE CENTRALE : Média plein cadre -->
-    <div class="flex-1 min-h-0 w-full flex items-center justify-center py-2 px-10 sm:px-12 overflow-hidden" ondblclick="if(event.target===this) closeLightbox()">
-        <div id="lb-media-stage" class="flex-1 h-full min-w-0 min-h-0 flex items-center justify-center overflow-hidden" ondblclick="if(event.target===this) closeLightbox()">
-            <div class="relative inline-flex items-center justify-center max-h-full max-w-full">
-                <img id="lb-img" src="" alt="" ondblclick="toggleLightboxDoubleClickZoom(event)"
-                     class="max-h-[calc(100vh-145px)] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-100 origin-center"/>
-                <video id="lb-video" controls
-                       class="hidden max-h-[calc(100vh-145px)] max-w-full w-auto h-auto object-contain shadow-2xl bg-black"></video>
+        <div class="relative inline-flex items-center justify-center max-h-full max-w-full">
+            <img id="lb-img" src="" alt="" ondblclick="toggleLightboxDoubleClickZoom(event)"
+                 class="max-h-[calc(100vh-165px)] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl transition-transform duration-100 origin-center"/>
+            <video id="lb-video" controls
+                   class="hidden max-h-[calc(100vh-165px)] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl bg-black"></video>
 
-                <!-- Badge Image animée / Live Photo -->
-                <span id="lb-animated-badge" class="hidden absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-extrabold tracking-wide z-20">
-                    ✨ Animée
-                </span>
-            </div>
+            <!-- Badge Image animée / Live Photo -->
+            <span id="lb-animated-badge" class="hidden absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/15 text-white text-[10px] font-extrabold tracking-wide z-20">
+                ✨ Animée
+            </span>
         </div>
     </div>
 
-    <!-- PELLICULE BASSE (Miniatures autour du média courant) -->
-    <div class="w-full min-w-0 flex justify-center shrink-0 pt-1 z-30" ondblclick="if(event.target===this) closeLightbox()">
-        <div id="lb-filmstrip" class="hidden bg-white/10 backdrop-blur-md rounded-xl px-2 py-1.5 flex items-center gap-1.5 max-w-full sm:max-w-xl overflow-x-auto no-scrollbar"></div>
+    <!-- BARRE DOUBLONS PROPRES AU MÉDIA + PELLICULE BASSE -->
+    <div class="w-full min-w-0 flex flex-col items-center gap-1.5 shrink-0 z-30" ondblclick="if(event.target===this) closeLightbox()">
+        <div id="lb-duplicates-bar" class="hidden bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl px-2.5 py-1.5 flex flex-wrap items-center justify-center gap-1.5 w-fit max-w-full max-h-32 overflow-y-auto text-white"></div>
+        <div id="lb-filmstrip" class="hidden bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl px-2.5 py-1.5 flex items-center gap-1.5 max-w-full sm:max-w-4xl overflow-x-auto no-scrollbar"></div>
     </div>
     </div>
 
-    <!-- COLONNE DROITE : PANNEAU INFORMATIONS -->
-    <aside id="lb-info-drawer" class="hidden w-72 shrink-0 h-full max-h-[96vh] flex flex-col justify-between items-center py-1 overflow-y-auto no-scrollbar text-white">
+    <!-- COLONNE DROITE : PANNEAU INFORMATIONS (STYLE TIROIR STUDIO) -->
+    <aside id="lb-info-drawer" class="hidden w-76 sm:w-80 shrink-0 h-full flex flex-col gap-2.5 overflow-y-auto no-scrollbar text-white">
             <div class="w-full space-y-2.5 flex flex-col items-center">
-                <!-- En-tête Pilule "Informations" centrée + Bouton Éditer métadonnées à droite -->
-                <div class="relative w-full flex items-center justify-center">
-                    <button onclick="toggleLightboxInfoDrawer()"
-                            class="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 px-7 py-1.5 rounded-full text-xs font-bold tracking-wide transition">
-                        Informations
-                    </button>
-                    <button type="button" onclick="lightboxOpenMetadataEditor()" title="Éditer EXIF / Date / Lieu"
-                            class="absolute right-0 w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center transition">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                    </button>
+                <!-- En-tête contextuel façon tiroir Studio -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 px-3.5 py-2 rounded-2xl flex items-center justify-between shrink-0">
+                    <span class="text-xs font-extrabold tracking-wide">Informations</span>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="lightboxOpenMetadataEditor()" title="Éditer EXIF / Date / Lieu"
+                                class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-white/80 hover:text-white transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button type="button" onclick="toggleLightboxInfoDrawer()" title="Fermer les informations"
+                                class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs opacity-70 hover:opacity-100 cursor-pointer">✕</button>
+                    </div>
                 </div>
 
                 <!-- Carte 1 : Nom fichier, Mpx/Dimensions, Date/Heure, Appareil/EXIF, Poids Mo -->
                 <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3.5 space-y-2.5 text-left">
                     <div class="flex items-start gap-2.5">
-                        <svg class="w-4 h-4 shrink-0 text-white/70 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 shrink-0 text-white/85 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                         </svg>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-1.5">
-                                <div id="lb-info-filename" class="text-xs font-bold truncate">IMG.jpg</div>
+                                <div id="lb-info-filename" class="text-[13px] font-bold text-white truncate">IMG.jpg</div>
                                 <button type="button" onclick="toggleLightboxTitleEdit()" title="Modifier le titre / nom"
-                                        class="shrink-0 w-5 h-5 rounded-full hover:bg-white/20 text-white/55 hover:text-white flex items-center justify-center transition">
+                                        class="shrink-0 w-5 h-5 rounded-full hover:bg-white/20 text-white/75 hover:text-white flex items-center justify-center transition cursor-pointer">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                                     </svg>
@@ -185,11 +192,11 @@
                             <div id="lb-info-title-editor" class="hidden flex items-center gap-1 mt-1">
                                 <input id="lb-info-title-input" type="text"
                                        onkeydown="if(event.key==='Enter'){saveLightboxTitleEdit();}else if(event.key==='Escape'){event.stopPropagation();cancelLightboxTitleEdit();}"
-                                       class="flex-1 min-w-0 bg-black/40 border border-white/20 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:border-white/50"/>
-                                <button type="button" onclick="saveLightboxTitleEdit()" class="w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 text-[10px] font-bold flex items-center justify-center">✓</button>
-                                <button type="button" onclick="cancelLightboxTitleEdit()" class="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold flex items-center justify-center">✕</button>
+                                       class="flex-1 min-w-0 bg-black/50 border border-white/25 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:border-white/60"/>
+                                <button type="button" onclick="saveLightboxTitleEdit()" class="w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 text-[10px] font-bold flex items-center justify-center cursor-pointer">✓</button>
+                                <button type="button" onclick="cancelLightboxTitleEdit()" class="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold flex items-center justify-center cursor-pointer">✕</button>
                             </div>
-                            <div class="flex items-center flex-wrap gap-x-1.5 text-[10px] font-medium text-white/60">
+                            <div class="flex items-center flex-wrap gap-x-1.5 text-[11px] font-medium text-white/80">
                                 <span id="lb-info-dims">12 Mpx • 3000 × 4000</span>
                                 <span>•</span>
                                 <span id="lb-info-size">0,00 Mo</span>
@@ -197,14 +204,14 @@
                         </div>
                     </div>
                     <div class="flex items-start gap-2.5">
-                        <svg class="w-4 h-4 shrink-0 text-white/70 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 shrink-0 text-white/85 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                         </svg>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-1.5">
-                                <div id="lb-info-date" class="text-xs font-bold">31 octobre 2026</div>
+                                <div id="lb-info-date" class="text-[13px] font-bold text-white">31 octobre 2026</div>
                                 <button type="button" onclick="toggleLightboxDateEdit()" title="Modifier la date et l'heure"
-                                        class="shrink-0 w-5 h-5 rounded-full hover:bg-white/20 text-white/55 hover:text-white flex items-center justify-center transition">
+                                        class="shrink-0 w-5 h-5 rounded-full hover:bg-white/20 text-white/75 hover:text-white flex items-center justify-center transition cursor-pointer">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                                     </svg>
@@ -214,16 +221,16 @@
                                 <div class="flex items-center gap-1">
                                     <input id="lb-info-date-only-input" type="date"
                                            onkeydown="if(event.key==='Enter'){saveLightboxDateEdit();}else if(event.key==='Escape'){event.stopPropagation();cancelLightboxDateEdit();}"
-                                           class="flex-1 min-w-0 bg-black/40 border border-white/20 rounded-lg px-1.5 py-0.5 text-[10px] text-white [color-scheme:dark] focus:outline-none focus:border-white/50"/>
-                                    <button type="button" onclick="saveLightboxDateEdit()" title="Valider" class="w-5 h-5 shrink-0 rounded-full bg-white/20 hover:bg-white/30 text-[10px] font-bold flex items-center justify-center">✓</button>
-                                    <button type="button" onclick="cancelLightboxDateEdit()" title="Annuler" class="w-5 h-5 shrink-0 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold flex items-center justify-center">✕</button>
+                                           class="flex-1 min-w-0 bg-black/50 border border-white/25 rounded-lg px-1.5 py-0.5 text-[11px] text-white [color-scheme:dark] focus:outline-none focus:border-white/60"/>
+                                    <button type="button" onclick="saveLightboxDateEdit()" title="Valider" class="w-5 h-5 shrink-0 rounded-full bg-white/20 hover:bg-white/30 text-[10px] font-bold flex items-center justify-center cursor-pointer">✓</button>
+                                    <button type="button" onclick="cancelLightboxDateEdit()" title="Annuler" class="w-5 h-5 shrink-0 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold flex items-center justify-center cursor-pointer">✕</button>
                                 </div>
                                 <div class="flex items-center gap-1">
                                     <input id="lb-info-time-only-input" type="time" step="1"
                                            onkeydown="if(event.key==='Enter'){saveLightboxDateEdit();}else if(event.key==='Escape'){event.stopPropagation();cancelLightboxDateEdit();}"
-                                           class="w-24 shrink-0 bg-black/40 border border-white/20 rounded-lg px-1.5 py-0.5 text-[10px] text-white [color-scheme:dark] focus:outline-none focus:border-white/50"/>
+                                           class="w-24 shrink-0 bg-black/50 border border-white/25 rounded-lg px-1.5 py-0.5 text-[11px] text-white [color-scheme:dark] focus:outline-none focus:border-white/60"/>
                                     <select id="lb-info-tz-select" title="Décalage UTC du fichier"
-                                            class="flex-1 min-w-0 bg-black/55 border border-white/20 rounded-lg px-1.5 py-0.5 text-[10px] text-white [color-scheme:dark] outline-none cursor-pointer">
+                                            class="flex-1 min-w-0 bg-black/60 border border-white/25 rounded-lg px-1.5 py-0.5 text-[11px] text-white [color-scheme:dark] outline-none cursor-pointer">
                                         <option value="-08:00">UTC-8</option>
                                         <option value="-05:00">UTC-5</option>
                                         <option value="-04:00">UTC-4</option>
@@ -240,42 +247,42 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="flex items-center flex-wrap gap-1.5 text-[10px] font-medium text-white/60">
+                            <div class="flex items-center flex-wrap gap-1.5 text-[11px] font-medium text-white/80">
                                 <span id="lb-info-weekday">Samedi</span>
                                 <span>•</span>
                                 <span id="lb-info-time">15h52</span>
-                                <span id="lb-info-utc" class="px-1.5 rounded-full bg-white/10 text-[9px] font-bold text-white/75">UTC+1</span>
-                                <span id="lb-info-default-time" class="hidden text-[9px] text-white/45"></span>
+                                <span id="lb-info-utc" class="px-1.5 rounded-full bg-white/15 text-[10px] font-bold text-white/90">UTC+1</span>
+                                <span id="lb-info-default-time" class="hidden text-[10px] text-white/70"></span>
                             </div>
                         </div>
                     </div>
                     <div class="flex items-start gap-2.5">
-                        <svg class="w-4 h-4 shrink-0 text-white/70 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 shrink-0 text-white/85 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
                         </svg>
                         <div class="min-w-0 flex-1">
-                            <div id="lb-info-camera" class="text-xs font-bold truncate">Appareil photo</div>
-                            <div id="lb-info-lens" class="text-[10px] font-medium text-white/60"></div>
+                            <div id="lb-info-camera" class="text-[13px] font-bold text-white truncate">Appareil photo</div>
+                            <div id="lb-info-lens" class="text-[11px] font-medium text-white/80"></div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2.5 pt-1 border-t border-white/10">
+                    <div class="flex items-center gap-2.5 pt-1.5 border-t border-white/15">
                         <button type="button" onclick="revealLightboxMediaInFolder()" title="Ouvrir le dossier et sélectionner le fichier"
-                                class="shrink-0 text-white/70 hover:text-white transition">
+                                class="shrink-0 text-white/85 hover:text-white transition cursor-pointer">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                         <button type="button" id="lb-info-path-pill" onclick="copyLightboxFilePath()" title="Cliquer pour copier le chemin"
-                                class="min-w-0 flex-1 text-left text-[10px] font-medium text-white/65 hover:text-white truncate cursor-pointer transition">
+                                class="min-w-0 flex-1 text-left text-[11px] font-medium text-white/80 hover:text-white truncate cursor-pointer transition">
                             C:/Mes Photos/...
                         </button>
                     </div>
-                    <div class="pt-1 border-t border-white/10">
-                        <button type="button" id="lb-info-more-btn" onclick="toggleLightboxExifDetails()" class="text-[10px] font-semibold text-white/55 hover:text-white transition">
+                    <div class="pt-1 border-t border-white/15">
+                        <button type="button" id="lb-info-more-btn" onclick="toggleLightboxExifDetails()" class="text-[11px] font-semibold text-white/80 hover:text-white transition cursor-pointer">
                             + plus de détails
                         </button>
                     </div>
-                    <div id="lb-info-exif-extra" class="hidden pt-1 border-t border-white/10 space-y-1 text-[10px] text-white/70">
+                    <div id="lb-info-exif-extra" class="hidden pt-1.5 border-t border-white/15 space-y-1 text-[11px] text-white/85">
                         <div id="lb-info-format"></div>
                         <div id="lb-info-iso-date"></div>
                     </div>
@@ -368,8 +375,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <div id="lb-info-place-title" class="text-[11px] font-medium text-white/65 truncate">Lieu inconnu</div>
-                            <div id="lb-mini-map" class="w-full h-24 rounded-xl bg-black/40 overflow-hidden relative flex items-center justify-center text-[10px] text-white/50 font-semibold">
+                            <div id="lb-info-place-title" class="text-[11px] font-medium text-white/85 truncate">Lieu inconnu</div>
+                            <div id="lb-mini-map" class="w-full h-24 rounded-xl bg-black/40 overflow-hidden relative flex items-center justify-center text-[11px] text-white/75 font-semibold">
                                 Aucune coordonnée GPS
                             </div>
                         </div>
@@ -399,7 +406,7 @@
                                     </svg>
                                 </button>
                             </div>
-                            <div id="lb-info-note" class="text-[11px] font-medium text-white/65 break-words">Ajouter une note...</div>
+                            <div id="lb-info-note" class="text-[11px] font-medium text-white/85 break-words">Ajouter une note...</div>
                         </div>
                     </div>
                     <div id="lb-info-note-editor" class="hidden mt-2 space-y-1.5">
@@ -416,7 +423,7 @@
                 <!-- Bouton Analyser le média (toujours visible juste en dessous de Note) -->
                 <div class="pt-1 pb-1 w-full flex justify-center">
                     <button type="button" id="lb-info-analyze-btn" onclick="openLightboxAnalyzeModal()"
-                            class="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 rounded-full px-4 py-2 shadow-lg flex items-center gap-2 transition">
+                            class="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 rounded-full px-4 py-2 shadow-lg flex items-center gap-2 transition cursor-pointer">
                         <svg class="w-3.5 h-3.5 shrink-0 text-white/85" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                         </svg>
@@ -427,26 +434,26 @@
         </aside>
 
     <!-- MODALE ÉDITION DES VISAGES DU MÉDIA -->
-    <div id="lb-faces-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxFacesEditor()">
-        <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
+    <div id="lb-faces-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-2xl flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxFacesEditor()">
+        <div class="w-full max-w-sm bg-[#121214]/90 backdrop-blur-2xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
             <div class="flex items-center justify-between">
                 <div class="text-sm font-bold">Modifier les visages</div>
-                <button type="button" onclick="closeLightboxFacesEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
+                <button type="button" onclick="closeLightboxFacesEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs cursor-pointer">✕</button>
             </div>
             <div id="lb-faces-edit-list" class="max-h-60 overflow-y-auto no-scrollbar space-y-2"></div>
             <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
                 <div class="flex items-center gap-1.5">
                     <button type="button" onclick="closeLightboxFacesEditor(); lightboxOpenFaceTagger();"
-                            class="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-[11px] font-bold transition">
+                            class="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-[11px] font-bold transition cursor-pointer">
                         + Ajouter
                     </button>
                     <button type="button" onclick="rerunLightboxFacesAnalysis()"
-                            class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-semibold transition">
+                            class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-semibold transition cursor-pointer">
                         ↻ Refaire l'analyse
                     </button>
                 </div>
                 <button type="button" onclick="closeLightboxFacesEditor()"
-                        class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
+                        class="px-3.5 py-1.5 rounded-full plum-btn text-xs font-extrabold shadow transition cursor-pointer">
                     Fermer
                 </button>
             </div>
@@ -454,8 +461,8 @@
     </div>
 
     <!-- MODALE ÉDITION DE LA LOCALISATION DU MÉDIA -->
-    <div id="lb-location-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxLocationEditor()">
-        <div class="w-full max-w-md bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-3.5">
+    <div id="lb-location-edit-modal" class="hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-2xl flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxLocationEditor()">
+        <div class="w-full max-w-md bg-[#121214]/90 backdrop-blur-2xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-3.5">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <svg class="w-4 h-4 text-white/80 shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -517,7 +524,7 @@
                         Annuler
                     </button>
                     <button type="button" id="lb-location-save-btn" onclick="saveLightboxLocationEdit()"
-                            class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                            class="px-3.5 py-1.5 rounded-full plum-btn text-xs font-extrabold shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                         Enregistrer
                     </button>
                 </div>
@@ -527,11 +534,11 @@
 </div>
 
 <!-- MODALE ÉDITION / AJOUT À UN ALBUM (partagée Visionneuse + Sélection par lot) -->
-<div id="lb-albums-edit-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAlbumsEditor()">
-    <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
+<div id="lb-albums-edit-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-2xl flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAlbumsEditor()">
+    <div class="w-full max-w-sm bg-[#121214]/90 backdrop-blur-2xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
             <div class="text-sm font-bold">Ajouter à un album</div>
-            <button type="button" onclick="closeLightboxAlbumsEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
+            <button type="button" onclick="closeLightboxAlbumsEditor()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs cursor-pointer">✕</button>
         </div>
 
         <div class="space-y-1.5">
@@ -545,7 +552,7 @@
                 <div class="flex items-center gap-1">
                     <select id="lb-albums-edit-sort-by" onchange="onChangeLightboxAlbumEditorSortBy()"
                             title="Trier la liste des albums"
-                            class="bg-black/40 border border-white/15 rounded-lg px-2 py-0.5 text-[10px] font-semibold text-white/85 focus:outline-none focus:border-white/40 cursor-pointer">
+                            class="bg-black/40 border border-white/15 rounded-lg px-2 py-0.5 text-[10px] font-semibold text-white/85 focus:outline-none focus:border-white/40 cursor-pointer [color-scheme:dark]">
                         <option value="date">Date</option>
                         <option value="modified">Modification</option>
                         <option value="name">Nom</option>
@@ -581,14 +588,14 @@
                     <div id="lb-albums-edit-new-source-wrap" class="hidden space-y-1">
                         <label for="lb-albums-edit-new-source" class="block text-[10px] font-semibold text-white/65">Dossier source</label>
                         <select id="lb-albums-edit-new-source"
-                                class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white/85 focus:outline-none focus:border-white/40"></select>
+                                class="w-full bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white/85 focus:outline-none focus:border-white/40 [color-scheme:dark]"></select>
                     </div>
                     <p id="lb-albums-edit-create-error" class="hidden text-[10px] text-red-300"></p>
                     <div class="flex items-center justify-end gap-1.5">
                         <button type="button" onclick="toggleLightboxAlbumCreateBox(false)"
-                                class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-semibold transition">Annuler</button>
+                                class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-semibold transition cursor-pointer">Annuler</button>
                         <button type="button" onclick="submitLightboxCreateAlbum()"
-                                class="px-3 py-1 rounded-lg bg-white text-[#1E1E1E] hover:bg-white/90 text-[10px] font-bold transition">Créer et ajouter</button>
+                                class="px-3 py-1 rounded-lg plum-btn text-[10px] font-extrabold shadow transition cursor-pointer">Créer et ajouter</button>
                     </div>
                 </div>
             </div>
@@ -596,7 +603,7 @@
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
             <button type="button" onclick="closeLightboxAlbumsEditor()"
-                    class="px-3.5 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
+                    class="px-3.5 py-1.5 rounded-full plum-btn text-xs font-extrabold shadow transition cursor-pointer">
                 Fermer
             </button>
         </div>
@@ -604,8 +611,8 @@
 </div>
 
 <!-- CONFIRMATION MISE À LA CORBEILLE (partagée Visionneuse + Sélection par lot) -->
-<div id="lb-delete-confirm" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) cancelLightboxDelete()">
-    <div class="w-full max-w-xs bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl text-center space-y-4">
+<div id="lb-delete-confirm" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-2xl flex items-center justify-center p-4" onclick="if(event.target===this) cancelLightboxDelete()">
+    <div class="w-full max-w-xs bg-[#121214]/90 backdrop-blur-2xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl text-center space-y-4">
         <div class="w-10 h-10 mx-auto rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                 <path d="M3 6h18"/>
@@ -615,7 +622,7 @@
             </svg>
         </div>
         <div class="space-y-1">
-            <div class="text-sm font-bold">Mettre à la corbeille ?</div>
+            <div id="lb-delete-title" class="text-sm font-bold">Mettre à la corbeille ?</div>
             <div id="lb-delete-filename" class="text-xs text-white/60 truncate px-2"></div>
         </div>
         <div class="flex items-center justify-center gap-2 pt-1">
@@ -623,7 +630,7 @@
                     class="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition cursor-pointer">
                 Annuler
             </button>
-            <button type="button" onclick="confirmLightboxDelete()"
+            <button id="lb-delete-confirm-btn" type="button" onclick="confirmLightboxDelete()"
                     class="px-4 py-1.5 rounded-full bg-rose-500/85 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer">
                 Mettre à la corbeille
             </button>
@@ -632,11 +639,11 @@
 </div>
 
 <!-- MODALE ANALYSER LES MÉDIAS (partagée Visionneuse + Sélection par lot) -->
-<div id="lb-analyze-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAnalyzeModal()">
-    <div class="w-full max-w-sm bg-[#1E1E1E]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
+<div id="lb-analyze-modal" class="hidden fixed inset-0 z-[60] bg-black/45 backdrop-blur-2xl flex items-center justify-center p-4" onclick="if(event.target===this) closeLightboxAnalyzeModal()">
+    <div class="w-full max-w-sm bg-[#121214]/90 backdrop-blur-2xl border border-white/15 rounded-2xl p-5 text-white shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
             <div id="lb-analyze-title" class="text-sm font-bold">Analyser le média</div>
-            <button type="button" onclick="closeLightboxAnalyzeModal()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs">✕</button>
+            <button type="button" onclick="closeLightboxAnalyzeModal()" class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center text-xs cursor-pointer">✕</button>
         </div>
 
         <!-- Étape 1 : Choix de l'analyse -->
@@ -663,13 +670,13 @@
                 </div>
             </button>
             <button type="button" onclick="runSingleMediaAnalysis(true, true)"
-                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-left transition cursor-pointer">
-                <svg class="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl plum-btn shadow text-left transition cursor-pointer">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                 </svg>
                 <div>
-                    <div class="text-xs font-bold">Les deux</div>
-                    <div class="text-[10px] text-white/70">Visages + éléments visuels</div>
+                    <div class="text-xs font-extrabold">Les deux</div>
+                    <div class="text-[10px] opacity-80">Visages + éléments visuels</div>
                 </div>
             </button>
         </div>
@@ -691,7 +698,7 @@
                 <div class="flex items-center justify-between gap-2">
                     <div class="text-xs font-bold text-white/85">Éléments visuels à catégoriser</div>
                     <button id="lb-analyze-redo-visual-btn" type="button" onclick="runSingleMediaAnalysis(false, true)" title="Relancer l'analyse visuelle"
-                            class="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white/80 transition">
+                            class="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white/80 transition cursor-pointer">
                         ↻ Refaire l'analyse
                     </button>
                 </div>
@@ -700,21 +707,66 @@
                     <input id="lb-analyze-custom-cat" type="text" placeholder="Ajouter une catégorie..."
                            onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAnalyzeCategory();}"
                            class="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-xl px-2.5 py-1 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/40"/>
-                    <button type="button" onclick="addCustomAnalyzeCategory()" class="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-[11px] font-bold">+</button>
+                    <button type="button" onclick="addCustomAnalyzeCategory()" class="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-[11px] font-bold cursor-pointer">+</button>
                 </div>
             </div>
 
             <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
                 <button type="button" onclick="closeLightboxAnalyzeModal()"
-                        class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition">
+                        class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition cursor-pointer">
                     Fermer
                 </button>
                 <button type="button" id="lb-analyze-validate-btn" onclick="confirmLightboxAnalyzeResults()"
-                        class="px-4 py-1.5 rounded-full bg-white text-[#1E1E1E] hover:bg-white/90 text-xs font-bold transition">
+                        class="px-4 py-1.5 rounded-full plum-btn text-xs font-extrabold shadow transition cursor-pointer">
                     Valider
                 </button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- ==================== MODALE COMPARAISON CÔTE À CÔTE ==================== -->
+<div id="compare-modal" class="hidden fixed inset-0 z-[60] bg-[#121214]/80 backdrop-blur-2xl flex flex-col gap-3 p-2.5 sm:p-4 text-white select-none"
+     onclick="if(event.target===this) closeCompareModal()">
+    <div class="w-full flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <button id="compare-modal-close" type="button" onclick="closeCompareModal()" title="Fermer (Échap)"
+                    class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center transition cursor-pointer shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <h2 id="compare-modal-title" class="text-sm sm:text-base font-extrabold truncate">Comparaison côte à côte</h2>
+                    <span id="compare-modal-badge" class="bg-white/15 border border-white/10 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold shrink-0">2 fichiers</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button id="compare-zoom-btn" type="button" onclick="toggleCompareZoom()"
+                    class="bg-white/10 hover:bg-white/20 border border-white/10 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                Zoom 100%
+            </button>
+            <button id="compare-showall-btn" type="button" onclick="toggleCompareShowAll()"
+                    class="hidden bg-white/10 hover:bg-white/20 border border-white/10 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                Tout afficher
+            </button>
+            <button type="button" onclick="closeCompareModal()"
+                    class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow transition cursor-pointer">
+                Fermer
+            </button>
+        </div>
+    </div>
+
+    <div id="compare-modal-grid" class="flex-1 min-h-0 rounded-2xl bg-black/35 border border-white/10 studio-stage-grid-bg p-3 grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto no-scrollbar"></div>
+
+    <div class="w-full flex flex-wrap items-center justify-between gap-2 shrink-0 pt-1">
+        <span id="compare-modal-status" class="text-xs font-bold text-white/75">Sélectionnez le meilleur fichier à conserver.</span>
+        <button id="compare-modal-delete-btn" type="button" onclick="deleteCheckedInCompareModal()"
+                class="hidden bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-full text-xs font-extrabold shadow-lg transition cursor-pointer">
+            Supprimer la sélection
+        </button>
     </div>
 </div>
 

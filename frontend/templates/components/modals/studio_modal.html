@@ -1,98 +1,1283 @@
-<div id="studio-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="ui-card rounded-3xl max-w-6xl w-full p-5 flex flex-col max-h-[94vh]">
-        <div class="flex justify-between items-center pb-3 mb-3">
-            <h2 class="text-lg font-extrabold">🎨 Studio d'Édition Photo & Vidéo</h2>
-            <button onclick="closeStudioModal()" class="text-xl font-bold">✕</button>
-        </div>
-        <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden">
-            <div class="lg:col-span-7 flex flex-col bg-black rounded-2xl p-3 overflow-hidden">
-                <div class="flex justify-between items-center pb-2 mb-2 text-xs text-white">
-                    <div class="flex gap-2">
-                        <button onclick="setStudioMouseTool('CROP')" class="plum-btn font-bold px-3 py-1 rounded-full">✂️ Rognage</button>
-                        <button onclick="setStudioMouseTool('ERASER')" class="bg-white/10 text-rose-300 px-3 py-1 rounded-full">🪄 Gomme Magique</button>
-                    </div>
-                    <button onclick="clearStudioDrawings()" class="opacity-70 underline">Effacer les tracés</button>
-                </div>
-                <div class="flex-1 flex items-center justify-center overflow-auto select-none">
-                    <div id="studio-stage" class="relative inline-block cursor-crosshair">
-                        <img id="studio-img" draggable="false" class="hidden max-h-[54vh] w-auto block select-none"/>
-                        <video id="studio-video" controls class="hidden max-h-[54vh] w-auto block select-none"></video>
-                        <div id="studio-crop-box" class="hidden absolute border-2 border-sky-400 bg-sky-400/15 pointer-events-none"></div>
-                        <div id="studio-eraser-boxes" class="absolute inset-0 pointer-events-none"></div>
-                    </div>
-                </div>
+<!-- ==================== ÉDITEUR PHOTO & VIDÉO PRO PLEIN ÉCRAN (OUTILS & PANNEAUX À GAUCHE) ==================== -->
+<div id="studio-modal" class="hidden fixed inset-0 z-50 bg-[#121214]/80 backdrop-blur-2xl flex flex-col p-2.5 sm:p-3.5 gap-2.5 select-none text-white">
+    <div id="studio-eraser-cursor" class="hidden fixed rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] bg-rose-400/25 pointer-events-none z-[60] -translate-x-1/2 -translate-y-1/2"></div>
+
+    <!-- BARRE SUPÉRIEURE FLOTTANTE -->
+    <div class="w-full flex flex-wrap items-center justify-between gap-2 shrink-0 z-40">
+        <!-- Gauche : Fermer aligné sur la rail (74px) + Original/Split/Grille alignés sur le tiroir -->
+        <div class="flex items-center gap-3">
+            <div class="w-[74px] shrink-0 flex items-center justify-center">
+                <button id="studio-btn-close" type="button" onclick="closeStudioModal()" title="Fermer (Échap)"
+                        class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white flex items-center justify-center transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
-            <div class="lg:col-span-5 overflow-y-auto space-y-3 pr-1 text-xs">
-                <div class="ui-pill rounded-2xl p-3 space-y-2">
-                    <div class="font-extrabold">🔄 Pivoter & Retourner</div>
-                    <div class="grid grid-cols-4 gap-2 font-bold">
-                        <button onclick="studioRotate(-90)" class="ui-card py-1.5 rounded-xl">↺ -90°</button>
-                        <button onclick="studioRotate(90)" class="ui-card py-1.5 rounded-xl">↻ +90°</button>
-                        <button onclick="studioFlip('H')" class="ui-card py-1.5 rounded-xl">↔ Miroir H</button>
-                        <button onclick="studioFlip('V')" class="ui-card py-1.5 rounded-xl">↕ Miroir V</button>
+            <div class="flex items-center gap-0.5 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full text-[11px] font-bold">
+                <button id="studio-btn-compare" type="button"
+                        onmousedown="setStudioCompareOriginal(true)" onmouseup="setStudioCompareOriginal(false)" onmouseleave="setStudioCompareOriginal(false)"
+                        ontouchstart="setStudioCompareOriginal(true)" ontouchend="setStudioCompareOriginal(false)"
+                        title="Maintenir pour comparer avec l'original"
+                        class="px-2.5 h-7 rounded-full hover:bg-white/20 flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="hidden md:inline">Original</span>
+                </button>
+                <button id="studio-btn-split" type="button" onclick="toggleStudioSplitCompare()" title="Comparateur glissant Avant / Après (M)"
+                        class="px-2.5 h-7 rounded-full hover:bg-white/20 flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="8 8 4 12 8 16"/><polyline points="16 8 20 12 16 16"/></svg>
+                    <span class="hidden md:inline">Split</span>
+                </button>
+                <button id="studio-btn-grid" type="button" onclick="cycleStudioGridOverlay()" title="Grille de composition (G)"
+                        class="px-2.5 h-7 rounded-full hover:bg-white/20 flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+                    <span class="hidden md:inline">Grille</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Centre (Photo) : Retour arrière, Auto, Réinit. + Zoom & Taille -->
+        <div id="studio-center-photo-pill" class="flex items-center gap-1 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full text-[11px] font-bold">
+            <button id="studio-btn-undo" type="button" onclick="studioUndo()" title="Annuler (Ctrl+Z)"
+                    class="w-7 h-7 rounded-full hover:bg-white/20 opacity-40 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
+                </svg>
+            </button>
+            <button id="studio-btn-redo" type="button" onclick="studioRedo()" title="Rétablir (Ctrl+Y)"
+                    class="w-7 h-7 rounded-full hover:bg-white/20 opacity-40 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M15 14l5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
+                </svg>
+            </button>
+            <span class="opacity-25 px-0.5 text-[10px]">|</span>
+            <button id="studio-btn-auto" type="button" onclick="studioAutoEnhance()" title="Amélioration automatique en 1 clic"
+                    class="px-2.5 h-7 rounded-full hover:bg-white/20 text-[11px] font-bold flex items-center gap-1 text-amber-200 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l1.9 4.5L18.5 9l-4.6 1.5L12 15l-1.9-4.5L5.5 9l4.6-1.5L12 3z"/></svg>
+                <span class="hidden xl:inline">Auto</span>
+            </button>
+            <button type="button" onclick="resetStudioEdits()" title="Tout réinitialiser"
+                    class="px-2.5 h-7 rounded-full hover:bg-white/20 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                </svg>
+                <span class="hidden xl:inline">Réinit.</span>
+            </button>
+            <span class="opacity-25 px-0.5">|</span>
+            <button type="button" onclick="adjustStudioZoom(-0.2)" title="Dézoomer" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button id="studio-zoom-label" type="button" onclick="resetStudioZoom()" title="Réinitialiser le zoom (100%)" class="px-1.5 h-6 rounded-full hover:bg-white/20 tabular-nums transition cursor-pointer">100%</button>
+            <button type="button" onclick="adjustStudioZoom(0.2)" title="Zoomer" class="w-6 h-6 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <span id="studio-dims-pill" class="hidden sm:inline-flex items-center px-2 h-6 rounded-full bg-white/10 text-[10px] font-bold opacity-85 tabular-nums ml-0.5">—</span>
+        </div>
+
+        <!-- Centre (Vidéo) : Transport & Timecode & Aperçu -->
+        <div id="studio-center-video-pill" class="hidden flex items-center gap-1 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full text-[11px] font-bold">
+            <button type="button" onclick="seekStudioToTrimIn()" title="Aller au point de début [In]" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="6" y1="5" x2="6" y2="19"/><polygon points="18 5 9 12 18 19 18 5" fill="currentColor"/></svg>
+            </button>
+            <button type="button" onclick="stepStudioVideo(-0.1)" title="Image précédente (-0.1s)" class="px-1.5 h-7 rounded-full hover:bg-white/20 tabular-nums transition cursor-pointer">−1f</button>
+            <button type="button" onclick="stepStudioVideo(-1)" title="Reculer de 1 s" class="px-2 h-7 rounded-full hover:bg-white/20 tabular-nums transition cursor-pointer">−1s</button>
+            <button id="studio-vid-play-btn" type="button" onclick="toggleStudioVideoPlay()" title="Lire / Pause (Espace)"
+                    class="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            </button>
+            <button type="button" onclick="stepStudioVideo(1)" title="Avancer de 1 s" class="px-2 h-7 rounded-full hover:bg-white/20 tabular-nums transition cursor-pointer">+1s</button>
+            <button type="button" onclick="stepStudioVideo(0.1)" title="Image suivante (+0.1s)" class="px-1.5 h-7 rounded-full hover:bg-white/20 tabular-nums transition cursor-pointer">+1f</button>
+            <span class="opacity-25 px-0.5">|</span>
+            <span id="studio-vid-timecode" class="px-2 tabular-nums">00:00.0 / 00:00.0</span>
+            <button id="studio-vid-loop-btn" type="button" onclick="toggleStudioVideoLoop()" title="Lire l'extrait en boucle"
+                    class="px-2.5 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center gap-1 transition cursor-pointer">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                <span>Boucle</span>
+            </button>
+            <span class="opacity-25 px-0.5">|</span>
+            <button type="button" onclick="cycleStudioGridOverlay()" title="Grille de composition (G)" class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+            </button>
+            <button type="button"
+                    onmousedown="setStudioCompareOriginal(true)" onmouseup="setStudioCompareOriginal(false)" onmouseleave="setStudioCompareOriginal(false)"
+                    ontouchstart="setStudioCompareOriginal(true)" ontouchend="setStudioCompareOriginal(false)"
+                    title="Maintenir pour afficher l'original"
+                    class="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+        </div>
+
+        <!-- Droite : Enregistrer (Créer une copie / Remplacer) -->
+        <div class="flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/10 text-white p-1 rounded-full text-[11px] font-bold">
+            <button id="studio-save-copy-btn" type="button" onclick="applyStudioChanges('EDIT', false)"
+                    title="Enregistrer les modifications dans une nouvelle copie (_edit)"
+                    class="plum-btn px-3.5 h-7 rounded-full font-extrabold shadow transition cursor-pointer">
+                Créer une copie
+            </button>
+            <button id="studio-save-overwrite-btn" type="button" onclick="applyStudioChanges('EDIT', true)"
+                    title="Remplacer définitivement le fichier actuel"
+                    class="px-3.5 h-7 rounded-full bg-white/10 hover:bg-rose-500/35 hover:text-rose-100 border border-white/15 font-extrabold transition cursor-pointer">
+                Remplacer
+            </button>
+        </div>
+    </div>
+
+    <!-- CORPS PRINCIPAL : SIDEBAR GAUCHE (5 SECTIONS) + TIROIR D'OUTILS À GAUCHE + SCÈNE PRINCIPALE -->
+    <div class="flex-1 min-h-0 flex flex-row gap-3">
+
+        <!-- 1. SIDEBAR GAUCHE DES OUTILS -->
+        <nav id="studio-left-rail" class="flex flex-col items-center justify-between w-[74px] shrink-0 py-2 px-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl">
+            <div class="flex flex-col items-center gap-1.5 w-full">
+                <button id="studio-stab-transform" type="button" onclick="selectStudioSidebarTab('transform')" title="Transformation : retourner, pivoter, recadrer, angle"
+                        class="relative w-full py-2 rounded-xl bg-white/25 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+                    <span>Transf.</span>
+                    <span id="studio-tab-badge-transform" class="hidden absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-sky-300"></span>
+                </button>
+                <button id="studio-stab-tone" type="button" onclick="selectStudioSidebarTab('tone')" title="Ajuster : lumière, luminosité, contraste, couleurs"
+                        class="relative w-full py-2 rounded-xl hover:bg-white/15 opacity-75 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                    <span>Ajuster</span>
+                    <span id="studio-tab-badge-tone" class="hidden absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                </button>
+                <button id="studio-stab-filter" type="button" onclick="selectStudioSidebarTab('filter')" title="Filtres & Looks prédéfinis"
+                        class="relative w-full py-2 rounded-xl hover:bg-white/15 opacity-75 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 12l6.4-6.4"/><path d="M12 12l6.4 6.4"/></svg>
+                    <span>Filtre</span>
+                    <span id="studio-tab-badge-filter" class="hidden absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-violet-300"></span>
+                </button>
+                <button id="studio-stab-decoration" type="button" onclick="selectStudioSidebarTab('decoration')" title="Décoration : dessin & texte"
+                        class="relative w-full py-2 rounded-xl hover:bg-white/15 opacity-80 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18.37 2.63L14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
+                    <span>Décor.</span>
+                    <span id="studio-tab-badge-decoration" class="hidden absolute top-1 right-1.5 text-[9px] px-1 rounded-full bg-pink-400/45"></span>
+                </button>
+                <button id="studio-stab-layers" type="button" onclick="selectStudioSidebarTab('layers')" title="Calques : gestion des calques, modèles, watermarks & médias"
+                        class="relative w-full py-2 rounded-xl hover:bg-white/15 opacity-80 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>
+                    <span>Calques</span>
+                    <span id="studio-tab-badge-layers" class="hidden absolute top-1 right-1.5 text-[9px] px-1 rounded-full bg-sky-400/45"></span>
+                </button>
+                <button id="studio-stab-tools" type="button" onclick="selectStudioSidebarTab('tools')" title="Outils : effaceur d'objet IA, suppression d'arrière-plan IA, retouche automatique"
+                        class="relative w-full py-2 rounded-xl hover:bg-rose-500/20 text-rose-200 opacity-85 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l1.9 4.5L18.5 9l-4.6 1.5L12 15l-1.9-4.5L5.5 9l4.6-1.5L12 3z"/><path d="M5 19l4-4"/></svg>
+                    <span>Outils</span>
+                    <span id="studio-tab-badge-tools" class="hidden absolute top-1 right-1.5 text-[9px] px-1 rounded-full bg-rose-400/45"></span>
+                </button>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 w-full pt-2 border-t border-white/10">
+                <button id="studio-stab-history" type="button" onclick="selectStudioSidebarTab('history')" title="Historique : voir et supprimer les modifications effectuées"
+                        class="relative w-full py-2 rounded-xl hover:bg-white/15 opacity-80 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><polyline points="12 7 12 12 15 14"/></svg>
+                    <span>Histor.</span>
+                    <span id="studio-tab-badge-history" class="hidden absolute top-1 right-1.5 text-[9px] px-1 rounded-full bg-emerald-400/45"></span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- 2. TIROIR DES MENUS OUVERT À GAUCHE (JUSTE À CÔTÉ DE LA SIDEBAR) -->
+        <aside id="studio-tools-drawer" class="w-76 sm:w-80 shrink-0 h-full flex flex-col gap-2.5 overflow-y-auto no-scrollbar text-white">
+            <!-- En-tête contextuel du menu ouvert -->
+            <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 px-3.5 py-2 rounded-2xl flex items-center justify-between shrink-0">
+                <span id="studio-drawer-title" class="text-xs font-extrabold tracking-wide">Transformation</span>
+                <button id="studio-drawer-close-btn" type="button" onclick="toggleStudioDrawerCollapsed()" title="Fermer ce menu"
+                        class="w-6 h-6 rounded-full hover:bg-white/15 flex items-center justify-center opacity-75 hover:opacity-100 cursor-pointer transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <!-- SECTION 1 : TRANSFORMATION (Angle, Rotation, Retourner & Recadrage) -->
+            <div id="studio-panel-transform" class="space-y-2.5 text-xs">
+                <!-- 1A. Angle -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Angle</span>
+                        <button type="button" onclick="resetStudioStraighten()" title="Réinitialiser l'angle" class="text-[10px] font-bold opacity-75 hover:opacity-100 cursor-pointer"><span id="st-straighten-val" class="tabular-nums">0.0°</span></button>
+                    </div>
+                    <input id="st-straighten" type="range" min="-45" max="45" step="0.5" value="0"
+                           ondblclick="resetStudioStraighten()" oninput="onStudioStraightenInput()" onchange="pushStudioHistorySnapshot()"
+                           class="studio-range"/>
+                </div>
+
+                <!-- 1B. Rotation -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Rotation</span>
+                    <div class="grid grid-cols-2 gap-1.5 font-bold">
+                        <button type="button" onclick="studioRotate(-90)" title="Pivoter à gauche (-90°)"
+                                class="h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+                            </svg>
+                            <span class="text-[10px]">-90°</span>
+                        </button>
+                        <button type="button" onclick="studioRotate(90)" title="Pivoter à droite (+90°)"
+                                class="h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+                            </svg>
+                            <span class="text-[10px]">+90°</span>
+                        </button>
                     </div>
                 </div>
-                <div class="ui-pill rounded-2xl p-3 space-y-2">
-                    <div class="font-extrabold">☀️ Luminosité, Contraste & Couleurs</div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label>Luminosité</label><input id="st-bright" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
-                        <div><label>Contraste</label><input id="st-contrast" type="range" min="0.3" max="2.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
-                        <div><label>Saturation</label><input id="st-sat" type="range" min="0.0" max="2.5" step="0.05" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
-                        <div><label>Netteté</label><input id="st-sharp" type="range" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateStudioLivePreview()" class="w-full"/></div>
+
+                <!-- 1C. Retourner -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Retourner</span>
+                    <div class="grid grid-cols-2 gap-1.5 font-bold">
+                        <button type="button" onclick="studioFlip('H')" title="Retourner horizontalement"
+                                class="h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>
+                                <polygon points="3 7 9 12 3 17 3 7" fill="currentColor" fill-opacity="0.35"/>
+                                <polygon points="21 7 15 12 21 17 21 7"/>
+                            </svg>
+                            <span class="text-[10px]">Horizontal</span>
+                        </button>
+                        <button type="button" onclick="studioFlip('V')" title="Retourner verticalement"
+                                class="h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/>
+                                <polygon points="7 3 12 9 17 3 7 3" fill="currentColor" fill-opacity="0.35"/>
+                                <polygon points="7 21 12 15 17 21 7 21"/>
+                            </svg>
+                            <span class="text-[10px]">Vertical</span>
+                        </button>
                     </div>
                 </div>
-                <div class="ui-pill rounded-2xl p-3 space-y-2">
-                    <div class="font-extrabold">🔤 Ajouter du Texte</div>
-                    <div class="flex gap-2">
-                        <input id="st-text-val" type="text" placeholder="Texte..." class="flex-1 ui-card rounded-xl px-2.5 py-1"/>
-                        <input id="st-text-color" type="color" value="#ffffff" class="w-8 h-7 bg-transparent"/>
+
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Recadrage</span>
+                        <button type="button" onclick="clearStudioCrop()" class="text-[10px] font-bold opacity-70 hover:opacity-100 underline cursor-pointer">Réinitialiser</button>
                     </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <input id="st-text-x" type="number" value="5" placeholder="X%" class="ui-card rounded-xl px-2 py-1"/>
-                        <input id="st-text-y" type="number" value="88" placeholder="Y%" class="ui-card rounded-xl px-2 py-1"/>
-                        <input id="st-text-size" type="number" value="40" placeholder="Taille" class="ui-card rounded-xl px-2 py-1"/>
+                    <div class="grid grid-cols-4 gap-1.5 text-[9px] font-extrabold">
+                        <button type="button" onclick="setStudioCropAspect('free')" id="st-ratio-free" title="Format libre"
+                                class="h-11 rounded-xl bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-8 h-5 border-[1.5px] border-dashed border-current rounded-[4px] flex items-center justify-center leading-none">Libre</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('orig')" id="st-ratio-orig" title="Format d'origine"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-8 h-5 border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">Orig.</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('1:1')" id="st-ratio-1:1" title="Carré 1:1"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-6 h-6 border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">1:1</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('4:3')" id="st-ratio-4:3" title="Format 4:3"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-8 h-6 border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">4:3</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('16:9')" id="st-ratio-16:9" title="Cinéma 16:9"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-9 h-[20px] border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">16:9</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('4:5')" id="st-ratio-4:5" title="Portrait 4:5"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-[22px] h-7 border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">4:5</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('9:16')" id="st-ratio-9:16" title="Vertical 9:16"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-[18px] h-8 border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">9:16</span>
+                        </button>
+                        <button type="button" onclick="setStudioCropAspect('3:2')" id="st-ratio-3:2" title="Photo 3:2"
+                                class="h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <span class="w-8 h-[21px] border-[1.5px] border-current rounded-[4px] flex items-center justify-center leading-none">3:2</span>
+                        </button>
                     </div>
+                    <button id="studio-crop-preview-btn" type="button" onclick="toggleStudioCropPreview()"
+                            class="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-extrabold transition cursor-pointer">
+                        Aperçu recadré
+                    </button>
                 </div>
-                <div id="studio-video-panel" class="hidden ui-pill rounded-2xl p-3 space-y-2.5">
-                    <div class="font-extrabold">🎬 Outils Vidéo</div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label>Début (sec)</label><input id="st-vid-start" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
-                        <div><label>Fin (0 = fin)</label><input id="st-vid-end" type="number" step="0.1" value="0" class="w-full ui-card rounded-xl px-2 py-1"/></div>
+
+                <!-- Découpage & Vitesse (Vidéo) -->
+                <div id="studio-video-panel" class="hidden w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Découpage &amp; Vitesse</div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                        <label class="space-y-1">
+                            <span class="opacity-75 font-bold block">Début (sec)</span>
+                            <input id="st-vid-start" type="number" min="0" step="0.1" value="0" onchange="onStudioTrimInputsChanged()"
+                                   class="w-full bg-black/40 border border-white/15 rounded-xl px-2.5 py-1.5 font-bold tabular-nums outline-none"/>
+                        </label>
+                        <label class="space-y-1">
+                            <span class="opacity-75 font-bold block">Fin (0 = fin)</span>
+                            <input id="st-vid-end" type="number" min="0" step="0.1" value="0" onchange="onStudioTrimInputsChanged()"
+                                   class="w-full bg-black/40 border border-white/15 rounded-xl px-2.5 py-1.5 font-bold tabular-nums outline-none"/>
+                        </label>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 items-center">
-                        <select id="st-vid-speed" class="ui-card rounded-xl px-2 py-1.5">
+                    <div class="grid grid-cols-2 gap-2 items-center text-[11px]">
+                        <select id="st-vid-speed" onchange="onStudioSpeedChanged()"
+                                class="bg-black/55 border border-white/15 rounded-xl px-2.5 py-1.5 font-bold outline-none cursor-pointer [color-scheme:dark]">
                             <option value="0.5">Vitesse 0.5x</option>
                             <option value="1.0" selected>Vitesse 1.0x</option>
                             <option value="1.5">Vitesse 1.5x</option>
                             <option value="2.0">Vitesse 2.0x</option>
                         </select>
-                        <label class="flex items-center gap-1.5 font-bold"><input id="st-vid-mute" type="checkbox"/> 🔇 Muet</label>
-                    </div>
-                    <div class="flex gap-2">
-                        <input id="st-vid-audio" type="text" placeholder="Fichier audio..." class="flex-1 ui-card rounded-xl px-2 py-1 font-mono"/>
-                        <button onclick="browseStudioAudio()" class="ui-card px-2.5 py-1 rounded-xl">📂 Audio</button>
-                    </div>
-                    <div class="flex gap-2 pt-1">
-                        <button onclick="applyStudioChanges('SPLIT')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">✂️ Séparer en 2</button>
-                        <button onclick="applyStudioChanges('GIF')" class="flex-1 plum-btn font-bold py-1.5 rounded-full">🎞️ Créer GIF</button>
+                        <label class="flex items-center gap-1.5 font-bold px-2.5 py-1.5 rounded-xl bg-white/5 cursor-pointer">
+                            <input id="st-vid-mute" type="checkbox" onchange="syncStudioTimelineUI()" class="accent-white"/>
+                            <span>Couper audio</span>
+                        </label>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="flex flex-wrap justify-between items-center gap-3 mt-4 pt-3 text-xs">
-            <div class="flex items-center gap-4 ui-pill px-4 py-2 rounded-full">
-                <label class="flex items-center gap-1.5 font-bold cursor-pointer">
-                    <input type="radio" name="studio_save_mode" value="copy" checked/>
-                    <span>Enregistrer une copie (<code>_edit</code>)</span>
-                </label>
-                <label class="flex items-center gap-1.5 font-semibold cursor-pointer">
-                    <input type="radio" name="studio_save_mode" value="overwrite"/>
-                    <span>Remplacer l'original</span>
-                </label>
+
+            <!-- SECTION 2 : FILTRE -->
+            <div id="studio-panel-filter" class="hidden space-y-2.5 text-xs">
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Filtres &amp; Looks</span>
+                        <span id="st-preset-intensity-val" class="text-[10px] font-bold opacity-75 tabular-nums">100%</span>
+                    </div>
+                    <div id="studio-filter-presets" class="grid grid-cols-3 gap-1.5 text-[10px] font-bold"></div>
+                    <div class="space-y-1 pt-1">
+                        <div class="flex justify-between text-[11px] font-bold">
+                            <span>Intensité du filtre</span>
+                            <button type="button" onclick="applyStudioFilterPreset('original')" class="text-[10px] opacity-65 hover:opacity-100 underline cursor-pointer">Original</button>
+                        </div>
+                        <input id="st-preset-intensity" type="range" min="0" max="100" step="5" value="100"
+                               oninput="onStudioPresetIntensityInput()" onchange="pushStudioHistorySnapshot()"
+                               title="Intensité du filtre sélectionné" class="studio-range"/>
+                    </div>
+                </div>
             </div>
-            <div class="flex gap-2">
-                <button onclick="closeStudioModal()" class="ui-pill px-5 py-2 rounded-full font-bold">Annuler</button>
-                <button onclick="applyStudioChanges('EDIT')" class="plum-btn font-bold px-6 py-2 rounded-full">Enregistrer</button>
+
+            <!-- SECTION 3 : TON (Histogramme, Lumière, Luminosité, Contraste, Couleurs, Optique) -->
+            <div id="studio-panel-tone" class="hidden space-y-2.5 text-xs">
+                <div id="studio-histogram-card" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-white/70">
+                        <span>Histogramme RVB</span>
+                        <span id="studio-hist-luma" class="tabular-nums opacity-75">—</span>
+                    </div>
+                    <canvas id="studio-histogram-canvas" width="280" height="56" class="w-full h-14 rounded-lg bg-black/45 block"></canvas>
+                </div>
+
+                <!-- Lumière -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Lumière &amp; Contraste</span>
+                        <button type="button" onclick="resetStudioSection('light')" class="text-[10px] font-bold opacity-60 hover:opacity-100 underline cursor-pointer">Réinit.</button>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Luminosité / Expo.</span><span id="st-bright-val" class="tabular-nums opacity-75">1.00</span></div>
+                        <input id="st-bright" type="range" min="0.3" max="2.0" step="0.05" value="1.0" ondblclick="this.value='1.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range studio-range-luma"/>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Contraste</span><span id="st-contrast-val" class="tabular-nums opacity-75">1.00</span></div>
+                        <input id="st-contrast" type="range" min="0.3" max="2.0" step="0.05" value="1.0" ondblclick="this.value='1.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                    </div>
+                    <div id="studio-tone-photo-group" class="space-y-2.5">
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-bold"><span>Hautes lumières</span><span id="st-highlights-val" class="tabular-nums opacity-75">0</span></div>
+                            <input id="st-highlights" type="range" min="-1.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-bold"><span>Ombres</span><span id="st-shadows-val" class="tabular-nums opacity-75">0</span></div>
+                            <input id="st-shadows" type="range" min="-1.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-bold"><span>Fondu mat (Fade)</span><span id="st-fade-val" class="tabular-nums opacity-75">0%</span></div>
+                            <input id="st-fade" type="range" min="0.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Couleur -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Couleur</span>
+                        <button type="button" onclick="resetStudioSection('color')" class="text-[10px] font-bold opacity-60 hover:opacity-100 underline cursor-pointer">Réinit.</button>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Saturation</span><span id="st-sat-val" class="tabular-nums opacity-75">1.00</span></div>
+                        <input id="st-sat" type="range" min="0.0" max="2.5" step="0.05" value="1.0" ondblclick="this.value='1.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range studio-range-sat"/>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Température</span><span id="st-warmth-val" class="tabular-nums opacity-75">0</span></div>
+                        <input id="st-warmth" type="range" min="-1.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range studio-range-warmth"/>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Teinte (Vert ↔ Magenta)</span><span id="st-tint-val" class="tabular-nums opacity-75">0</span></div>
+                        <input id="st-tint" type="range" min="-1.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range studio-range-tint"/>
+                    </div>
+                </div>
+
+                <!-- Optique & Effets -->
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Optique &amp; Détails</span>
+                        <button type="button" onclick="resetStudioSection('optics')" class="text-[10px] font-bold opacity-60 hover:opacity-100 underline cursor-pointer">Réinit.</button>
+                    </div>
+                    <div id="studio-sharp-row" class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Netteté</span><span id="st-sharp-val" class="tabular-nums opacity-75">1.0</span></div>
+                        <input id="st-sharp" type="range" min="0.5" max="2.5" step="0.1" value="1.0" ondblclick="this.value='1.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                    </div>
+                    <div id="studio-grain-row" class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Grain argentique</span><span id="st-grain-val" class="tabular-nums opacity-75">0%</span></div>
+                        <input id="st-grain" type="range" min="0.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Vignette</span><span id="st-vignette-val" class="tabular-nums opacity-75">0%</span></div>
+                        <input id="st-vignette" type="range" min="0.0" max="1.0" step="0.05" value="0.0" ondblclick="this.value='0.0'; updateStudioLivePreview(true)" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4 : DÉCORATION (Dessin, Image, Texte & Bordure) -->
+            <div id="studio-panel-decoration" class="hidden space-y-2.5 text-xs">
+                <!-- Sous-onglets Décoration -->
+                <div class="grid grid-cols-4 gap-1 p-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl text-[11px] font-extrabold">
+                    <button id="studio-dectab-draw" type="button" onclick="selectStudioDecorationSubtab('draw')"
+                            class="py-1.5 rounded-xl bg-white/25 text-white transition cursor-pointer">Dessin</button>
+                    <button id="studio-dectab-image" type="button" onclick="selectStudioDecorationSubtab('image')"
+                            class="py-1.5 rounded-xl hover:bg-white/15 opacity-75 transition cursor-pointer">Image</button>
+                    <button id="studio-dectab-text" type="button" onclick="selectStudioDecorationSubtab('text')"
+                            class="py-1.5 rounded-xl hover:bg-white/15 opacity-75 transition cursor-pointer">Texte</button>
+                    <button id="studio-dectab-border" type="button" onclick="selectStudioDecorationSubtab('border')"
+                            class="py-1.5 rounded-xl hover:bg-white/15 opacity-75 transition cursor-pointer">Bordure</button>
+                </div>
+
+                <!-- 4A. SOUS-ONGLET DESSIN -->
+                <div id="studio-decsub-draw" class="space-y-2.5">
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-3">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Outil de dessin</span>
+                        <div class="grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+                            <button id="st-bmode-brush" type="button" onclick="selectStudioBrushMode('brush')"
+                                    class="py-2 px-1 rounded-xl bg-white/25 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></svg>
+                                <span>Pinceau</span>
+                            </button>
+                            <button id="st-bmode-pen" type="button" onclick="selectStudioBrushMode('pen')"
+                                    class="py-2 px-1 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                                <span>Stylo</span>
+                            </button>
+                            <button id="st-bmode-highlighter" type="button" onclick="selectStudioBrushMode('highlighter')"
+                                    class="py-2 px-1 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+                                <span>Surligneur</span>
+                            </button>
+                            <button id="st-bmode-blur" type="button" onclick="selectStudioBrushMode('blur')"
+                                    class="py-2 px-1 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                                <span>Flouter</span>
+                            </button>
+                            <button id="st-bmode-shape" type="button" onclick="selectStudioBrushMode('shape')"
+                                    class="py-2 px-1 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="9" cy="9" r="5"/><rect x="11" y="11" width="10" height="10" rx="1"/></svg>
+                                <span>Forme</span>
+                            </button>
+                            <button id="st-bmode-stroke_eraser" type="button" onclick="selectStudioBrushMode('stroke_eraser')"
+                                    class="py-2 px-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+                                <span>Gomme</span>
+                            </button>
+                        </div>
+
+                        <!-- Sous-options Flouter (Flou doux / Pixelisé) -->
+                        <div id="studio-brush-blur-style-row" class="hidden pt-1 grid grid-cols-2 gap-1.5 text-[10px] font-bold">
+                            <button id="st-blurstyle-blur" type="button" onclick="setStudioBlurStyle('blur')"
+                                    class="py-1.5 rounded-xl bg-white/25 text-white transition cursor-pointer">Flou doux</button>
+                            <button id="st-blurstyle-pixelate" type="button" onclick="setStudioBlurStyle('pixelate')"
+                                    class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Flouter en pixel</button>
+                        </div>
+
+                        <!-- Sous-options Forme (Rond, Carré, Triangle, Flèche, Ligne, Étoile + Plein) -->
+                        <div id="studio-brush-shape-row" class="hidden pt-1 space-y-1.5">
+                            <div class="grid grid-cols-3 gap-1 text-[10px] font-bold">
+                                <button id="st-shape-circle" type="button" onclick="setStudioBrushShape('circle')" class="py-1.5 rounded-lg bg-white/25 text-white cursor-pointer">Rond</button>
+                                <button id="st-shape-rect" type="button" onclick="setStudioBrushShape('rect')" class="py-1.5 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Carré</button>
+                                <button id="st-shape-triangle" type="button" onclick="setStudioBrushShape('triangle')" class="py-1.5 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Triangle</button>
+                                <button id="st-shape-arrow" type="button" onclick="setStudioBrushShape('arrow')" class="py-1.5 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Flèche</button>
+                                <button id="st-shape-line" type="button" onclick="setStudioBrushShape('line')" class="py-1.5 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Ligne</button>
+                                <button id="st-shape-star" type="button" onclick="setStudioBrushShape('star')" class="py-1.5 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Étoile</button>
+                            </div>
+                            <label class="flex items-center gap-2 text-[10px] font-bold cursor-pointer pt-0.5">
+                                <input id="st-shape-fill" type="checkbox" onchange="syncStudioBrushStyleUI()" class="rounded accent-sky-400"/>
+                                <span>Remplir la forme (sinon contour)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="studio-brush-style-card" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-3">
+                        <div id="studio-brush-color-row" class="space-y-2">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Couleur</span>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button type="button" onclick="setStudioBrushColor('#ffffff')" title="#FFFFFF" class="w-6 h-6 rounded-full bg-white border border-white/40 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#94a3b8')" title="#94A3B8" class="w-6 h-6 rounded-full bg-slate-400 border border-white/25 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#111111')" title="#111111" class="w-6 h-6 rounded-full bg-neutral-900 border border-white/40 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#ef4444')" title="#EF4444" class="w-6 h-6 rounded-full bg-red-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#f43f5e')" title="#F43F5E" class="w-6 h-6 rounded-full bg-rose-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#f97316')" title="#F97316" class="w-6 h-6 rounded-full bg-orange-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#fbbf24')" title="#FBBF24" class="w-6 h-6 rounded-full bg-amber-400 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#84cc16')" title="#84CC16" class="w-6 h-6 rounded-full bg-lime-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#10b981')" title="#10B981" class="w-6 h-6 rounded-full bg-emerald-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#38bdf8')" title="#38BDF8" class="w-6 h-6 rounded-full bg-sky-400 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#3b82f6')" title="#3B82F6" class="w-6 h-6 rounded-full bg-blue-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#a855f7')" title="#A855F7" class="w-6 h-6 rounded-full bg-purple-500 border border-white/20 cursor-pointer"></button>
+                                <button type="button" onclick="setStudioBrushColor('#ec4899')" title="#EC4899" class="w-6 h-6 rounded-full bg-pink-500 border border-white/20 cursor-pointer"></button>
+                                <label title="Sélecteur complet (HEX, RGB, roue)" class="relative w-6 h-6 rounded-full border border-white/60 cursor-pointer overflow-hidden shrink-0 flex items-center justify-center" style="background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red)">
+                                    <input id="st-brush-color" type="color" value="#f43f5e" oninput="syncStudioBrushStyleUI()" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
+                                </label>
+                                <button id="st-brush-pipette-btn" type="button" onclick="pickStudioColorWithPipette('brush')" title="Pipette (prélever une couleur)"
+                                        class="w-6 h-6 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 flex items-center justify-center cursor-pointer shrink-0">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] font-bold">
+                                <span>Taille (px)</span>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepStudioSlider('st-brush-size', -2, syncStudioBrushStyleUI)" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">-</button>
+                                    <input id="st-brush-size-num" type="number" min="2" max="72" step="1" value="16" oninput="syncStudioNumberToSlider('st-brush-size-num', 'st-brush-size', syncStudioBrushStyleUI)"
+                                           class="w-11 bg-black/40 border border-white/15 rounded-md px-1 py-0.5 text-center text-[10px] font-bold tabular-nums outline-none"/>
+                                    <button type="button" onclick="stepStudioSlider('st-brush-size', 2, syncStudioBrushStyleUI)" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="st-brush-size" type="range" min="2" max="72" step="1" value="16" oninput="syncStudioBrushStyleUI()" class="studio-range"/>
+                        </div>
+
+                        <div id="studio-brush-opacity-row" class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] font-bold">
+                                <span>Opacité (%)</span>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepStudioSlider('st-brush-opacity', -0.05, syncStudioBrushStyleUI)" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">-</button>
+                                    <input id="st-brush-opacity-num" type="number" min="15" max="100" step="5" value="100" oninput="syncStudioOpacityNumToSlider('st-brush-opacity-num', 'st-brush-opacity', syncStudioBrushStyleUI)"
+                                           class="w-11 bg-black/40 border border-white/15 rounded-md px-1 py-0.5 text-center text-[10px] font-bold tabular-nums outline-none"/>
+                                    <button type="button" onclick="stepStudioSlider('st-brush-opacity', 0.05, syncStudioBrushStyleUI)" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="st-brush-opacity" type="range" min="0.15" max="1.0" step="0.05" value="1.0" oninput="syncStudioBrushStyleUI()" class="studio-range"/>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1.5 text-[11px] font-bold pt-1">
+                            <button type="button" onclick="undoStudioBrushStep()" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Annuler trait</button>
+                            <button type="button" onclick="clearStudioBrushLayers()" class="py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 transition cursor-pointer">Tout effacer</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4B. SOUS-ONGLET IMAGE (Ajouter une image, sticker ou photo sur la scène) -->
+                <div id="studio-decsub-image" class="hidden space-y-2.5">
+                    <input id="studio-local-file-input" type="file" multiple accept="image/*,video/*,audio/*" class="hidden" onchange="handleStudioLocalFilesSelected(this.files)"/>
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Ajouter une image</span>
+                        <div class="grid grid-cols-2 gap-1 p-1 bg-black/35 rounded-xl text-[10px] font-extrabold">
+                            <button id="st-imgsrc-gallery" type="button" onclick="selectStudioImageSource('gallery')"
+                                    class="py-1.5 rounded-lg bg-white/25 text-white transition cursor-pointer">Parcourir la galerie</button>
+                            <button id="st-imgsrc-pc" type="button" onclick="selectStudioImageSource('pc')"
+                                    class="py-1.5 rounded-lg hover:bg-white/15 opacity-75 transition cursor-pointer">Depuis le PC</button>
+                        </div>
+                        <div id="studio-dec-gallery-wrap" class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/65">Photos Phototo</span>
+                                <button type="button" onclick="loadStudioLibraryBin('IMAGE')" class="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold cursor-pointer">Actualiser</button>
+                            </div>
+                            <div id="studio-dec-library-bin-grid" class="grid grid-cols-3 gap-1.5 max-h-44 overflow-y-auto no-scrollbar"></div>
+                        </div>
+                        <div id="studio-dec-pc-wrap" class="hidden grid grid-cols-2 gap-1.5 text-[11px] font-bold pt-1">
+                            <button type="button" onclick="document.getElementById('studio-local-file-input')?.click()"
+                                    class="py-2.5 px-2 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <span>Choisir un fichier</span>
+                            </button>
+                            <button type="button" onclick="openStudioNativeMediaDialog()"
+                                    class="py-2.5 px-2 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                <span>Explorateur</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Images ajoutées</span>
+                            <span id="studio-dec-images-count" class="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-extrabold">0</span>
+                        </div>
+                        <div id="studio-dec-images-list" class="space-y-2 text-[11px]"></div>
+                    </div>
+                </div>
+
+                <!-- 4C. SOUS-ONGLET TEXTE -->
+                <div id="studio-decsub-text" class="hidden space-y-2.5">
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Textes sur le média</span>
+                            <button type="button" onclick="addExtraStudioTextLayer()" class="px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-bold cursor-pointer">+ Texte</button>
+                        </div>
+                        <div id="studio-text-editing-banner" class="hidden flex items-center justify-between gap-2 px-2.5 py-1 rounded-xl bg-amber-400/20 border border-amber-300/35 text-[10px] font-bold text-amber-100">
+                            <span id="studio-text-editing-label">Modification du texte #2</span>
+                            <button type="button" onclick="finishEditingStudioTextLayer()" class="px-2 py-0.5 rounded-lg bg-amber-400 text-black font-extrabold cursor-pointer">OK</button>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <input id="st-text-val" type="text" placeholder="Saisir un titre ou légende..." oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()"
+                                   class="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none"/>
+                            <button type="button" onclick="clearPrimaryStudioText()" title="Effacer le texte"
+                                    class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs font-bold cursor-pointer shrink-0">×</button>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button type="button" onclick="setStudioTextColor('#ffffff')" class="w-5 h-5 rounded-full bg-white border border-white/40 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#fbbf24')" class="w-5 h-5 rounded-full bg-amber-400 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#38bdf8')" class="w-5 h-5 rounded-full bg-sky-400 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#f43f5e')" class="w-5 h-5 rounded-full bg-rose-500 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#10b981')" class="w-5 h-5 rounded-full bg-emerald-500 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#a855f7')" class="w-5 h-5 rounded-full bg-purple-500 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioTextColor('#111111')" class="w-5 h-5 rounded-full bg-neutral-900 border border-white/40 cursor-pointer"></button>
+                            <label title="Sélecteur complet (HEX, RGB, roue)" class="relative w-5 h-5 rounded-full border border-white/60 cursor-pointer overflow-hidden shrink-0" style="background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red)">
+                                <input id="st-text-color" type="color" value="#ffffff" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
+                            </label>
+                            <button id="st-text-pipette-btn" type="button" onclick="pickStudioColorWithPipette('text')" title="Pipette (prélever une couleur)"
+                                    class="w-5 h-5 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 flex items-center justify-center cursor-pointer shrink-0">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1.5 text-[10px] font-bold">
+                            <button id="st-text-bold" type="button" onclick="toggleStudioTextStyle('bold')" title="Gras"
+                                    class="py-1.5 rounded-xl bg-white/25 text-white font-black transition cursor-pointer">G</button>
+                            <button id="st-text-italic" type="button" onclick="toggleStudioTextStyle('italic')" title="Italique"
+                                    class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 italic transition cursor-pointer">I</button>
+                            <button id="st-text-shadow" type="button" onclick="toggleStudioTextStyle('shadow')" title="Ombre portée"
+                                    class="py-1.5 rounded-xl bg-white/25 text-white transition cursor-pointer">Ombre</button>
+                            <select id="st-text-bg" onchange="updateStudioLivePreview(true)" class="bg-black/55 border border-white/15 rounded-xl px-1.5 py-1 text-[10px] font-bold [color-scheme:dark]">
+                                <option value="transparent">Sans fond</option>
+                                <option value="dark">Fond noir</option>
+                                <option value="light">Fond clair</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] font-bold">
+                                <span>Police Windows</span>
+                                <button type="button" onclick="loadStudioSystemFonts(true)" title="Actualiser les polices Windows installées"
+                                        class="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold cursor-pointer">Actualiser</button>
+                            </div>
+                            <select id="st-text-font" onchange="onStudioTextFontChanged()"
+                                    class="w-full bg-black/55 border border-white/15 rounded-xl px-2.5 py-1.5 text-[11px] font-bold outline-none [color-scheme:dark]">
+                                <option value="">Défaut système (Segoe UI)</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] font-bold">
+                                <span>Taille du texte</span>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepStudioSlider('st-text-size', -2, () => updateStudioLivePreview(true))" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">-</button>
+                                    <input id="st-text-size-num" type="number" min="12" max="140" step="1" value="40" oninput="syncStudioNumberToSlider('st-text-size-num', 'st-text-size', () => updateStudioLivePreview(true))"
+                                           class="w-11 bg-black/40 border border-white/15 rounded-md px-1 py-0.5 text-center text-[10px] font-bold tabular-nums outline-none"/>
+                                    <button type="button" onclick="stepStudioSlider('st-text-size', 2, () => updateStudioLivePreview(true))" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="st-text-size" type="range" min="12" max="140" step="2" value="40" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] font-bold">
+                                <span>Opacité (%)</span>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepStudioSlider('st-text-opacity', -0.05, () => updateStudioLivePreview(true))" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">-</button>
+                                    <input id="st-text-opacity-num" type="number" min="10" max="100" step="5" value="100" oninput="syncStudioOpacityNumToSlider('st-text-opacity-num', 'st-text-opacity', () => updateStudioLivePreview(true))"
+                                           class="w-11 bg-black/40 border border-white/15 rounded-md px-1 py-0.5 text-center text-[10px] font-bold tabular-nums outline-none"/>
+                                    <button type="button" onclick="stepStudioSlider('st-text-opacity', 0.05, () => updateStudioLivePreview(true))" class="w-5 h-5 rounded-md bg-white/15 hover:bg-white/25 flex items-center justify-center font-black cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="st-text-opacity" type="range" min="0.1" max="1.0" step="0.05" value="1.0" oninput="updateStudioLivePreview()" onchange="pushStudioHistorySnapshot()" class="studio-range"/>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+                            <button type="button" onclick="setStudioTextPresetPos(8, 8)" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Haut</button>
+                            <button type="button" onclick="setStudioTextPresetPos(32, 46)" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Centre</button>
+                            <button type="button" onclick="setStudioTextPresetPos(5, 86)" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Bas</button>
+                        </div>
+                        <div id="studio-text-timing-row" class="hidden space-y-1.5 text-[10px]">
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="space-y-0.5"><span class="opacity-70 font-bold block">Apparition (s)</span><input id="st-text-start" type="number" min="0" step="0.5" value="0" onchange="pushStudioHistorySnapshot()" class="w-full bg-black/40 border border-white/15 rounded-lg px-2 py-1 font-bold tabular-nums"/></label>
+                                <label class="space-y-0.5"><span class="opacity-70 font-bold block">Fin (0 = touj.)</span><input id="st-text-end" type="number" min="0" step="0.5" value="0" onchange="pushStudioHistorySnapshot()" class="w-full bg-black/40 border border-white/15 rounded-lg px-2 py-1 font-bold tabular-nums"/></label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5 font-bold">
+                                <button type="button" onclick="setStudioInputToPlayhead('st-text-start')" class="py-1 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">[ Début ici</button>
+                                <button type="button" onclick="setStudioInputToPlayhead('st-text-end')" class="py-1 rounded-lg bg-white/10 hover:bg-white/20 cursor-pointer">Fin ici ]</button>
+                            </div>
+                        </div>
+                        <input id="st-text-x" type="hidden" value="5"/>
+                        <input id="st-text-y" type="hidden" value="86"/>
+                        <div id="studio-extra-text-list" class="space-y-1.5"></div>
+                    </div>
+                </div>
+                <!-- 4D. SOUS-ONGLET BORDURE -->
+                <div id="studio-decsub-border" class="hidden space-y-2.5">
+                    <div id="studio-borders-card" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Bordures &amp; Cadres</span>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button type="button" onclick="setStudioBorderColor('#ffffff')" title="#FFFFFF" class="w-5 h-5 rounded-full bg-white border border-white/40 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#111111')" title="#111111" class="w-5 h-5 rounded-full bg-neutral-900 border border-white/40 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#94a3b8')" title="#94A3B8" class="w-5 h-5 rounded-full bg-slate-400 border border-white/25 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#f43f5e')" title="#F43F5E" class="w-5 h-5 rounded-full bg-rose-500 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#fbbf24')" title="#FBBF24" class="w-5 h-5 rounded-full bg-amber-400 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#10b981')" title="#10B981" class="w-5 h-5 rounded-full bg-emerald-500 border border-white/20 cursor-pointer"></button>
+                            <button type="button" onclick="setStudioBorderColor('#38bdf8')" title="#38BDF8" class="w-5 h-5 rounded-full bg-sky-400 border border-white/20 cursor-pointer"></button>
+                            <label title="Sélecteur complet (HEX, RGB, roue)" class="relative w-5 h-5 rounded-full border border-white/60 cursor-pointer overflow-hidden shrink-0" style="background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red)">
+                                <input id="st-border-color" type="color" value="#ffffff" oninput="onStudioBorderChange(false)" onchange="onStudioBorderChange(true)" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
+                            </label>
+                            <button id="st-border-pipette-btn" type="button" onclick="pickStudioColorWithPipette('border')" title="Pipette (prélever une couleur)"
+                                    class="w-5 h-5 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 flex items-center justify-center cursor-pointer shrink-0">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+                            <button id="st-bdr-none" type="button" onclick="setStudioBorderStyle('none')" class="py-1.5 rounded-xl bg-white/25 transition cursor-pointer">Aucune</button>
+                            <button id="st-bdr-solid" type="button" onclick="setStudioBorderStyle('solid')" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Cadre uni</button>
+                            <button id="st-bdr-polaroid" type="button" onclick="setStudioBorderStyle('polaroid')" class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Polaroid</button>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-bold"><span>Épaisseur</span><span id="st-border-size-val" class="tabular-nums opacity-80">3%</span></div>
+                            <input id="st-border-size" type="range" min="1" max="12" step="0.5" value="3" oninput="onStudioBorderChange(false)" onchange="onStudioBorderChange(true)" class="studio-range"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4B : CALQUES (Modèles / Créer) -->
+            <div id="studio-panel-layers" class="hidden space-y-2.5 text-xs">
+                <!-- 2 options principales : Modèles / Créer -->
+                <div class="grid grid-cols-2 gap-1 p-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl text-[11px] font-extrabold">
+                    <button id="studio-layertab-templates" type="button" onclick="selectStudioLayerSubtab('templates')"
+                            class="py-1.5 rounded-xl bg-white/25 text-white transition cursor-pointer">Modèles</button>
+                    <button id="studio-layertab-create" type="button" onclick="selectStudioLayerSubtab('create')"
+                            class="py-1.5 rounded-xl hover:bg-white/15 opacity-75 transition cursor-pointer">Créer</button>
+                </div>
+
+                <!-- 4B-1. SOUS-ONGLET MODÈLES -->
+                <div id="studio-layersub-templates" class="space-y-2.5">
+                    <div id="studio-layer-templates-card" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Modèles de calques &amp; Watermark</span>
+                        <div id="studio-layer-templates-list" class="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar"></div>
+
+                        <!-- Personnalisation lors du choix d'un modèle intégré (texte et/ou image) -->
+                        <div id="studio-tpl-apply-customizer" class="hidden p-2.5 rounded-xl bg-black/45 border border-amber-300/35 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span id="studio-tpl-apply-title" class="text-[10px] font-extrabold text-amber-200 uppercase tracking-wider">Personnaliser le modèle</span>
+                                <button type="button" onclick="cancelApplyStudioLayerTemplate()" class="text-xs opacity-70 hover:opacity-100 cursor-pointer">×</button>
+                            </div>
+                            <div id="studio-tpl-apply-text-wrap" class="space-y-1">
+                                <span class="text-[10px] opacity-75 font-bold block">Texte du calque</span>
+                                <input id="studio-tpl-apply-text" type="text" placeholder="Votre texte / watermark..."
+                                       class="w-full bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-[11px] font-bold outline-none"/>
+                            </div>
+                            <div id="studio-tpl-apply-img-wrap" class="space-y-1">
+                                <span class="text-[10px] opacity-75 font-bold block">Image / Logo (optionnel)</span>
+                                <div class="flex gap-1.5">
+                                    <input id="studio-tpl-apply-img-path" type="text" placeholder="Chemin image/logo..." readonly
+                                           class="flex-1 min-w-0 bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-[10px] font-mono outline-none"/>
+                                    <button type="button" onclick="pickImageForStudioTemplateApply()" class="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[10px] font-bold cursor-pointer shrink-0">Choisir</button>
+                                </div>
+                            </div>
+                            <button type="button" onclick="confirmApplyStudioLayerTemplate()"
+                                    class="w-full py-1.5 rounded-lg bg-amber-400 text-black hover:bg-amber-300 text-[11px] font-extrabold cursor-pointer">
+                                Appliquer ce modèle
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="studio-layers-stack-card" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Pile des calques actifs</span>
+                            <span id="studio-layers-stack-count" class="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-extrabold">0</span>
+                        </div>
+                        <div id="studio-layers-stack-list" class="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar text-[11px]"></div>
+                    </div>
+                </div>
+
+                <!-- 4B-2. SOUS-ONGLET CRÉER -->
+                <div id="studio-layersub-create" class="hidden space-y-2.5">
+                    <div id="studio-tpl-edit-banner" class="hidden flex items-center justify-between gap-2 px-3 py-1.5 rounded-2xl bg-amber-400/20 border border-amber-300/40 text-[10px] font-bold text-amber-100">
+                        <span id="studio-tpl-edit-label" class="truncate">Modification du modèle</span>
+                        <button type="button" onclick="cancelEditStudioLayerTemplate()" class="px-2 py-0.5 rounded-lg bg-black/40 hover:bg-black/60 text-white cursor-pointer shrink-0">Annuler</button>
+                    </div>
+
+                    <!-- 1. Nom du modèle -->
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Nom du modèle</span>
+                        <input id="st-tpl-name" type="text" placeholder="Nom du modèle (ex: Mon Watermark)"
+                               class="w-full bg-black/45 border border-white/15 rounded-xl px-2.5 py-1.5 text-[11px] font-bold outline-none"/>
+                    </div>
+
+                    <!-- 2. Composer les éléments -->
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Composer les éléments</span>
+                        <p class="text-[10px] opacity-70 leading-snug">Ajoutez texte, image/logo, dessin ou bordure sur l'aperçu à droite.</p>
+                        <div class="grid grid-cols-2 gap-1.5 text-[11px] font-bold">
+                            <button type="button" onclick="openStudioCreatorDecorationTool('text')"
+                                    class="py-2 px-2 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <span>Texte</span>
+                            </button>
+                            <button type="button" onclick="openStudioCreatorDecorationTool('image')"
+                                    class="py-2 px-2 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <span>Image / Logo</span>
+                            </button>
+                            <button type="button" onclick="openStudioCreatorDecorationTool('draw')"
+                                    class="py-2 px-2 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <span>Dessin</span>
+                            </button>
+                            <button type="button" onclick="openStudioCreatorDecorationTool('border')"
+                                    class="py-2 px-2 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                                <span>Bordure</span>
+                            </button>
+                        </div>
+                        <div id="studio-tpl-elements-list" class="space-y-1.5 pt-1"></div>
+                    </div>
+
+                    <!-- 3. Filigrane -->
+                    <div id="studio-tpl-creator-box" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Filigrane (optionnel)</span>
+                        <div class="grid grid-cols-2 gap-1 p-1 bg-black/35 rounded-xl text-[10px] font-extrabold">
+                            <button id="st-tpl-wm-type-text" type="button" onclick="setStudioWatermarkType('text')"
+                                    class="py-1 rounded-lg bg-white/25 text-white transition cursor-pointer">Texte</button>
+                            <button id="st-tpl-wm-type-image" type="button" onclick="setStudioWatermarkType('image')"
+                                    class="py-1 rounded-lg hover:bg-white/15 opacity-75 transition cursor-pointer">Image / Logo</button>
+                        </div>
+                        <input id="st-tpl-wm-type" type="hidden" value="text"/>
+
+                        <div id="st-tpl-wm-text-wrap">
+                            <input id="st-tpl-wm-text" type="text" placeholder="Texte du filigrane (ex: © Mon Studio)"
+                                   oninput="previewStudioWatermarkLive()"
+                                   class="w-full bg-black/45 border border-white/15 rounded-lg px-2.5 py-1.5 text-[11px] outline-none"/>
+                        </div>
+                        <div id="st-tpl-wm-img-wrap" class="hidden flex gap-1.5">
+                            <input id="st-tpl-wm-img-path" type="text" placeholder="Choisir une image / logo..." readonly
+                                   class="flex-1 min-w-0 bg-black/45 border border-white/15 rounded-lg px-2 py-1 text-[10px] font-mono outline-none"/>
+                            <button type="button" onclick="pickImageForStudioWatermark()" class="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[10px] font-bold cursor-pointer shrink-0">Choisir</button>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold"><span class="opacity-80">Opacité</span><span id="st-tpl-wm-op-val" class="tabular-nums opacity-80">55%</span></div>
+                            <input id="st-tpl-wm-opacity" type="range" min="0.10" max="1.0" step="0.05" value="0.55" oninput="document.getElementById('st-tpl-wm-op-val').textContent=Math.round(this.value*100)+'%'; previewStudioWatermarkLive()" class="studio-range"/>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold"><span class="opacity-80">Taille</span><span id="st-tpl-wm-size-val" class="tabular-nums opacity-80">28</span></div>
+                            <input id="st-tpl-wm-size" type="range" min="14" max="80" step="2" value="28" oninput="document.getElementById('st-tpl-wm-size-val').textContent=this.value; previewStudioWatermarkLive()" class="studio-range"/>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1.5 text-[10px]">
+                            <label class="space-y-0.5">
+                                <span class="opacity-75 font-bold block">Position</span>
+                                <select id="st-tpl-wm-layout" onchange="previewStudioWatermarkLive()" class="w-full bg-black/60 border border-white/15 rounded-lg px-1.5 py-1 font-bold [color-scheme:dark]">
+                                    <option value="br">Bas-Droit</option>
+                                    <option value="bl">Bas-Gauche</option>
+                                    <option value="tr">Haut-Droit</option>
+                                    <option value="tl">Haut-Gauche</option>
+                                    <option value="center">Centre</option>
+                                </select>
+                            </label>
+                            <label class="space-y-0.5">
+                                <span class="opacity-75 font-bold block">Répétition</span>
+                                <select id="st-tpl-wm-repeat" onchange="onStudioWatermarkRepeatChange()" class="w-full bg-black/60 border border-white/15 rounded-lg px-1.5 py-1 font-bold [color-scheme:dark]">
+                                    <option value="once">Juste une fois</option>
+                                    <option value="grid">Aligné</option>
+                                    <option value="staggered">Décalé</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div id="st-tpl-wm-spacing-row" class="hidden space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold"><span class="opacity-80">Espacement</span><span id="st-tpl-wm-spacing-val" class="tabular-nums opacity-80">30%</span></div>
+                            <input id="st-tpl-wm-spacing" type="range" min="18" max="50" step="2" value="30" oninput="document.getElementById('st-tpl-wm-spacing-val').textContent=this.value+'%'; previewStudioWatermarkLive()" class="studio-range"/>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1.5 text-[10px] font-extrabold pt-1">
+                            <button id="st-tpl-wm-validate-btn" type="button" onclick="validateStudioWatermarkToScene()"
+                                    class="py-1.5 rounded-lg bg-emerald-400/25 hover:bg-emerald-400/35 text-emerald-200 transition cursor-pointer">Valider</button>
+                            <button id="st-tpl-wm-clear-btn" type="button" onclick="clearStudioWatermarkDraft()"
+                                    class="py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 transition cursor-pointer">Effacer</button>
+                        </div>
+                        <div id="studio-tpl-wm-draft-list" class="space-y-1.5 pt-1"></div>
+                    </div>
+
+                    <!-- 4. Enregistrer -->
+                    <button id="st-tpl-save-btn" type="button" onclick="saveStudioLayerTemplateUnified('new')"
+                            class="w-full py-2 rounded-2xl bg-amber-400 text-black hover:bg-amber-300 text-xs font-extrabold shadow transition cursor-pointer">
+                        Enregistrer le modèle
+                    </button>
+                    <div id="studio-tpl-edit-save-bar" class="hidden grid grid-cols-2 gap-1.5 text-[11px] font-extrabold">
+                        <button id="st-tpl-save-overwrite-btn" type="button" onclick="saveStudioLayerTemplateUnified('overwrite')"
+                                class="py-2 rounded-2xl bg-amber-400 text-black hover:bg-amber-300 shadow transition cursor-pointer">
+                            Écraser le modèle
+                        </button>
+                        <button id="st-tpl-save-copy-btn" type="button" onclick="saveStudioLayerTemplateUnified('copy')"
+                                class="py-2 rounded-2xl bg-white/20 hover:bg-white/30 text-white transition cursor-pointer">
+                            Nouvelle copie
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Clips ajoutés & Mix Audio (Vidéo) -->
+                <div id="studio-media-video-section" class="hidden space-y-2.5">
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Séquence Clips (V1)</span>
+                            <span id="studio-clips-count" class="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-extrabold">1</span>
+                        </div>
+                        <div id="studio-extra-clips-list" class="space-y-1.5 text-[11px]"></div>
+                    </div>
+
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Mixage Audio (A1)</span>
+                        <div class="flex gap-1.5">
+                            <input id="st-vid-audio" type="text" placeholder="Fichier audio / musique..." oninput="onStudioAudioPathChanged()"
+                                   class="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-xl px-2.5 py-1 text-[11px] font-mono outline-none"/>
+                            <button type="button" onclick="clearStudioAudioTrack()" title="Retirer la piste audio ajoutée"
+                                    class="px-2 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold cursor-pointer shrink-0">×</button>
+                            <button type="button" onclick="browseStudioAudio()" title="Parcourir un fichier audio"
+                                    class="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-[11px] font-bold flex items-center transition cursor-pointer shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            </button>
+                        </div>
+                        <select id="st-audio-mix-mode" onchange="syncStudioTimelineUI()" class="w-full bg-black/55 border border-white/15 rounded-xl px-2 py-1.5 text-[11px] font-bold outline-none [color-scheme:dark]">
+                            <option value="replace">Remplacer l'audio original</option>
+                            <option value="mix">Mixer avec l'audio original</option>
+                        </select>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold opacity-80"><span>Volume original</span><span id="st-orig-vol-val">100%</span></div>
+                            <input id="st-orig-vol" type="range" min="0" max="2" step="0.1" value="1.0" oninput="syncStudioAudioVolumes()" class="studio-range"/>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold opacity-80"><span>Volume musique ajoutée</span><span id="st-music-vol-val">100%</span></div>
+                            <input id="st-music-vol" type="range" min="0" max="2" step="0.1" value="1.0" oninput="syncStudioAudioVolumes()" class="studio-range"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 5 : OUTILS (Effaceur d'objet IA, Suppression d'arrière-plan IA, Retouche automatique) -->
+            <div id="studio-panel-tools" class="hidden space-y-2.5 text-xs">
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70 block">Outils intelligents</span>
+                    <div class="grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+                        <button id="st-rmode-object" type="button" onclick="selectStudioRetouchTool('object')"
+                                class="py-2 px-1.5 rounded-xl bg-rose-500/35 text-rose-100 ring-1 ring-rose-300/60 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/></svg>
+                            <span>Objet IA</span>
+                        </button>
+                        <button id="st-rmode-bg_remove" type="button" onclick="selectStudioRetouchTool('bg_remove')"
+                                class="py-2 px-1.5 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 21v-2a5 5 0 0 1 10 0v2"/></svg>
+                            <span>Suppr. fond</span>
+                        </button>
+                        <button id="st-rmode-auto_retouch" type="button" onclick="selectStudioRetouchTool('auto_retouch')"
+                                class="py-2 px-1.5 rounded-xl bg-white/10 hover:bg-white/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3l1.9 4.5L18.5 9l-4.6 1.5L12 15l-1.9-4.5L5.5 9l4.6-1.5L12 3z"/><path d="M5 19l4-4"/></svg>
+                            <span>Retouche</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5A. EFFACEUR D'OBJET IA -->
+                <div id="studio-tool-object-box" class="space-y-2.5">
+                    <div id="studio-ai-inpaint-banner" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-amber-200">Moteur IA LaMa</span>
+                            <span id="studio-ai-inpaint-badge" class="px-2 py-0.5 rounded-full bg-white/15 text-[9px] font-extrabold">Vérification...</span>
+                        </div>
+                        <p id="studio-ai-inpaint-desc" class="text-[10px] opacity-70 leading-snug">Suppression intelligente d'objets par réseau de neurones LaMa ONNX.</p>
+                        <button id="studio-ai-inpaint-install-btn" type="button" onclick="installStudioAiInpaintModel()"
+                                class="hidden w-full py-1.5 rounded-xl bg-amber-400 text-black hover:bg-amber-300 text-[10px] font-extrabold transition cursor-pointer">
+                            Installer le modèle IA LaMa (~200 Mo)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5B. SUPPRESSION D'ARRIÈRE-PLAN PAR IA -->
+                <div id="studio-tool-bg-box" class="hidden space-y-2.5">
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-sky-200">Arrière-plan IA</span>
+                            <span id="studio-ai-bg-badge" class="px-2 py-0.5 rounded-full bg-white/15 text-[9px] font-extrabold">Vérification...</span>
+                        </div>
+                        <button id="st-bg-remove-toggle" type="button" onclick="toggleStudioBgRemove()"
+                                class="w-full py-2 rounded-xl bg-sky-500/25 hover:bg-sky-500/35 text-sky-100 border border-sky-300/35 text-[11px] font-extrabold transition cursor-pointer">
+                            Supprimer l'arrière-plan par IA
+                        </button>
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-bold opacity-75 block">Type de fond résultant</span>
+                            <select id="st-bg-remove-mode" onchange="onStudioBgRemoveModeChange()"
+                                    class="w-full bg-black/55 border border-white/15 rounded-xl px-2.5 py-1.5 text-[11px] font-bold outline-none [color-scheme:dark]">
+                                <option value="transparent">Fond transparent (PNG)</option>
+                                <option value="blur">Flou d'arrière-plan (Bokeh)</option>
+                                <option value="white">Fond blanc uni</option>
+                                <option value="black">Fond noir uni</option>
+                            </select>
+                        </div>
+                        <p id="studio-ai-bg-desc" class="text-[10px] opacity-70 leading-snug">Détourage automatique du sujet par IA (U2-Netp ONNX + repli OpenCV).</p>
+                        <button id="studio-ai-bg-install-btn" type="button" onclick="installStudioBgRemoveModel()"
+                                class="hidden w-full py-1.5 rounded-xl bg-amber-400 text-black hover:bg-amber-300 text-[10px] font-extrabold transition cursor-pointer">
+                            Installer le modèle IA U2-Netp (~4.7 Mo)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5C. RETOUCHE AUTOMATIQUE & CIBLÉE -->
+                <div id="studio-tool-auto-retouch-box" class="hidden space-y-2.5">
+                    <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-200">Retouche automatique</span>
+                            <span id="st-auto-retouch-state-badge" class="px-2 py-0.5 rounded-full bg-white/15 text-[9px] font-extrabold">Désactivée</span>
+                        </div>
+                        <button id="st-auto-retouch-toggle" type="button" onclick="toggleStudioAutoRetouch()"
+                                class="w-full py-2 rounded-xl bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-100 border border-emerald-300/35 text-[11px] font-extrabold transition cursor-pointer">
+                            Lancer la retouche automatique
+                        </button>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-bold">
+                                <span>Intensité</span>
+                                <span id="st-auto-retouch-strength-val" class="tabular-nums opacity-80">65%</span>
+                            </div>
+                            <input id="st-auto-retouch-strength" type="range" min="0.15" max="1.0" step="0.05" value="0.65"
+                                   oninput="onStudioAutoRetouchChange(false)" onchange="onStudioAutoRetouchChange(true)" class="studio-range"/>
+                        </div>
+                        <div class="space-y-1.5 text-[11px] font-bold pt-1">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="st-auto-retouch-skin" type="checkbox" checked onchange="onStudioAutoRetouchChange(true)" class="rounded accent-emerald-400"/>
+                                <span>Lissage peau &amp; rides</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="st-auto-retouch-redeye" type="checkbox" checked onchange="onStudioAutoRetouchChange(true)" class="rounded accent-emerald-400"/>
+                                <span>Yeux rouges automatiques</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="st-auto-retouch-blemish" type="checkbox" checked onchange="onStudioAutoRetouchChange(true)" class="rounded accent-emerald-400"/>
+                                <span>Imperfections, boutons &amp; reflets</span>
+                            </label>
+                        </div>
+                        <div class="pt-2 border-t border-white/10 space-y-1.5">
+                            <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/65 block">Retouche ciblée au pinceau</span>
+                            <div class="grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+                                <button id="st-rmode-blemish" type="button" onclick="selectStudioRetouchTool('blemish')"
+                                        class="py-1.5 px-1 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Boutons</button>
+                                <button id="st-rmode-redeye" type="button" onclick="selectStudioRetouchTool('redeye')"
+                                        class="py-1.5 px-1 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Yeux rouges</button>
+                                <button id="st-rmode-glare" type="button" onclick="selectStudioRetouchTool('glare')"
+                                        class="py-1.5 px-1 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Reflets</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pinceau commun pour Effaceur d'objet / Boutons / Yeux rouges / Reflets -->
+                <div id="studio-eraser-bar" class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span id="studio-retouch-active-label" class="text-[11px] font-extrabold uppercase tracking-wider text-rose-200">Pinceau Effaceur d'objet</span>
+                        <span id="studio-eraser-busy" class="hidden text-[10px] text-amber-200 animate-pulse font-bold">Calcul...</span>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold"><span>Taille du pinceau</span><span id="st-eraser-size-val" class="tabular-nums opacity-80">24px</span></div>
+                        <input id="st-eraser-size" type="range" min="8" max="72" step="2" value="24" oninput="syncStudioEraserCursorSize()" class="studio-range"/>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5 text-[11px] font-bold">
+                        <button id="studio-eraser-masks-btn" type="button" onclick="toggleStudioEraserMasksOverlay()"
+                                class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Voir masques</button>
+                        <button type="button" onclick="undoLastStudioEraser()"
+                                class="py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition cursor-pointer">Annuler dernier</button>
+                    </div>
+                    <p id="studio-retouch-help-text" class="text-[10px] opacity-65 leading-snug">Coloriez l'objet à supprimer : l'IA reconstruit l'arrière-plan automatiquement.</p>
+                </div>
+
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Retouches appliquées</span>
+                        <span id="studio-eraser-count" class="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-extrabold">0</span>
+                    </div>
+                    <div id="studio-eraser-strokes-list" class="space-y-1 max-h-40 overflow-y-auto no-scrollbar"></div>
+                </div>
+
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-2.5 flex items-center justify-between gap-2 text-[10px] opacity-85">
+                    <span id="studio-info-filename" class="font-mono truncate"></span>
+                    <button type="button" onclick="clearStudioDrawings()" class="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 font-bold shrink-0 cursor-pointer">Tout effacer</button>
+                </div>
+            </div>
+
+            <!-- SECTION 6 : HISTORIQUE DES MODIFICATIONS -->
+            <div id="studio-panel-history" class="hidden space-y-2.5 text-xs">
+                <div class="w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-white/70">Modifications effectuées</span>
+                        <span id="studio-history-count" class="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-extrabold">0</span>
+                    </div>
+                    <div id="studio-history-list" class="space-y-1.5 max-h-[52vh] overflow-y-auto no-scrollbar"></div>
+                    <button type="button" onclick="resetStudioEdits()"
+                            class="w-full py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-[11px] font-extrabold transition cursor-pointer">
+                        Tout réinitialiser
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 3. SCÈNE PRINCIPALE & TIMELINE MULTIPISTE (À DROITE) -->
+        <div class="flex-1 min-w-0 h-full flex flex-col justify-between gap-2 relative">
+            <div id="studio-viewport" class="flex-1 min-h-0 w-full rounded-2xl bg-black/35 border border-white/10 studio-stage-grid-bg flex items-center justify-center p-2 overflow-hidden relative"
+                 ondragover="event.preventDefault(); this.classList.add('ring-2','ring-white/40')"
+                 ondragleave="this.classList.remove('ring-2','ring-white/40')"
+                 ondrop="handleStudioStageDrop(event)">
+                <div id="studio-zoom-wrap" class="relative inline-flex items-center justify-center max-h-full max-w-full origin-center">
+                    <div id="studio-stage" class="relative inline-block overflow-hidden shadow-2xl bg-black/50 cursor-crosshair">
+                        <img id="studio-img" draggable="false" class="hidden max-h-[calc(100vh-165px)] max-w-full w-auto h-auto block select-none"/>
+                        <video id="studio-video" class="hidden max-h-[calc(100vh-355px)] max-w-full w-auto h-auto block select-none bg-black" onclick="toggleStudioVideoPlay()"></video>
+                        <audio id="studio-music-player" class="hidden" preload="auto"></audio>
+
+                        <!-- Comparateur Split Avant / Après -->
+                        <img id="studio-split-orig-img" draggable="false" class="hidden absolute inset-0 w-full h-full object-contain pointer-events-none z-[32] select-none"/>
+                        <div id="studio-split-divider" class="hidden absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_10px_rgba(0,0,0,0.85)] z-[35] cursor-ew-resize" style="left:50%;">
+                            <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white text-black shadow-lg flex items-center justify-center text-[10px] font-black">◀▶</div>
+                            <span class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/75 text-[9px] font-extrabold pointer-events-none">AVANT</span>
+                            <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/75 text-[9px] font-extrabold pointer-events-none">APRÈS</span>
+                        </div>
+
+                        <!-- Superpositions live -->
+                        <div id="studio-warmth-tint" class="hidden absolute inset-0 pointer-events-none z-10 mix-blend-soft-light"></div>
+                        <div id="studio-fade-overlay" class="hidden absolute inset-0 pointer-events-none z-10 bg-zinc-700/30 mix-blend-lighten"></div>
+                        <div id="studio-grain-overlay" class="hidden absolute inset-0 pointer-events-none z-10 opacity-0 mix-blend-overlay" style="background-image:url(&quot;data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E&quot;);"></div>
+                        <div id="studio-vignette-overlay" class="hidden absolute inset-0 pointer-events-none z-10"></div>
+                        <canvas id="studio-blur-canvas" class="hidden absolute inset-0 w-full h-full pointer-events-none z-[24]"></canvas>
+                        <canvas id="studio-pixel-canvas" class="hidden absolute inset-0 w-full h-full pointer-events-none z-[24]"></canvas>
+                        <canvas id="studio-draw-canvas" class="hidden absolute inset-0 w-full h-full pointer-events-none z-[25]"></canvas>
+                        <canvas id="studio-eraser-canvas" class="hidden absolute inset-0 w-full h-full pointer-events-none z-[26]"></canvas>
+
+                        <!-- Grille de composition -->
+                        <div id="studio-stage-grid" class="hidden absolute inset-0 pointer-events-none z-20 grid grid-cols-3 grid-rows-3">
+                            <div class="border-r border-b border-white/25"></div><div class="border-r border-b border-white/25"></div><div class="border-b border-white/25"></div>
+                            <div class="border-r border-b border-white/25"></div><div class="border-r border-b border-white/25"></div><div class="border-b border-white/25"></div>
+                            <div class="border-r border-white/25"></div><div class="border-r border-white/25"></div><div></div>
+                        </div>
+
+                        <!-- Formes interactives & calques d'images / logos -->
+                        <div id="studio-shapes-layer" class="absolute inset-0 pointer-events-none z-[26]"></div>
+                        <div id="studio-img-overlays-layer" class="absolute inset-0 pointer-events-none z-[27]"></div>
+
+                        <!-- Texte principal & calques textes additionnels -->
+                        <div id="studio-text-preview" title="Glisser pour déplacer le texte"
+                             class="hidden group absolute font-extrabold whitespace-nowrap z-30 px-2.5 py-1 rounded-lg border border-dashed border-white/45 cursor-move hover:border-white transition-colors">
+                            <span id="studio-text-preview-span"></span>
+                            <button type="button" onclick="event.stopPropagation(); clearPrimaryStudioText()" title="Supprimer ce texte"
+                                    class="opacity-0 group-hover:opacity-100 absolute -top-2 -right-2 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] leading-none flex items-center justify-center shadow cursor-pointer">×</button>
+                            <div data-text-resize="main" title="Agrandir / Réduire le texte"
+                                 class="opacity-0 group-hover:opacity-100 absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-amber-400 border border-black cursor-nwse-resize"></div>
+                        </div>
+                        <div id="studio-extra-texts-layer" class="absolute inset-0 pointer-events-none z-30"></div>
+                        <div id="studio-applied-templates-layer" class="absolute inset-0 pointer-events-none z-[28]"></div>
+                        <div id="studio-wm-preview-layer" class="absolute inset-0 pointer-events-none z-[29]"></div>
+
+                        <!-- Cadre de recadrage interactif -->
+                        <div id="studio-crop-box" data-crop-handle="move"
+                             class="hidden absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.56)] z-20 cursor-move">
+                            <div class="w-full h-full grid grid-cols-3 grid-rows-3 pointer-events-none">
+                                <div class="border-r border-b border-white/30"></div><div class="border-r border-b border-white/30"></div><div class="border-b border-white/30"></div>
+                                <div class="border-r border-b border-white/30"></div><div class="border-r border-b border-white/30"></div><div class="border-b border-white/30"></div>
+                                <div class="border-r border-white/30"></div><div class="border-r border-white/30"></div><div></div>
+                            </div>
+                            <span id="studio-crop-size-badge" class="hidden sm:inline-block absolute -top-6 left-0 px-2 py-0.5 rounded-md bg-black/80 text-white text-[10px] font-extrabold tabular-nums pointer-events-none whitespace-nowrap"></span>
+                            <div data-crop-handle="nw" class="absolute -top-2 -left-2 w-5 h-5 cursor-nwse-resize flex items-start justify-start p-0.5"><span class="w-3.5 h-3.5 border-t-[3px] border-l-[3px] border-white rounded-tl-sm block"></span></div>
+                            <div data-crop-handle="n"  class="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-3.5 cursor-ns-resize flex items-center justify-center"><span class="w-6 h-1 bg-white rounded-full shadow block"></span></div>
+                            <div data-crop-handle="ne" class="absolute -top-2 -right-2 w-5 h-5 cursor-nesw-resize flex items-start justify-end p-0.5"><span class="w-3.5 h-3.5 border-t-[3px] border-r-[3px] border-white rounded-tr-sm block"></span></div>
+                            <div data-crop-handle="e"  class="absolute top-1/2 -right-2 -translate-y-1/2 w-3.5 h-8 cursor-ew-resize flex items-center justify-center"><span class="w-1 h-6 bg-white rounded-full shadow block"></span></div>
+                            <div data-crop-handle="se" class="absolute -bottom-2 -right-2 w-5 h-5 cursor-nwse-resize flex items-end justify-end p-0.5"><span class="w-3.5 h-3.5 border-b-[3px] border-r-[3px] border-white rounded-br-sm block"></span></div>
+                            <div data-crop-handle="s"  class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-3.5 cursor-ns-resize flex items-center justify-center"><span class="w-6 h-1 bg-white rounded-full shadow block"></span></div>
+                            <div data-crop-handle="sw" class="absolute -bottom-2 -left-2 w-5 h-5 cursor-nesw-resize flex items-end justify-start p-0.5"><span class="w-3.5 h-3.5 border-b-[3px] border-l-[3px] border-white rounded-bl-sm block"></span></div>
+                            <div data-crop-handle="w"  class="absolute top-1/2 -left-2 -translate-y-1/2 w-3.5 h-8 cursor-ew-resize flex items-center justify-center"><span class="w-1 h-6 bg-white rounded-full shadow block"></span></div>
+                        </div>
+
+                        <!-- Zones Gomme / Floutage -->
+                        <div id="studio-eraser-boxes" class="absolute inset-0 pointer-events-none z-20"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DOCK BAS (VIDÉO UNIQUEMENT) : TIMELINE MULTIPISTE NLE -->
+            <div id="studio-video-timeline-dock" class="hidden w-full bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-2.5 space-y-2 shrink-0 z-30">
+                <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button" onclick="setStudioTrimInAtPlayhead()" title="Fixer le début [In] au curseur (I)"
+                                class="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer">[ Début</button>
+                        <button type="button" onclick="setStudioTrimOutAtPlayhead()" title="Fixer la fin [Out] au curseur (O)"
+                                class="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer">Fin ]</button>
+                        <button type="button" onclick="applyStudioChanges('SPLIT')" title="Scinder et exporter 2 clips au niveau du curseur"
+                                class="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 flex items-center gap-1 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/></svg>
+                            <span>Scinder</span>
+                        </button>
+                        <button type="button" onclick="applyStudioChanges('GIF')" title="Exporter l'extrait en GIF animé"
+                                class="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 transition cursor-pointer">Export GIF</button>
+                        <button type="button" onclick="resetStudioTrim()" class="px-2 py-1 rounded-full hover:bg-white/15 opacity-75 hover:opacity-100 transition cursor-pointer">Tout</button>
+                    </div>
+                    <div class="flex items-center gap-2 tabular-nums">
+                        <span id="studio-montage-total-pill" class="hidden px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-200 text-[10px] font-extrabold"></span>
+                        <span class="px-2.5 py-1 rounded-full bg-black/35 text-[10px] font-extrabold">
+                            Sélection : <span id="studio-trim-range-label" class="text-amber-300">0.0s → Fin</span> · <span id="studio-trim-dur-label">0.0s</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Règle + 4 pistes alignées -->
+                <div class="flex items-stretch gap-2">
+                    <div class="w-20 shrink-0 flex flex-col gap-1 text-[10px] font-extrabold opacity-80">
+                        <div class="h-4 flex items-center opacity-50">Temps</div>
+                        <div class="h-6 flex items-center text-sky-300">V2 Incrust.</div>
+                        <div class="h-10 flex items-center text-amber-300">V1 Vidéo</div>
+                        <div class="h-6 flex items-center text-violet-300">T1 Texte</div>
+                        <div class="h-7 flex items-center text-emerald-300">A1 Audio</div>
+                    </div>
+
+                    <div id="studio-tl-tracks-wrap" class="relative flex-1 min-w-0 flex flex-col gap-1 cursor-pointer">
+                        <div id="studio-tl-playhead" class="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)] pointer-events-none z-30" style="left:0%;">
+                            <div class="w-3 h-3 -ml-[5px] -mt-0.5 rounded-full bg-white shadow border border-black/30"></div>
+                        </div>
+
+                        <div id="studio-tl-ruler" class="relative h-4 rounded-lg bg-black/30 px-1 flex items-center justify-between text-[9px] font-bold opacity-70 tabular-nums overflow-hidden"></div>
+
+                        <div id="studio-tl-v2-rail" onclick="event.stopPropagation(); selectStudioSidebarTab('layers')"
+                             class="relative h-6 rounded-lg bg-black/30 border border-white/10 overflow-hidden flex items-center px-1.5 gap-1.5">
+                            <span class="text-[10px] opacity-55">Aucune incrustation (+ Ajouter)</span>
+                        </div>
+
+                        <div class="flex items-stretch gap-1 h-10">
+                            <div id="studio-tl-v1-rail" class="relative flex-1 min-w-[45%] h-10 rounded-xl bg-black/50 border border-white/10 overflow-hidden">
+                                <div id="studio-tl-filmstrip" class="absolute inset-0 flex overflow-hidden opacity-85 pointer-events-none"></div>
+                                <div id="studio-tl-curtain-left" class="hidden absolute top-0 bottom-0 left-0 bg-black/70 pointer-events-none z-10"></div>
+                                <div id="studio-tl-curtain-right" class="hidden absolute top-0 bottom-0 right-0 bg-black/70 pointer-events-none z-10"></div>
+                                <div id="studio-tl-v1-active" class="absolute top-0 bottom-0 border-y-2 border-amber-400 flex items-center justify-between z-20" style="left:0%; right:0%;">
+                                    <div id="studio-tl-handle-in" data-handle="in" title="Début [In]"
+                                         class="w-3.5 h-full bg-amber-400 hover:bg-amber-300 cursor-ew-resize flex items-center justify-center rounded-l-lg shadow shrink-0">
+                                        <span class="w-0.5 h-4 rounded-full bg-black/60"></span>
+                                    </div>
+                                    <span id="studio-tl-v1-name" class="text-[10px] font-extrabold truncate px-2 pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">Clip principal</span>
+                                    <div id="studio-tl-handle-out" data-handle="out" title="Fin [Out]"
+                                         class="w-3.5 h-full bg-amber-400 hover:bg-amber-300 cursor-ew-resize flex items-center justify-center rounded-r-lg shadow shrink-0">
+                                        <span class="w-0.5 h-4 rounded-full bg-black/60"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="studio-tl-extra-clips" onclick="event.stopPropagation()" class="hidden flex items-stretch gap-1 max-w-[45%] overflow-x-auto no-scrollbar"></div>
+                        </div>
+
+                        <div class="relative h-6 rounded-lg bg-black/30 border border-white/10 overflow-hidden flex items-center px-1.5 gap-1.5">
+                            <div id="studio-tl-t1-clip" onclick="event.stopPropagation(); selectStudioSidebarTab('decoration', 'text')"
+                                 class="h-4 px-2.5 rounded-md bg-violet-500/25 border border-violet-300/35 text-[10px] font-bold flex items-center gap-1.5 truncate cursor-pointer hover:bg-violet-500/35 transition">
+                                <span id="studio-tl-t1-label" class="truncate opacity-85">Cliquer pour ajouter un texte</span>
+                            </div>
+                        </div>
+
+                        <div class="relative h-7 rounded-lg bg-black/30 border border-white/10 overflow-hidden flex items-center justify-between px-1.5 gap-2">
+                            <div id="studio-tl-a1-clip" class="relative h-5 flex-1 rounded-md bg-emerald-500/20 border border-emerald-400/35 px-2 flex items-center gap-2 min-w-0 overflow-hidden">
+                                <div id="studio-tl-waveform" class="flex items-center gap-[2px] h-3.5 opacity-60 shrink-0 pointer-events-none"></div>
+                                <span id="studio-tl-a1-label" class="text-[10px] font-bold truncate z-10">Audio original</span>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+                                <button id="studio-tl-mute-btn" type="button" onclick="toggleStudioMuteQuick()" title="Couper / Rétablir le son"
+                                        class="px-2 h-5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer">
+                                    <span>Son</span>
+                                </button>
+                                <button type="button" onclick="browseStudioAudio()" title="Ajouter/remplacer piste audio"
+                                        class="px-2 h-5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold transition cursor-pointer">Audio</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

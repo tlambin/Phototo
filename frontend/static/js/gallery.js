@@ -2,6 +2,7 @@
 
 let galleryPage = 1, galleryTotalPages = 1, galleryTotalItems = 0;
 let galleryIsLoading = false;
+let _pendingGalleryCustomSkip = null;
 let selectedGalleryPaths = new Set();
 let currentGalleryItems = [];
 let lastClickedGalleryIdx = null;
@@ -10,10 +11,14 @@ let lastRenderedGroupTitle = {};
 let singleAlbumIsLoading = false;
 let singleAlbumTotalItems = 0;
 let lightboxIsCustomItem = false;
+let currentLightboxDupGroup = null;
+let _lbDupLookupSeq = 0;
 let infiniteScrollObserver = null;
 
 let currentSkipOffset = 0;
 let cachedTimelineData = [];
+let cachedTimelineTotalDated = 0;
+let _timelineMonthSegments = [];
 
 let galleryLayout = localStorage.getItem('phototo_gallery_layout') || 'GRID';    // 'GRID' | 'MASONRY' | 'LIST'
 let gallerySize = localStorage.getItem('phototo_gallery_size') || 'MD';        // 'SM' | 'MD' | 'LG'
@@ -42,8 +47,8 @@ function getSelectIconHTML(isSelected, isList = false) {
 function getFavHeartHTML(isFav, isList = false) {
     if (isFav) {
         const cls = isList
-            ? 'w-7 h-7 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-500 flex items-center justify-center shadow-sm transition-all duration-150'
-            : 'w-7 h-7 rounded-full bg-rose-500/25 backdrop-blur-md border border-rose-400/60 text-rose-400 hover:bg-rose-500/35 flex items-center justify-center shadow-md transition-all duration-150';
+            ? 'fav-badge-active w-7 h-7 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-500 flex items-center justify-center shadow-sm transition-all duration-150'
+            : 'fav-badge-active w-7 h-7 rounded-full bg-rose-500/25 backdrop-blur-md border border-rose-400/60 text-rose-400 hover:bg-rose-500/35 flex items-center justify-center shadow-md transition-all duration-150';
         return `<div class="${cls}">
                     <svg class="w-3.5 h-3.5" fill="currentColor" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
                         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
@@ -152,9 +157,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
     const isVid = isVideoFile(it.dest_path);
     const durText = formatDuration(it.duration_sec);
 
-    const borderClass = isSel
-        ? 'tile-selected'
-        : 'hover:ring-2 hover:ring-emerald-400/75';
+    const borderClass = isSel ? 'tile-selected' : '';
 
     const favVisibility = it.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
 
@@ -194,7 +197,7 @@ function renderSingleMediaTile(it, idx, layoutMode = galleryLayout) {
         const padCls = gallerySize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (gallerySize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
         const titleCls = gallerySize === 'SM' ? 'text-xs' : (gallerySize === 'LG' ? 'text-base' : 'text-sm');
 
-        const listSelectBorder = isSel ? 'tile-selected-list' : 'hover:ring-1 hover:ring-emerald-400/75';
+        const listSelectBorder = isSel ? 'tile-selected-list' : '';
         const metaParts = [dtStr, dimStr, sizeStr].filter(Boolean).join(' • ');
 
         return `
@@ -530,6 +533,11 @@ document.addEventListener('click', (e) => {
     if (facesWrapper && facesPop && !facesPop.classList.contains('hidden') && !facesWrapper.contains(e.target)) {
         facesPop.classList.add('hidden');
     }
+    const placesWrapper = document.getElementById('places-filter-wrapper');
+    const placesPop = document.getElementById('places-filter-popover');
+    if (placesWrapper && placesPop && !placesPop.classList.contains('hidden') && !placesWrapper.contains(e.target)) {
+        placesPop.classList.add('hidden');
+    }
 });
 
 function onGalleryYearOrMonthSelectChange() {
@@ -594,7 +602,10 @@ function resetAndLoadGallery() {
 }
 
 async function loadGalleryItems(append = false, customSkip = -1) {
-    if (galleryIsLoading) return;
+    if (galleryIsLoading) {
+        if (!append && customSkip >= 0) _pendingGalleryCustomSkip = customSkip;
+        return;
+    }
     if (append && galleryTotalItems > 0 && (currentSkipOffset + currentGalleryItems.length) >= galleryTotalItems) return;
 
     galleryIsLoading = true;
@@ -660,6 +671,11 @@ async function loadGalleryItems(append = false, customSkip = -1) {
     } finally {
         galleryIsLoading = false;
         if (spinner) spinner.classList.add('hidden');
+        if (_pendingGalleryCustomSkip !== null) {
+            const nextSkip = _pendingGalleryCustomSkip;
+            _pendingGalleryCustomSkip = null;
+            loadGalleryItems(false, nextSkip);
+        }
     }
 }
 
@@ -723,6 +739,11 @@ async function loadPreviousGalleryItems() {
     } finally {
         galleryIsLoading = false;
         if (spinner) spinner.classList.add('hidden');
+        if (_pendingGalleryCustomSkip !== null) {
+            const nextSkip = _pendingGalleryCustomSkip;
+            _pendingGalleryCustomSkip = null;
+            loadGalleryItems(false, nextSkip);
+        }
     }
 }
 
@@ -895,27 +916,50 @@ function toggleActiveFloatingGroupSelection() {
 }
 
 function syncBatchBarBounds() {
-    const batchBar = document.getElementById('gal-batch-bar');
-    if (!batchBar) return;
-    batchBar.style.top = '';
+    const ctx = typeof _getActiveOptionsContext === 'function' ? _getActiveOptionsContext() : null;
+    const header = ctx && ctx.headerId ? document.getElementById(ctx.headerId) : null;
+    const drawer = ctx && ctx.drawerId ? document.getElementById(ctx.drawerId) : null;
+    const stuckOptionsOpen = Boolean(
+        header && header.classList.contains('is-stuck') &&
+        drawer && !drawer.classList.contains('hidden')
+    );
+    let anyVisible = false;
+    [document.getElementById('gal-batch-bar'), document.getElementById('trash-batch-bar'), document.getElementById('sug-batch-bar')].forEach(bar => {
+        if (!bar) return;
+        bar.style.top = '';
+        bar.style.bottom = '';
+        if (!bar.classList.contains('hidden')) {
+            anyVisible = true;
+            if (stuckOptionsOpen) {
+                const drawerRect = drawer.getBoundingClientRect();
+                const drawerHeight = Math.ceil(drawerRect.height || 44);
+                bar.style.bottom = `${20 + drawerHeight + 10}px`;
+            }
+        }
+    });
+    document.body.classList.toggle('has-stuck-options-open', anyVisible && stuckOptionsOpen);
 }
 
 function updateGalleryBatchBar() {
     const mediaVisible = currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent'
         || (currentTab === 'albums' && !!openedAlbumName)
-        || (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null);
+        || (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null)
+        || (currentTab === 'map' && typeof _openedPlaceBucketIdx !== 'undefined' && _openedPlaceBucketIdx >= 0);
     const hasSelection = mediaVisible && selectedGalleryPaths.size > 0;
-    document.body.classList.toggle('has-batch-bar', hasSelection);
+    const trashSelActive = currentTab === 'trash' && typeof selectedTrashPaths !== 'undefined' && selectedTrashPaths.size > 0;
+    const sugSelActive = String(currentTab || '').startsWith('sug-') && typeof _sugPageState !== 'undefined' && _sugPageState.selected && _sugPageState.selected.size > 0;
+    document.body.classList.toggle('has-batch-bar', hasSelection || trashSelActive || sugSelActive);
     document.getElementById('gal-batch-bar').classList.toggle('hidden', !hasSelection);
     document.getElementById('gal-batch-count').textContent = `${selectedGalleryPaths.size} sélectionné(s)`;
     const remBtn = document.getElementById('btn-batch-album-remove');
     if (remBtn) remBtn.classList.toggle('hidden', !openedAlbumName);
     const grpBtn = document.getElementById('gal-batch-group-btn');
     if (grpBtn) grpBtn.classList.toggle('hidden', currentTab !== 'favorites');
-    ['gallery-content-area', 'album-single-content-area', 'tl-faces-grid'].forEach(id => {
+    ['gallery-content-area', 'album-single-content-area', 'tl-faces-grid', 'place-single-grid'].forEach(id => {
         const area = document.getElementById(id);
         if (area) area.classList.toggle('selection-active', hasSelection);
     });
+    if (typeof updateTrashBatchBar === 'function') updateTrashBatchBar();
     syncGroupSectionSelectionButtons();
     syncBatchBarBounds();
     updateFloatingGroupPill();
@@ -1010,13 +1054,20 @@ async function loadGalleryTimeline() {
     if (!res.ok) return;
     const d = await res.json();
     cachedTimelineData = d.timeline || [];
-    renderTimelineScrubberDOM();
+    cachedTimelineTotalDated = Number(d.total_dated || 0);
     if (typeof syncTimelineWrapperBounds === 'function') syncTimelineWrapperBounds();
+    renderTimelineScrubberDOM();
 }
 
 let activeScrollTimelineYear = '';
 let activeScrollTimelineMonth = '';
+let activeScrollTileIdx = 0;
 let _timelineScrollRaf = null;
+let _isTimelineScrubbing = false;
+let _timelineScrubTimer = null;
+let _pendingScrubTarget = null;
+let _lastScrubJumpOffset = -1;
+let _timelineEventsBound = false;
 
 function updateActiveTimelineFromScroll() {
     const tabGal = document.getElementById('tab-gallery');
@@ -1028,6 +1079,7 @@ function updateActiveTimelineFromScroll() {
     const probeTop = scrollerRect.top + 110;
     const tiles = area.querySelectorAll('.media-tile[data-ts]');
     let foundTs = 0;
+    let foundTileIdx = activeScrollTileIdx;
 
     for (let i = 0; i < tiles.length; i++) {
         const ts = parseInt(tiles[i].getAttribute('data-ts') || '0', 10);
@@ -1035,6 +1087,7 @@ function updateActiveTimelineFromScroll() {
         const rect = tiles[i].getBoundingClientRect();
         if (rect.bottom >= probeTop && rect.top <= scrollerRect.bottom) {
             foundTs = ts;
+            foundTileIdx = parseInt(tiles[i].getAttribute('data-tile-idx') || String(i), 10) || 0;
             break;
         }
     }
@@ -1044,10 +1097,11 @@ function updateActiveTimelineFromScroll() {
     const yr = String(dt.getFullYear());
     const mo = String(dt.getMonth() + 1).padStart(2, '0');
 
-    if (yr !== activeScrollTimelineYear || mo !== activeScrollTimelineMonth) {
+    if (yr !== activeScrollTimelineYear || mo !== activeScrollTimelineMonth || foundTileIdx !== activeScrollTileIdx) {
         activeScrollTimelineYear = yr;
         activeScrollTimelineMonth = mo;
-        renderTimelineScrubberDOM();
+        activeScrollTileIdx = foundTileIdx;
+        _updateTimelineScrollPositionUI();
     }
 }
 
@@ -1081,6 +1135,21 @@ function _getActiveGroupedContainerAndMode() {
         const facesMode = document.getElementById('faces-group-by')?.value || 'NONE';
         return { container: document.getElementById('persons-identified-grid'), mode: facesMode, headerId: 'faces-sticky-header', drawerId: 'faces-options-drawer' };
     }
+    if (currentTab === 'map') {
+        if (typeof _openedPlaceBucketIdx !== 'undefined' && _openedPlaceBucketIdx >= 0) {
+            return { container: document.getElementById('place-single-grid'), mode: galleryGroupBy, headerId: 'place-single-sticky-header', drawerId: 'filter-drawer' };
+        }
+        const placesMode = document.getElementById('places-group-by')?.value || 'NONE';
+        return { container: document.getElementById('places-cards-grid'), mode: placesMode, headerId: 'places-sticky-header', drawerId: 'places-options-drawer' };
+    }
+    if (currentTab === 'dups') {
+        const dupsMode = document.getElementById('dups-group-by')?.value || 'NONE';
+        return { container: document.getElementById('dups-container'), mode: dupsMode, headerId: 'dups-sticky-header', drawerId: 'dups-options-drawer' };
+    }
+    if (currentTab === 'similar') {
+        const simMode = document.getElementById('similar-group-by')?.value || 'NONE';
+        return { container: document.getElementById('similar-container'), mode: simMode, headerId: 'similar-sticky-header', drawerId: 'similar-options-drawer' };
+    }
     if (currentTab === 'gallery' || currentTab === 'favorites') {
         return { container: document.getElementById('gallery-content-area'), mode: galleryGroupBy, headerId: 'gallery-sticky-header', drawerId: 'filter-drawer' };
     }
@@ -1104,12 +1173,14 @@ function updateFloatingGroupPill() {
     let topAnchor = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().bottom + 10) : 90;
     const batchBar = document.getElementById('gal-batch-bar');
     if (batchBar && !batchBar.classList.contains('hidden')) {
-        topAnchor = Math.max(topAnchor, Math.ceil(batchBar.getBoundingClientRect().bottom + 8));
+        const bRect = batchBar.getBoundingClientRect();
+        if (bRect.top < 220) topAnchor = Math.max(topAnchor, Math.ceil(bRect.bottom + 8));
     }
     const header = headerId ? document.getElementById(headerId) : null;
     const drawer = drawerId ? document.getElementById(drawerId) : null;
     if (header && header.classList.contains('is-stuck') && drawer && !drawer.classList.contains('hidden')) {
-        topAnchor = Math.max(topAnchor, Math.ceil(drawer.getBoundingClientRect().bottom + 8));
+        const dRect = drawer.getBoundingClientRect();
+        if (dRect.top < 220) topAnchor = Math.max(topAnchor, Math.ceil(dRect.bottom + 8));
     }
 
     const sections = container.querySelectorAll('.group-section');
@@ -1156,79 +1227,270 @@ function scrollToActiveGroupTop() {
     scroller.scrollTo({ top: target, behavior: 'smooth' });
 }
 
-function _timelineItemClass(isFiltered, isActive, activeSize, inactiveClasses) {
-    if (isFiltered) {
-        return `plum-btn w-full py-0.5 px-1 rounded-full ${activeSize} font-extrabold shadow-sm cursor-pointer transition text-center`;
+function _getTimelineMetrics(scrubber) {
+    const h = (scrubber ? scrubber.clientHeight : 0) || window.innerHeight - 110;
+    const padTop = 16;
+    const padBottom = 16;
+    const usableH = Math.max(60, h - padTop - padBottom);
+    return { h, padTop, padBottom, usableH };
+}
+
+function _buildTimelineSegments() {
+    const total = cachedTimelineTotalDated || cachedTimelineData.reduce((s, y) => s + Number(y.count || 0), 0);
+    const segs = [];
+    if (!total || !cachedTimelineData.length) return { total: 0, segs };
+    cachedTimelineData.forEach(yObj => {
+        const months = Array.isArray(yObj.months) && yObj.months.length
+            ? yObj.months
+            : [{ month: '01', count: yObj.count || 1, offset: yObj.offset || 0 }];
+        months.forEach(mObj => {
+            const cnt = Number(mObj.count || 0);
+            const off = Number(mObj.offset || 0);
+            const mPad = String(mObj.month).padStart(2, '0');
+            const mNum = parseInt(mObj.month, 10);
+            const mName = (typeof SHORT_MONTHS_FR !== 'undefined' && SHORT_MONTHS_FR[mNum]) ? SHORT_MONTHS_FR[mNum] : mPad;
+            segs.push({
+                year: String(yObj.year),
+                month: mPad,
+                label: `${mName} ${yObj.year}`,
+                offset: off,
+                count: cnt,
+                startRatio: off / total,
+                endRatio: (off + cnt) / total,
+            });
+        });
+    });
+    return { total, segs };
+}
+
+function _findTimelineSegmentAtClientY(clientY) {
+    const scrubber = document.getElementById('gallery-timeline-box');
+    const wrapper = document.getElementById('gallery-timeline-wrapper');
+    if (!scrubber || !wrapper || !_timelineMonthSegments.length) return null;
+    const rect = scrubber.getBoundingClientRect();
+    const wrapRect = wrapper.getBoundingClientRect();
+    const { padTop, usableH } = _getTimelineMetrics(scrubber);
+    const relY = Math.max(padTop, Math.min(rect.height - padTop, clientY - rect.top));
+    const ratio = Math.max(0, Math.min(1, (relY - padTop) / usableH));
+    let matched = _timelineMonthSegments[_timelineMonthSegments.length - 1];
+    for (let i = 0; i < _timelineMonthSegments.length; i++) {
+        if (ratio <= _timelineMonthSegments[i].endRatio + 1e-6) {
+            matched = _timelineMonthSegments[i];
+            break;
+        }
     }
-    if (isActive) {
-        return `nav-item-active w-full py-0.5 px-1 rounded-full ${activeSize} font-extrabold shadow-sm cursor-pointer transition text-center`;
+    const indicatorY = Math.max(14, Math.min(wrapRect.height - 14, clientY - wrapRect.top));
+    return { seg: matched, indicatorY, ratio };
+}
+
+function _updateTimelineHoverIndicator(info) {
+    const indicator = document.getElementById('timeline-hover-indicator');
+    const pill = document.getElementById('timeline-hover-pill');
+    if (!indicator || !pill || !info || !info.seg) return;
+    pill.textContent = info.seg.label;
+    indicator.style.top = `${Math.round(info.indicatorY)}px`;
+    indicator.classList.remove('hidden');
+}
+
+function _hideTimelineHoverIndicator() {
+    const indicator = document.getElementById('timeline-hover-indicator');
+    if (indicator) indicator.classList.add('hidden');
+}
+
+function _updateTimelineScrollPositionUI() {
+    const scrubber = document.getElementById('gallery-timeline-box');
+    const container = document.getElementById('timeline-items-container');
+    const marker = document.getElementById('timeline-scroll-marker');
+    if (!scrubber || !container) return;
+
+    const selectedYear = document.getElementById('gal-year')?.value || '';
+    const activeYear = selectedYear || activeScrollTimelineYear || (cachedTimelineData[0] ? String(cachedTimelineData[0].year) : '');
+
+    container.querySelectorAll('.tl-gp-year').forEach(el => {
+        const yVal = el.getAttribute('data-year') || '';
+        const isFiltered = Boolean(selectedYear && yVal === String(selectedYear));
+        const isActive = Boolean(!selectedYear && yVal === String(activeYear));
+        el.classList.toggle('tl-gp-year-filtered', isFiltered);
+        el.classList.toggle('tl-gp-year-active', isActive);
+    });
+
+    if (marker && _timelineMonthSegments.length) {
+        const total = cachedTimelineTotalDated || cachedTimelineData.reduce((s, y) => s + Number(y.count || 0), 0);
+        const matchSeg = _timelineMonthSegments.find(s => s.year === String(activeYear) && (!activeScrollTimelineMonth || s.month === String(activeScrollTimelineMonth)))
+            || _timelineMonthSegments.find(s => s.year === String(activeYear));
+        if (matchSeg || total > 0) {
+            const { padTop, usableH } = _getTimelineMetrics(scrubber);
+            let posRatio = matchSeg ? (matchSeg.startRatio + matchSeg.endRatio) * 0.5 : 0;
+            if (total > 1 && !selectedYear && (document.getElementById('gal-sort-by')?.value || 'date') === 'date') {
+                const liveRatio = Math.max(0, Math.min(1, (currentSkipOffset + activeScrollTileIdx) / (total - 1)));
+                posRatio = liveRatio;
+            }
+            marker.style.top = `${Math.round(padTop + posRatio * usableH)}px`;
+            marker.classList.remove('hidden');
+        } else {
+            marker.classList.add('hidden');
+        }
+    } else if (marker) {
+        marker.classList.add('hidden');
     }
-    return `${inactiveClasses} w-full opacity-45 hover:opacity-100 cursor-pointer py-0.5 px-1 rounded-full hover:bg-[var(--bg-hover)] transition text-center`;
+}
+
+function _scheduleScrubJump(info, immediate = false) {
+    if (!info || !info.seg) return;
+    const total = cachedTimelineTotalDated || cachedTimelineData.reduce((s, y) => s + Number(y.count || 0), 0);
+    const exactOffset = total > 1 ? Math.max(0, Math.min(total - 1, Math.round(info.ratio * (total - 1)))) : 0;
+    if (exactOffset === _lastScrubJumpOffset && !immediate) return;
+    _pendingScrubTarget = { year: info.seg.year, month: info.seg.month, offset: exactOffset };
+    const run = () => {
+        if (!_pendingScrubTarget) return;
+        const tgt = _pendingScrubTarget;
+        _pendingScrubTarget = null;
+        _lastScrubJumpOffset = tgt.offset;
+        _jumpToTimelineOffset(tgt.year, tgt.month, tgt.offset);
+    };
+    if (immediate) {
+        clearTimeout(_timelineScrubTimer);
+        _timelineScrubTimer = null;
+        run();
+        return;
+    }
+    if (!_timelineScrubTimer) {
+        _timelineScrubTimer = setTimeout(() => {
+            _timelineScrubTimer = null;
+            run();
+        }, 90);
+    }
+}
+
+function _initGooglePhotosTimelineScrubber() {
+    if (_timelineEventsBound) return;
+    const scrubber = document.getElementById('gallery-timeline-box');
+    const wrapper = document.getElementById('gallery-timeline-wrapper');
+    if (!scrubber || !wrapper) return;
+    _timelineEventsBound = true;
+
+    scrubber.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+        const info = _findTimelineSegmentAtClientY(e.clientY);
+        if (!info) return;
+        e.preventDefault();
+        if (scrubber.setPointerCapture) {
+            try { scrubber.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+        _isTimelineScrubbing = true;
+        wrapper.classList.add('is-scrubbing');
+        _updateTimelineHoverIndicator(info);
+        _scheduleScrubJump(info, true);
+    });
+
+    scrubber.addEventListener('pointermove', (e) => {
+        const info = _findTimelineSegmentAtClientY(e.clientY);
+        if (!info) return;
+        _updateTimelineHoverIndicator(info);
+        if (_isTimelineScrubbing) {
+            _scheduleScrubJump(info, false);
+        }
+    });
+
+    const endScrub = (e) => {
+        if (!_isTimelineScrubbing) return;
+        _isTimelineScrubbing = false;
+        wrapper.classList.remove('is-scrubbing');
+        if (scrubber.releasePointerCapture && e && e.pointerId !== undefined) {
+            try { scrubber.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+        if (_pendingScrubTarget) {
+            const tgt = _pendingScrubTarget;
+            _pendingScrubTarget = null;
+            clearTimeout(_timelineScrubTimer);
+            _timelineScrubTimer = null;
+            _lastScrubJumpOffset = tgt.offset;
+            _jumpToTimelineOffset(tgt.year, tgt.month, tgt.offset);
+        }
+    };
+    scrubber.addEventListener('pointerup', endScrub);
+    scrubber.addEventListener('pointercancel', endScrub);
+    scrubber.addEventListener('pointerleave', () => {
+        if (!_isTimelineScrubbing) _hideTimelineHoverIndicator();
+    });
+
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => {
+            if (cachedTimelineData.length) renderTimelineScrubberDOM();
+        });
+        ro.observe(scrubber);
+    }
 }
 
 function renderTimelineScrubberDOM() {
+    _initGooglePhotosTimelineScrubber();
     const scrubber = document.getElementById('gallery-timeline-box');
     const container = document.getElementById('timeline-items-container');
     if (!scrubber || !container) return;
 
-    if (!cachedTimelineData.length) {
-        container.classList.remove('justify-between');
-        container.classList.add('justify-center');
-        container.innerHTML = `<span class="text-[9px] opacity-40">—</span>`;
+    const { total, segs } = _buildTimelineSegments();
+    _timelineMonthSegments = segs;
+
+    if (!cachedTimelineData.length || !total) {
+        container.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-[9px] opacity-40">—</span></div>`;
+        _updateTimelineScrollPositionUI();
         return;
     }
 
-    const spreadYears = cachedTimelineData.length > 3;
-    container.classList.remove('justify-center');
-    container.classList.toggle('justify-between', spreadYears);
-    container.classList.toggle('justify-start', !spreadYears);
+    const { padTop, usableH } = _getTimelineMetrics(scrubber);
+    const minGapPx = 24;
+    const rawItems = cachedTimelineData.map(yObj => {
+        const ratio = Math.max(0, Math.min(1, Number(yObj.offset || 0) / total));
+        return { year: String(yObj.year), count: Number(yObj.count || 0), yPx: padTop + ratio * usableH };
+    });
 
-    const selectedYear = document.getElementById('gal-year')?.value || '';
-    const selectedMonth = document.getElementById('gal-month')?.value || '';
-    const expandedYear = selectedYear || activeScrollTimelineYear || cachedTimelineData[0].year;
-    const activeMonth = selectedMonth || (String(expandedYear) === String(activeScrollTimelineYear) ? activeScrollTimelineMonth : '');
-
-    container.innerHTML = cachedTimelineData.map(yObj => {
-        const isYearActive = String(yObj.year) === String(expandedYear);
-        const isYearFiltered = String(yObj.year) === String(selectedYear);
-        const yearBtnClass = _timelineItemClass(isYearFiltered, isYearActive, 'text-[10px]', 'text-[10px] font-extrabold');
-
-        let monthsHtml = '';
-        if (isYearActive && yObj.months && yObj.months.length) {
-            monthsHtml = `<div class="w-full flex flex-col items-center gap-0.5 py-1 px-0.5 mt-0.5 rounded-2xl bg-[var(--bg-pill)]">` +
-                yObj.months.map(mObj => {
-                    const mCode = String(mObj.month).padStart(2, '0');
-                    const mNum = parseInt(mObj.month, 10);
-                    const mName = TIMELINE_MONTHS_FR[mNum] || mCode;
-                    const isMonthFiltered = isYearFiltered && String(selectedMonth) === mCode;
-                    const isMonthVisible = String(activeMonth) === mCode;
-                    const mClass = _timelineItemClass(isMonthFiltered, isMonthVisible, 'text-[9px]', 'text-[9px] font-bold');
-                    return `<div onclick="event.stopPropagation(); selectTimelineMonth('${yObj.year}', '${mCode}')"
-                                 title="${FULL_MONTHS_FR[mNum]} ${yObj.year} (${mObj.count})"
-                                 class="${mClass}">${mName}</div>`;
-                }).join('') +
-            `</div>`;
+    // Répartition anti-chevauchement façon Google Photos : garde la première et la dernière année
+    const placed = [];
+    const totalYears = rawItems.length;
+    const maxY = padTop + usableH;
+    rawItems.forEach((item, i) => {
+        const clampedY = Math.min(maxY, Math.max(padTop, item.yPx));
+        if (i === 0) {
+            placed.push({ ...item, yPx: padTop });
+            return;
         }
+        const isLast = i === totalYears - 1;
+        if (isLast) {
+            while (placed.length > 1 && (maxY - placed[placed.length - 1].yPx) < minGapPx) {
+                placed.pop();
+            }
+            const safeLastY = Math.max(placed[placed.length - 1].yPx + 18, maxY);
+            placed.push({ ...item, yPx: Math.min(maxY + 2, safeLastY) });
+            return;
+        }
+        const prevY = placed[placed.length - 1].yPx;
+        if (clampedY - prevY >= minGapPx && (maxY - clampedY) >= minGapPx) {
+            placed.push({ ...item, yPx: clampedY });
+        }
+    });
 
-        return `
-            <div ${isYearActive ? 'id="tl-active-year"' : ''} class="w-full flex flex-col items-center">
-                <div onclick="event.stopPropagation(); selectTimelineYear('${yObj.year}')"
-                     title="${yObj.year} (${yObj.count} médias)"
-                     class="${yearBtnClass}">
-                    ${yObj.year}
-                </div>
-                ${monthsHtml}
-            </div>
-        `;
-    }).join('');
-
-    const activeYearEl = document.getElementById('tl-active-year');
-    if (activeYearEl && scrubber.scrollHeight > scrubber.clientHeight) {
-        activeYearEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    let html = '';
+    for (let i = 0; i < placed.length; i++) {
+        const cur = placed[i];
+        html += `<span class="tl-gp-year" data-year="${cur.year}" style="top:${Math.round(cur.yPx)}px;" title="${cur.year} (${cur.count} médias)">${cur.year}</span>`;
+        if (i < placed.length - 1) {
+            const next = placed[i + 1];
+            const gap = next.yPx - cur.yPx;
+            if (gap >= 30) {
+                const dots = Math.min(4, Math.floor((gap - 18) / 11));
+                for (let d = 1; d <= dots; d++) {
+                    const dy = cur.yPx + (gap * d) / (dots + 1);
+                    html += `<span class="tl-gp-dot" style="top:${Math.round(dy)}px;"></span>`;
+                }
+            }
+        }
     }
+
+    container.innerHTML = html;
+    _updateTimelineScrollPositionUI();
 }
 
-function _jumpToTimelineOffset(yearStr, monthCode = '') {
+function _jumpToTimelineOffset(yearStr, monthCode = '', overrideOffset = null) {
     const yObj = cachedTimelineData.find(y => String(y.year) === String(yearStr));
     if (!yObj) return;
     let targetOffset = Number(yObj.offset || 0);
@@ -1241,6 +1503,9 @@ function _jumpToTimelineOffset(yearStr, monthCode = '') {
             targetMonth = mPad;
         }
     }
+    if (overrideOffset !== null && overrideOffset >= 0) {
+        targetOffset = overrideOffset;
+    }
 
     // La timeline navigue dans la galerie sans appliquer de filtre année/mois
     const ySel = document.getElementById('gal-year');
@@ -1251,7 +1516,7 @@ function _jumpToTimelineOffset(yearStr, monthCode = '') {
 
     activeScrollTimelineYear = String(yearStr);
     activeScrollTimelineMonth = targetMonth || (yObj.months && yObj.months[0] ? String(yObj.months[0].month).padStart(2, '0') : '');
-    renderTimelineScrubberDOM();
+    _updateTimelineScrollPositionUI();
 
     const sc = document.getElementById('main-scroll-container');
     if (sc) sc.scrollTop = 0;
@@ -2012,34 +2277,520 @@ window.addEventListener('DOMContentLoaded', initInfiniteScrollObserver);
 
 // ==================== CORBEILLE ====================
 
-async function loadTrashTab() {
-    const res = await fetch('/api/trash/items');
-    const d = await res.json();
-    document.getElementById('trash-summary-label').textContent = `${d.items.length} éléments (${d.total_mb} Mo)`;
-    document.getElementById('trash-grid').innerHTML = (d.items||[]).map(it => {
-        const enc = encodeURIComponent(it.source_path);
-        const daysLabel = it.days_left !== null ? `${it.days_left} jours` : 'Manuel';
-        return `
-        <div class="ui-card rounded-3xl overflow-hidden shadow-sm group relative flex flex-col">
-            <div class="aspect-square overflow-hidden relative">
-                <img src="/thumb?path=${encodeURIComponent(it.dest_path)}" loading="lazy" class="w-full h-full object-cover"/>
-                <div class="opacity-0 group-hover:opacity-100 absolute inset-0 bg-black/50 flex items-center justify-center gap-2 transition">
-                    <button onclick="restoreTrash('${enc}')" class="plum-btn text-xs font-bold px-3 py-1.5 rounded-full">Restaurer</button>
-                    <button onclick="deletePermTrash('${enc}')" class="bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-full">✕</button>
-                </div>
-            </div>
-            <div class="py-2 text-center text-xs font-extrabold">${daysLabel}</div>
-        </div>`;
-    }).join('');
+const _trashViewState = {
+    layout: localStorage.getItem('phototo_trash_layout') || 'GRID',
+    size: localStorage.getItem('phototo_trash_size') || 'MD',
+    cache: [],
+    retentionDays: 30,
+};
+let selectedTrashPaths = new Set();
+let lastClickedTrashIdx = null;
+let _trashLastSorted = [];
+
+function syncTrashLayoutSizeButtons() {
+    ['GRID', 'MASONRY', 'LIST'].forEach(l => {
+        const b = document.getElementById(`trash-layout-btn-${l}`);
+        if (b) {
+            b.classList.toggle('nav-item-active', l === _trashViewState.layout);
+            b.classList.toggle('ui-pill', l !== _trashViewState.layout);
+        }
+    });
+    ['SM', 'MD', 'LG'].forEach(s => {
+        const b = document.getElementById(`trash-size-btn-${s}`);
+        if (b) {
+            b.classList.toggle('nav-item-active', s === _trashViewState.size);
+            b.classList.toggle('ui-pill', s !== _trashViewState.size);
+        }
+    });
 }
 
-async function restoreTrash(enc) { await fetch('/api/trash/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({source_paths:[decodeURIComponent(enc)], action:'RESTORE'})}); loadTrashTab(); loadStats(); }
-async function deletePermTrash(enc) { await fetch('/api/trash/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({source_paths:[decodeURIComponent(enc)], action:'DELETE_PERMANENTLY'})}); loadTrashTab(); loadStats(); }
-async function emptyAllTrash() { if(confirm("Vider définitivement la corbeille ?")) { await fetch('/api/trash/empty_all', {method:'POST'}); loadTrashTab(); loadStats(); } }
+function setTrashLayout(layout) {
+    _trashViewState.layout = ['GRID', 'MASONRY', 'LIST'].includes(layout) ? layout : 'GRID';
+    localStorage.setItem('phototo_trash_layout', _trashViewState.layout);
+    syncTrashLayoutSizeButtons();
+    renderTrashFromCache();
+}
 
-// ==================== CATÉGORIES / TYPES ====================
+function setTrashSize(size) {
+    _trashViewState.size = ['SM', 'MD', 'LG'].includes(size) ? size : 'MD';
+    localStorage.setItem('phototo_trash_size', _trashViewState.size);
+    syncTrashLayoutSizeButtons();
+    renderTrashFromCache();
+}
+
+function toggleTrashSortOrder() {
+    _toggleSortOrderInput('trash-sort-order', 'trash-sort-dir-btn', 'trash-sort-arrow', onTrashControlsChanged);
+}
+
+function onTrashControlsChanged() {
+    renderTrashFromCache();
+}
+
+document.addEventListener('DOMContentLoaded', syncTrashLayoutSizeButtons);
+
+function _getTrashGridColsClass() {
+    const { layout, size } = _trashViewState;
+    if (layout === 'LIST') {
+        if (size === 'SM') return 'group-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2';
+        if (size === 'LG') return 'group-grid grid grid-cols-1 lg:grid-cols-2 gap-3.5';
+        return 'group-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5';
+    }
+    if (layout === 'MASONRY') {
+        const sizeCls = size === 'SM' ? 'masonry-sm' : (size === 'LG' ? 'masonry-lg' : '');
+        return `group-grid masonry-grid ${sizeCls}`.trim();
+    }
+    if (size === 'SM') return 'group-grid grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2.5';
+    if (size === 'LG') return 'group-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-5';
+    return 'group-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4';
+}
+
+function _getTrashMasonryColumnCount() {
+    const w = window.innerWidth || 1280;
+    if (_trashViewState.size === 'SM') return w >= 1280 ? 8 : (w >= 768 ? 6 : 3);
+    if (_trashViewState.size === 'LG') return w >= 1280 ? 3 : (w >= 768 ? 2 : 1);
+    return w >= 1280 ? 5 : (w >= 768 ? 4 : 2);
+}
+
+function updateTrashBatchBar() {
+    const bar = document.getElementById('trash-batch-bar');
+    const grid = document.getElementById('trash-grid');
+    const visible = currentTab === 'trash' && selectedTrashPaths.size > 0;
+    if (bar) {
+        bar.classList.toggle('hidden', !visible);
+        const cntEl = document.getElementById('trash-batch-count');
+        if (cntEl) cntEl.textContent = `${selectedTrashPaths.size} sélectionné(s)`;
+    }
+    if (grid) grid.classList.toggle('selection-active', visible);
+    const galHasSel = selectedGalleryPaths.size > 0 && currentTab !== 'trash';
+    document.body.classList.toggle('has-batch-bar', visible || galHasSel);
+    syncBatchBarBounds();
+}
+
+function toggleTrashItemSelect(sortedIdx, event) {
+    if (event) event.stopPropagation();
+    const list = _trashLastSorted || [];
+    const target = list[sortedIdx];
+    if (!target || !target.source_path) return;
+
+    const shouldSelect = !selectedTrashPaths.has(target.source_path);
+    if (event && event.shiftKey && lastClickedTrashIdx !== null && lastClickedTrashIdx < list.length) {
+        const start = Math.min(lastClickedTrashIdx, sortedIdx);
+        const end = Math.max(lastClickedTrashIdx, sortedIdx);
+        for (let i = start; i <= end; i++) {
+            const p = list[i]?.source_path;
+            if (!p) continue;
+            if (shouldSelect) selectedTrashPaths.add(p);
+            else selectedTrashPaths.delete(p);
+        }
+    } else {
+        if (shouldSelect) selectedTrashPaths.add(target.source_path);
+        else selectedTrashPaths.delete(target.source_path);
+    }
+    lastClickedTrashIdx = sortedIdx;
+    renderTrashFromCache();
+}
+
+function toggleSelectAllTrash(forceState) {
+    const items = _trashViewState.cache || [];
+    if (!items.length) return;
+    const willSelect = typeof forceState === 'boolean' ? forceState : (selectedTrashPaths.size < items.length);
+    if (!willSelect) {
+        selectedTrashPaths.clear();
+    } else {
+        items.forEach(it => { if (it.source_path) selectedTrashPaths.add(it.source_path); });
+    }
+    lastClickedTrashIdx = null;
+    renderTrashFromCache();
+}
+
+function toggleTrashGroupSelection(indices) {
+    const list = _trashLastSorted || [];
+    const paths = (indices || []).map(i => list[i]?.source_path).filter(Boolean);
+    if (!paths.length) return;
+    const allSel = paths.every(p => selectedTrashPaths.has(p));
+    paths.forEach(p => {
+        if (allSel) selectedTrashPaths.delete(p);
+        else selectedTrashPaths.add(p);
+    });
+    renderTrashFromCache();
+}
+
+function openLightboxForTrashItem(sortedIdx) {
+    const list = _trashLastSorted || [];
+    if (!list.length) return;
+    lightboxIsCustomItem = true;
+    currentLightboxDupGroup = null;
+    currentGalleryItems = list.filter(Boolean).map(it => ({ ...it, _isTrashContext: true }));
+    const safeIdx = Math.max(0, Math.min(sortedIdx, currentGalleryItems.length - 1));
+    openLightbox(safeIdx);
+}
+
+function _renderTrashCard(it, sortedIdx) {
+    const enc = encodeURIComponent(it.source_path);
+    const fname = _escTileText((it.dest_path || it.source_path || '').split(/[\\/]/).pop() || 'Média');
+    const thumbUrl = `/thumb?path=${encodeURIComponent(it.dest_path)}`;
+    const isSel = Boolean(it.source_path && selectedTrashPaths.has(it.source_path));
+    const layout = _trashViewState.layout;
+    const size = _trashViewState.size;
+    const isVid = isVideoFile(it.dest_path);
+    const durText = formatDuration(it.duration_sec);
+    const dim = (it.width && it.height) ? `${it.width}×${it.height}` : '';
+    const mb = _formatBytesShort(it.file_size);
+    const tsDate = it.trashed_at || it.timestamp || it.modified_at || 0;
+    const dateTxt = tsDate ? new Date(tsDate * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    const daysLeft = it.days_left;
+    const daysLabel = daysLeft === null || daysLeft === undefined
+        ? 'Manuel'
+        : (daysLeft === 0 ? "0 j" : `${daysLeft} j`);
+    const isUrgent = daysLeft !== null && daysLeft !== undefined && daysLeft <= 3;
+
+    const selectBtn = `
+        <button type="button"
+                onclick="event.stopPropagation(); toggleTrashItemSelect(${sortedIdx}, event)"
+                title="Sélectionner"
+                class="tile-select-btn absolute top-2.5 left-2.5 z-10 cursor-pointer">
+            ${getSelectIconHTML(isSel, false)}
+        </button>`;
+    const daysBadge = `
+        <span title="${daysLeft === null ? 'Conservation manuelle' : (daysLeft === 0 ? "Expire aujourd'hui" : `${daysLeft} jour(s) avant suppression définitive`)}"
+              class="absolute top-2.5 right-2.5 z-10 ${isUrgent ? 'bg-rose-600/85 text-white' : 'bg-black/35 text-white/95'} backdrop-blur-sm text-[10px] font-bold px-2 py-0.5 rounded-full pointer-events-none">
+            ${daysLabel}
+        </span>`;
+    const videoBadge = isVid
+        ? `<div class="absolute bottom-2.5 left-2.5 z-10 bg-black/30 backdrop-blur-sm text-white/95 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
+             <svg class="w-2.5 h-2.5 opacity-90" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+             <span>${durText}</span>
+           </div>`
+        : '';
+    const hoverActions = `
+        <div class="opacity-0 group-hover:opacity-100 absolute bottom-2 right-2 z-10 flex items-center gap-1 transition">
+            <button type="button" onclick="event.stopPropagation(); restoreTrash('${enc}')" title="Restaurer"
+                    class="w-7 h-7 rounded-full bg-black/50 hover:bg-emerald-500/85 backdrop-blur-md text-white flex items-center justify-center transition cursor-pointer shadow">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+            <button type="button" onclick="event.stopPropagation(); deletePermTrash('${enc}')" title="Supprimer définitivement"
+                    class="w-7 h-7 rounded-full bg-black/50 hover:bg-rose-600 backdrop-blur-md text-white flex items-center justify-center text-[11px] font-extrabold transition cursor-pointer shadow">
+                ✕
+            </button>
+        </div>`;
+
+    if (layout === 'LIST') {
+        const thumbSizeCls = size === 'SM' ? 'w-11 h-11 rounded-xl' : (size === 'LG' ? 'w-24 h-24 rounded-2xl' : 'w-16 h-16 rounded-2xl');
+        const padCls = size === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (size === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
+        const titleCls = size === 'SM' ? 'text-xs' : (size === 'LG' ? 'text-base' : 'text-sm');
+        const listSelBorder = isSel ? 'tile-selected-list' : '';
+        const metaParts = [dateTxt, dim, mb].filter(Boolean).join(' • ');
+
+        return `
+        <div onclick="openLightboxForTrashItem(${sortedIdx})"
+             class="media-tile ui-card group flex items-center ${padCls} cursor-pointer shadow-sm transition-all duration-150 ${listSelBorder}">
+            <button type="button" onclick="event.stopPropagation(); toggleTrashItemSelect(${sortedIdx}, event)" title="Sélectionner"
+                    class="tile-select-btn shrink-0 cursor-pointer">
+                ${getSelectIconHTML(isSel, true)}
+            </button>
+            <div class="relative shrink-0 ${thumbSizeCls} overflow-hidden bg-black/10">
+                <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-full object-cover select-none pointer-events-none"/>
+                ${isVid ? `<span class="absolute bottom-1 left-1 bg-black/35 backdrop-blur-sm text-white/95 text-[9px] font-semibold tabular-nums px-1.5 py-[1px] rounded-full pointer-events-none">${durText}</span>` : ''}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-bold truncate ${titleCls}">${fname}</span>
+                    <span class="${isUrgent ? 'bg-rose-500/20 text-rose-400' : 'ui-pill opacity-75'} text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0">${daysLabel}</span>
+                </div>
+                <div class="text-[11px] opacity-65 truncate mt-0.5">${metaParts || 'Supprimé'}</div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="event.stopPropagation(); restoreTrash('${enc}')" title="Restaurer"
+                        class="w-8 h-8 rounded-full ui-pill hover:bg-emerald-500/20 hover:text-emerald-400 flex items-center justify-center transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                </button>
+                <button type="button" onclick="event.stopPropagation(); deletePermTrash('${enc}')" title="Supprimer définitivement"
+                        class="w-8 h-8 rounded-full ui-pill hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center text-xs font-extrabold transition cursor-pointer">
+                    ✕
+                </button>
+            </div>
+        </div>`;
+    }
+
+    if (layout === 'MASONRY') {
+        const aspectStyle = (it.width && it.height) ? `aspect-ratio: ${it.width} / ${it.height};` : '';
+        return `
+        <div onclick="openLightboxForTrashItem(${sortedIdx})" style="${aspectStyle}"
+             class="media-tile masonry-item ui-card group relative w-full rounded-lg overflow-hidden cursor-pointer shadow-sm transition-all duration-150 ${isSel ? 'tile-selected' : ''}">
+            <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-auto block group-hover:scale-[1.02] transition duration-300 select-none pointer-events-none"/>
+            ${selectBtn}
+            ${daysBadge}
+            ${videoBadge}
+            ${hoverActions}
+        </div>`;
+    }
+
+    return `
+    <div onclick="openLightboxForTrashItem(${sortedIdx})"
+         class="media-tile ui-card group relative aspect-square rounded-[24px] overflow-hidden cursor-pointer shadow-sm transition-all duration-150 ${isSel ? 'tile-selected' : ''}">
+        <img src="${thumbUrl}" loading="lazy" decoding="async" class="w-full h-full object-cover group-hover:scale-[1.03] transition duration-300 select-none pointer-events-none"/>
+        ${selectBtn}
+        ${daysBadge}
+        ${videoBadge}
+        ${hoverActions}
+    </div>`;
+}
+
+function _buildTrashMasonryHtml(entries) {
+    const colCount = _getTrashMasonryColumnCount();
+    const colsHtml = Array.from({ length: colCount }, () => []);
+    const heights = new Array(colCount).fill(0);
+    entries.forEach(({ it, idx }) => {
+        let bestCol = 0;
+        for (let c = 1; c < colCount; c++) {
+            if (heights[c] < heights[bestCol] - 1e-6) bestCol = c;
+        }
+        const ratio = (it.width && it.height && it.width > 0) ? (it.height / it.width) : 1.0;
+        heights[bestCol] += ratio;
+        colsHtml[bestCol].push(_renderTrashCard(it, idx));
+    });
+    return colsHtml.map(buf => `<div class="masonry-col">${buf.join('')}</div>`).join('');
+}
+
+function renderTrashFromCache() {
+    const grid = document.getElementById('trash-grid');
+    if (!grid) return;
+    const items = _trashViewState.cache || [];
+    updateTrashBatchBar();
+
+    if (!items.length) {
+        _trashLastSorted = [];
+        const rDays = Number(_trashViewState.retentionDays ?? 30);
+        const retInfo = rDays > 0
+            ? `Les médias mis à la corbeille sont conservés ${rDays} jours avant suppression définitive.`
+            : 'La suppression automatique est désactivée (conservation manuelle uniquement).';
+        grid.className = 'pb-10';
+        grid.innerHTML = `
+        <div class="ui-card rounded-3xl p-10 text-center space-y-3.5 shadow-sm">
+            <div class="w-14 h-14 rounded-2xl ui-pill mx-auto flex items-center justify-center opacity-75">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                </svg>
+            </div>
+            <div class="text-base font-extrabold">La corbeille est vide</div>
+            <p class="text-xs opacity-65 max-w-md mx-auto leading-relaxed">${retInfo}</p>
+            <button type="button" onclick="openPageSettingsModal('trash')" class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer">
+                Configurer la durée de conservation
+            </button>
+        </div>`;
+        if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+        return;
+    }
+
+    const sortBy = document.getElementById('trash-sort-by')?.value || 'trashed_at';
+    const sortOrder = document.getElementById('trash-sort-order')?.value || 'desc';
+    const groupBy = document.getElementById('trash-group-by')?.value || 'NONE';
+    const dir = sortOrder === 'asc' ? 1 : -1;
+
+    const sorted = [...items].sort((a, b) => {
+        if (sortBy === 'name') {
+            const na = (a.dest_path || a.source_path || '').split(/[\\/]/).pop() || '';
+            const nb = (b.dest_path || b.source_path || '').split(/[\\/]/).pop() || '';
+            return dir * na.localeCompare(nb, 'fr', { sensitivity: 'base' });
+        }
+        if (sortBy === 'size') {
+            return dir * (Number(a.file_size || 0) - Number(b.file_size || 0));
+        }
+        if (sortBy === 'days_left') {
+            const da = a.days_left ?? 999999;
+            const db = b.days_left ?? 999999;
+            return dir * (da - db);
+        }
+        if (sortBy === 'date') {
+            return dir * (Number(a.timestamp || a.modified_at || 0) - Number(b.timestamp || b.modified_at || 0));
+        }
+        return dir * (Number(a.trashed_at || 0) - Number(b.trashed_at || 0));
+    });
+    _trashLastSorted = sorted;
+
+    const colsCls = _getTrashGridColsClass();
+    const isMasonry = _trashViewState.layout === 'MASONRY';
+    const hasSel = selectedTrashPaths.size > 0 && currentTab === 'trash';
+    grid.className = `space-y-6 pb-10 ${hasSel ? 'selection-active' : ''}`.trim();
+
+    if (groupBy !== 'NONE') {
+        const sections = [];
+        const secMap = new Map();
+        sorted.forEach((it, idx) => {
+            const ts = sortBy === 'date' ? (it.timestamp || it.modified_at || 0) : (it.trashed_at || it.timestamp || 0);
+            const label = formatGroupHeading(ts, groupBy);
+            if (!secMap.has(label)) {
+                const sec = { label, entries: [] };
+                secMap.set(label, sec);
+                sections.push(sec);
+            }
+            secMap.get(label).entries.push({ it, idx });
+        });
+        grid.innerHTML = sections.map(sec => {
+            const idxList = sec.entries.map(e => e.idx);
+            const allGrpSel = sec.entries.length > 0 && sec.entries.every(e => e.it.source_path && selectedTrashPaths.has(e.it.source_path));
+            const innerHtml = isMasonry
+                ? _buildTrashMasonryHtml(sec.entries)
+                : sec.entries.map(({ it, idx }) => _renderTrashCard(it, idx)).join('');
+            return `
+            <section class="group-section space-y-3">
+                <div class="group-header flex items-center justify-between gap-2 pb-1">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <button type="button" onclick="toggleTrashGroupSelection(${JSON.stringify(idxList)})"
+                                title="Tout sélectionner / désélectionner dans ce groupe"
+                                class="group-section-select-btn shrink-0 cursor-pointer">
+                            ${getSelectIconHTML(allGrpSel, true)}
+                        </button>
+                        <h2 class="group-section-title text-lg font-extrabold tracking-tight truncate">${_escTileText(sec.label)}</h2>
+                    </div>
+                    <span class="text-xs font-bold opacity-55 shrink-0">${sec.entries.length}</span>
+                </div>
+                <div class="${colsCls}">${innerHtml}</div>
+            </section>`;
+        }).join('');
+    } else {
+        const entries = sorted.map((it, idx) => ({ it, idx }));
+        const innerHtml = isMasonry
+            ? _buildTrashMasonryHtml(entries)
+            : entries.map(({ it, idx }) => _renderTrashCard(it, idx)).join('');
+        grid.innerHTML = `<div class="${colsCls}">${innerHtml}</div>`;
+    }
+    if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+}
+
+async function loadTrashTab() {
+    const res = await fetch('/api/trash/items');
+    if (!res.ok) return;
+    const d = await res.json();
+    _trashViewState.cache = d.items || [];
+    _trashViewState.retentionDays = d.retention_days ?? 30;
+    const validPaths = new Set(_trashViewState.cache.map(it => it.source_path));
+    for (const p of [...selectedTrashPaths]) {
+        if (!validPaths.has(p)) selectedTrashPaths.delete(p);
+    }
+
+    const sumEl = document.getElementById('trash-summary-label');
+    if (sumEl) {
+        const cnt = _trashViewState.cache.length;
+        sumEl.textContent = `${cnt} élément${cnt > 1 ? 's' : ''} (${d.total_mb} Mo)`;
+    }
+    const retBadge = document.getElementById('trash-retention-badge');
+    if (retBadge) {
+        const rd = Number(_trashViewState.retentionDays);
+        retBadge.textContent = rd > 0 ? `Conservation : ${rd} j` : 'Conservation : illimitée';
+    }
+    const hasItems = _trashViewState.cache.length > 0;
+    document.getElementById('trash-restore-all-btn')?.classList.toggle('hidden', !hasItems);
+    document.getElementById('trash-empty-btn')?.classList.toggle('hidden', !hasItems);
+
+    syncTrashLayoutSizeButtons();
+    renderTrashFromCache();
+}
+
+async function _runTrashBatchAction(paths, action, successMsg) {
+    if (!paths || !paths.length) return;
+    const res = await fetch('/api/trash/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_paths: paths, action })
+    });
+    if (!res.ok) return;
+    paths.forEach(p => selectedTrashPaths.delete(p));
+    lastClickedTrashIdx = null;
+    if (successMsg && typeof showAppToast === 'function') showAppToast(successMsg, 'success');
+    await loadTrashTab();
+    loadStats();
+}
+
+async function restoreTrash(enc) {
+    await _runTrashBatchAction([decodeURIComponent(enc)], 'RESTORE', 'Élément restauré.');
+}
+
+async function restoreSelectedTrash() {
+    const paths = Array.from(selectedTrashPaths);
+    if (!paths.length) return;
+    await _runTrashBatchAction(paths, 'RESTORE', `${paths.length} élément${paths.length > 1 ? 's' : ''} restauré${paths.length > 1 ? 's' : ''}.`);
+}
+
+async function restoreAllTrash() {
+    const paths = (_trashViewState.cache || []).map(it => it.source_path).filter(Boolean);
+    if (!paths.length) return;
+    await _runTrashBatchAction(paths, 'RESTORE', `${paths.length} élément${paths.length > 1 ? 's' : ''} restauré${paths.length > 1 ? 's' : ''}.`);
+}
+
+async function deletePermTrash(enc) {
+    if (!confirm("Supprimer définitivement cet élément ? Cette action est irréversible.")) return;
+    await _runTrashBatchAction([decodeURIComponent(enc)], 'DELETE_PERMANENTLY', 'Élément supprimé définitivement.');
+}
+
+async function deleteSelectedTrashPermanently() {
+    const paths = Array.from(selectedTrashPaths);
+    if (!paths.length) return;
+    if (!confirm(`Supprimer définitivement ${paths.length} élément${paths.length > 1 ? 's' : ''} ? Cette action est irréversible.`)) return;
+    await _runTrashBatchAction(paths, 'DELETE_PERMANENTLY', `${paths.length} élément${paths.length > 1 ? 's' : ''} supprimé${paths.length > 1 ? 's' : ''} définitivement.`);
+}
+
+async function emptyAllTrash() {
+    if (!confirm("Vider définitivement la corbeille ?")) return;
+    const res = await fetch('/api/trash/empty_all', { method: 'POST' });
+    if (res.ok) {
+        selectedTrashPaths.clear();
+        lastClickedTrashIdx = null;
+        if (typeof showAppToast === 'function') showAppToast('Corbeille vidée.', 'info');
+    }
+    loadTrashTab();
+    loadStats();
+}
+
+// ==================== CATÉGORIES & STATISTIQUES ====================
 
 let _openedCategoryId = null;
+let typesLayout = localStorage.getItem('phototo_types_layout') || 'GRID';
+let typesSize = localStorage.getItem('phototo_types_size') || 'MD';
+let _smartCategoriesCache = { categories: [], ai_indexed: 0 };
+
+function syncTypesLayoutSizeButtons() {
+    ['GRID', 'LIST'].forEach(m => {
+        const b = document.getElementById(`types-layout-btn-${m}`);
+        if (b) {
+            b.className = typesLayout === m
+                ? 'w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition'
+                : 'w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition';
+        }
+    });
+    ['SM', 'MD', 'LG'].forEach(s => {
+        const b = document.getElementById(`types-size-btn-${s}`);
+        if (b) {
+            b.className = typesSize === s
+                ? 'nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer'
+                : 'ui-pill px-2.5 py-1 rounded-full transition cursor-pointer';
+        }
+    });
+}
+
+function setTypesLayout(layout) {
+    typesLayout = layout === 'LIST' ? 'LIST' : 'GRID';
+    localStorage.setItem('phototo_types_layout', typesLayout);
+    syncTypesLayoutSizeButtons();
+    renderSmartCategoriesFromCache();
+}
+
+function setTypesSize(size) {
+    typesSize = ['SM', 'MD', 'LG'].includes(size) ? size : 'MD';
+    localStorage.setItem('phototo_types_size', typesSize);
+    syncTypesLayoutSizeButtons();
+    renderSmartCategoriesFromCache();
+}
+
+function toggleTypesSortOrder() {
+    if (typeof _toggleSortOrderInput === 'function') {
+        _toggleSortOrderInput('types-sort-order', 'types-sort-dir-btn', 'types-sort-arrow', () => onTypesControlsChanged());
+    }
+}
+
+function onTypesControlsChanged() {
+    renderSmartCategoriesFromCache();
+}
 
 function toggleFormatsPanel(forceState) {
     const panel = document.getElementById('types-formats-panel');
@@ -2051,107 +2802,631 @@ function toggleFormatsPanel(forceState) {
 }
 
 function _renderTypesPills(c = {}, extCount = 0) {
+    const fmtGb = (v) => `${String(Number(v || 0).toFixed(2)).replace('.', ',')} Go`;
     const pills = [
         {
             id: 'PHOTOS',
             title: 'Photos',
+            sub: c.PHOTOS ? fmtGb(c.PHOTOS.gb) : 'Images fixes',
             count: (c.PHOTOS?.count ?? '...'),
             onclick: "filterGalleryByType('PHOTOS')",
-            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`
+            icon: `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`
         },
         {
             id: 'VIDEOS',
             title: 'Vidéos',
+            sub: c.VIDEOS ? fmtGb(c.VIDEOS.gb) : 'Séquences vidéo',
             count: (c.VIDEOS?.count ?? '...'),
             onclick: "filterGalleryByType('VIDEOS')",
-            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 12h20"/></svg>`
+            icon: `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 12h20"/></svg>`
         },
         {
             id: 'ANIMATED',
             title: 'Images animées',
+            sub: c.ANIMATED ? fmtGb(c.ANIMATED.gb) : 'GIF, WebP, Live',
             count: (c.ANIMATED?.count ?? '...'),
             onclick: "filterGalleryByType('ANIMATED')",
-            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>`
+            icon: `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>`
         },
         {
             id: 'FORMATS',
             title: 'Formats',
+            sub: 'Extensions détectées',
             count: extCount,
             onclick: "toggleFormatsPanel()",
-            icon: `<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`
+            icon: `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`
         }
     ];
     const grid = document.getElementById('types-cards-grid');
     if (grid) {
         grid.innerHTML = pills.map(k => `
             <button id="type-pill-${k.id}" type="button" onclick="${k.onclick}"
-                    class="ui-card rounded-2xl px-5 py-3 cursor-pointer hover:scale-[1.02] transition shadow-sm flex items-center gap-2.5 text-xs font-extrabold">
-                ${k.icon}
-                <span>${k.title}</span>
-                <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-75">${k.count}</span>
+                    class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 flex items-center justify-between gap-3 text-left shadow-sm transition group cursor-pointer">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-2xl ui-pill flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                        ${k.icon}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold truncate">${k.title}</div>
+                        <div class="text-[11px] opacity-60 font-semibold truncate">${k.sub}</div>
+                    </div>
+                </div>
+                <span class="ui-pill px-2.5 py-1 rounded-full text-xs font-extrabold tabular-nums shrink-0">${k.count}</span>
             </button>
         `).join('');
     }
 }
 
+function renderStatsTypeBreakdown(c = {}) {
+    const barEl = document.getElementById('stats-type-bar');
+    const listEl = document.getElementById('stats-type-breakdown');
+    const totEl = document.getElementById('stats-type-total');
+    if (!barEl || !listEl) return;
+
+    const rows = [
+        { key: 'PHOTOS', label: 'Photos', color: 'bg-sky-500' },
+        { key: 'VIDEOS', label: 'Vidéos', color: 'bg-violet-500' },
+        { key: 'ANIMATED', label: 'Images animées', color: 'bg-emerald-500' },
+        { key: 'RAW', label: 'RAW', color: 'bg-amber-500' },
+        { key: 'SCREENSHOTS', label: "Captures d'écran", color: 'bg-rose-500' }
+    ].map(r => ({
+        ...r,
+        count: Number(c[r.key]?.count || 0),
+        gb: Number(c[r.key]?.gb || 0)
+    }));
+
+    const totalCount = rows.reduce((acc, r) => acc + r.count, 0);
+    const totalGb = rows.reduce((acc, r) => acc + r.gb, 0);
+    if (totEl) totEl.textContent = `${String(totalGb.toFixed(2)).replace('.', ',')} Go`;
+
+    if (totalCount === 0) {
+        barEl.innerHTML = '';
+        listEl.innerHTML = `<div class="text-xs opacity-60 font-semibold py-2">Aucun média indexé pour le moment.</div>`;
+        return;
+    }
+
+    barEl.innerHTML = rows.filter(r => r.count > 0).map(r => {
+        const pct = Math.max(2, (r.count / totalCount) * 100);
+        return `<div class="${r.color} h-full transition-all" style="width:${pct.toFixed(1)}%" title="${r.label}: ${r.count}"></div>`;
+    }).join('');
+
+    listEl.innerHTML = rows.map(r => {
+        const pct = totalCount > 0 ? ((r.count / totalCount) * 100).toFixed(1).replace('.', ',') : '0,0';
+        const gbTxt = String(r.gb.toFixed(2)).replace('.', ',');
+        return `
+            <div class="flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-2.5 h-2.5 rounded-full ${r.color} shrink-0"></span>
+                    <span class="font-bold truncate">${r.label}</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 tabular-nums">
+                    <span class="font-extrabold">${r.count}</span>
+                    <span class="opacity-50">·</span>
+                    <span class="opacity-70 font-semibold">${gbTxt} Go</span>
+                    <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-80">${pct} %</span>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function renderStatsCoverage(d = {}) {
+    const el = document.getElementById('stats-coverage-list');
+    if (!el) return;
+    const cov = d.coverage || {};
+    const items = [
+        { label: 'Doublons exacts (BLAKE3)', data: cov.dedup },
+        { label: 'Médias similaires (pHash / Vidéo)', data: cov.similar },
+        { label: 'Texte OCR', data: cov.ocr },
+        { label: 'Indexation IA visuelle (CLIP)', data: cov.clip },
+        { label: 'Détection des visages', data: cov.faces }
+    ];
+    const barsHtml = items.map(it => {
+        const c = it.data || { done: 0, total: 0, percent: 0 };
+        const pct = Math.max(0, Math.min(100, Number(c.percent || 0)));
+        return `
+            <div class="space-y-1">
+                <div class="flex items-center justify-between text-[11px] font-bold">
+                    <span class="opacity-85">${it.label}</span>
+                    <span class="tabular-nums opacity-70">${c.done || 0} / ${c.total || 0} (${pct} %)</span>
+                </div>
+                <div class="h-2 rounded-full ui-pill overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-300" style="width:${pct}%; background-color: var(--accent);"></div>
+                </div>
+            </div>`;
+    }).join('');
+
+    const extrasHtml = `
+        <div class="pt-2 border-t border-[var(--border-subtle)] grid grid-cols-3 gap-2">
+            <button type="button" onclick="switchTab('dups')" class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl p-2.5 text-center transition cursor-pointer">
+                <div class="text-xs font-extrabold tabular-nums">${Number(d.duplicates || 0)}</div>
+                <div class="text-[10px] opacity-65 font-semibold truncate">Doublons</div>
+            </button>
+            <button type="button" onclick="switchTab('similar')" class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl p-2.5 text-center transition cursor-pointer">
+                <div class="text-xs font-extrabold tabular-nums">${Number(d.similar_count || 0)}</div>
+                <div class="text-[10px] opacity-65 font-semibold truncate">Similaires</div>
+            </button>
+            <button type="button" onclick="switchTab('sug-missing_meta')" class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl p-2.5 text-center transition cursor-pointer">
+                <div class="text-xs font-extrabold tabular-nums">${Number(d.missing_meta || 0)}</div>
+                <div class="text-[10px] opacity-65 font-semibold truncate">Sans date</div>
+            </button>
+        </div>`;
+
+    el.innerHTML = `${barsHtml}${extrasHtml}`;
+}
+
+let _statsDetailedCache = null;
+let _statsGranularity = 'years';
+let _statsOrderMode = 'recent';
+let _statsMetricMode = 'count';
+
+function _formatStatsBytes(bytes) {
+    const b = Number(bytes || 0);
+    if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(2).replace('.', ',')} Go`;
+    if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
+    if (b >= 1024) return `${Math.round(b / 1024)} Ko`;
+    return `${b} o`;
+}
+
+function _formatStatsVideoDuration(sec) {
+    const total = Math.max(0, Math.round(Number(sec || 0)));
+    if (total === 0) return '0 s';
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (hrs > 0) return `${hrs} h ${String(mins).padStart(2, '0')} min`;
+    if (mins > 0) return `${mins} min ${String(s).padStart(2, '0')} s`;
+    return `${s} s`;
+}
+
+function _syncStatsSegButtons(prefix, activeVal, values) {
+    values.forEach(v => {
+        const b = document.getElementById(`${prefix}-${v}`);
+        if (!b) return;
+        b.className = v === activeVal
+            ? 'nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer'
+            : 'px-2.5 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer';
+    });
+}
+
+function setStatsGranularity(gran) {
+    if (!['years', 'months', 'weeks', 'days'].includes(gran)) return;
+    _statsGranularity = gran;
+    ['years', 'months', 'weeks', 'days'].forEach(v => {
+        const b = document.getElementById(`stats-gran-${v}`);
+        if (!b) return;
+        b.className = v === gran
+            ? 'nav-item-active px-3 py-1 rounded-full transition cursor-pointer'
+            : 'px-3 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer';
+    });
+    renderStatsPeriodSection();
+}
+
+function setStatsOrderMode(mode) {
+    _statsOrderMode = mode === 'top' ? 'top' : 'recent';
+    _syncStatsSegButtons('stats-order', _statsOrderMode, ['recent', 'top']);
+    renderStatsPeriodSection();
+}
+
+function setStatsMetricMode(mode) {
+    _statsMetricMode = mode === 'bytes' ? 'bytes' : 'count';
+    _syncStatsSegButtons('stats-metric', _statsMetricMode, ['count', 'bytes']);
+    renderStatsPeriodSection();
+}
+
+function renderStatsPeriodSection() {
+    const chartEl = document.getElementById('stats-period-chart');
+    const listEl = document.getElementById('stats-period-list');
+    if (!chartEl || !listEl) return;
+
+    const raw = (_statsDetailedCache && Array.isArray(_statsDetailedCache[_statsGranularity]))
+        ? [..._statsDetailedCache[_statsGranularity]]
+        : [];
+    const metric = _statsMetricMode;
+    const isTop = _statsOrderMode === 'top';
+
+    if (isTop) {
+        raw.sort((a, b) => (Number(b[metric] || 0) - Number(a[metric] || 0)) || String(b.key).localeCompare(String(a.key)));
+    } else {
+        raw.sort((a, b) => String(b.key).localeCompare(String(a.key)));
+    }
+
+    if (!raw.length) {
+        chartEl.innerHTML = `<div class="w-full text-center text-xs opacity-60 font-semibold self-center">Aucune donnée datée pour afficher cette chronologie.</div>`;
+        listEl.innerHTML = '';
+        return;
+    }
+
+    const chartSlice = raw.slice(0, 18);
+    if (!isTop) chartSlice.reverse();
+    const maxVal = Math.max(1, ...chartSlice.map(x => Number(x[metric] || 0)));
+
+    chartEl.innerHTML = chartSlice.map(it => {
+        const val = Number(it[metric] || 0);
+        const hPct = Math.max(8, Math.round((val / maxVal) * 100));
+        const pRatio = it.count > 0 ? Math.round(((it.photos + it.animated) / it.count) * 100) : 100;
+        const vRatio = Math.max(0, 100 - pRatio);
+        const valLbl = metric === 'bytes' ? _formatStatsBytes(it.bytes) : String(it.count);
+        const shortLbl = _statsGranularity === 'years'
+            ? it.key
+            : (_statsGranularity === 'months' ? `${it.sub || ''} ${it.key.slice(2, 4)}`.trim()
+            : (_statsGranularity === 'weeks' ? `S${it.key.slice(-2)}` : it.key.slice(5)));
+        const tip = `${it.label} : ${it.count} média(s) (${_formatStatsBytes(it.bytes)})`;
+        return `
+            <button type="button" onclick="filterGalleryByPeriod('${it.date_from}', '${it.date_to}')" title="${_escTileText(tip)}"
+                    class="flex-1 min-w-[34px] max-w-[68px] h-full flex flex-col items-center justify-end gap-1 group cursor-pointer">
+                <span class="text-[9px] font-extrabold opacity-65 group-hover:opacity-100 tabular-nums truncate w-full text-center">${valLbl}</span>
+                <div class="w-full max-w-[26px] rounded-t-xl overflow-hidden flex flex-col justify-end transition-transform group-hover:scale-105" style="height:${Math.round(hPct * 0.72)}%;">
+                    ${vRatio > 0 ? `<div class="w-full bg-violet-500/85" style="height:${vRatio}%"></div>` : ''}
+                    ${pRatio > 0 ? `<div class="w-full" style="height:${pRatio}%; background-color: var(--accent);"></div>` : ''}
+                </div>
+                <span class="text-[9px] font-bold opacity-60 group-hover:opacity-100 truncate w-full text-center">${_escTileText(shortLbl)}</span>
+            </button>`;
+    }).join('');
+
+    const listMax = Math.max(1, ...raw.map(x => Number(x[metric] || 0)));
+    listEl.innerHTML = raw.slice(0, 60).map(it => {
+        const val = Number(it[metric] || 0);
+        const pct = Math.max(4, Math.round((val / listMax) * 100));
+        const parts = [];
+        if (it.photos > 0) parts.push(`${it.photos} photo${it.photos > 1 ? 's' : ''}`);
+        if (it.videos > 0) parts.push(`${it.videos} vidéo${it.videos > 1 ? 's' : ''}`);
+        if (it.animated > 0) parts.push(`${it.animated} anim.`);
+        return `
+            <button type="button" onclick="filterGalleryByPeriod('${it.date_from}', '${it.date_to}')"
+                    class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl p-3 text-left space-y-1.5 transition cursor-pointer group">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold truncate group-hover:underline">${_escTileText(it.label)}</div>
+                        <div class="text-[10px] opacity-60 font-semibold truncate">${_escTileText(it.sub ? `${it.sub} · ` : '')}${parts.join(' · ') || '0 média'}</div>
+                    </div>
+                    <div class="text-right shrink-0 tabular-nums">
+                        <div class="text-xs font-extrabold">${it.count}</div>
+                        <div class="text-[10px] opacity-65 font-semibold">${_formatStatsBytes(it.bytes)}</div>
+                    </div>
+                </div>
+                <div class="h-1.5 w-full rounded-full bg-black/15 overflow-hidden">
+                    <div class="h-full rounded-full" style="width:${pct}%; background-color: var(--accent);"></div>
+                </div>
+            </button>`;
+    }).join('');
+}
+
+function _renderStatsMiniColumns(containerEl, items, labelFn, titleFn) {
+    if (!containerEl) return;
+    if (!items || !items.length) {
+        containerEl.innerHTML = `<div class="w-full text-center text-xs opacity-60 self-center">Aucune donnée.</div>`;
+        return;
+    }
+    const maxC = Math.max(1, ...items.map(x => Number(x.count || 0)));
+    containerEl.innerHTML = items.map(it => {
+        const c = Number(it.count || 0);
+        const hPct = c > 0 ? Math.max(10, Math.round((c / maxC) * 100)) : 4;
+        const lbl = labelFn(it);
+        return `
+            <div title="${_escTileText(titleFn(it))}" class="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1 group">
+                <div class="w-full rounded-t-md transition-opacity ${c > 0 ? 'opacity-85 group-hover:opacity-100' : 'opacity-20'}"
+                     style="height:${Math.round(hPct * 0.78)}%; background-color: var(--accent);"></div>
+                <span class="text-[9px] font-bold opacity-60 truncate w-full text-center">${_escTileText(lbl)}</span>
+            </div>`;
+    }).join('');
+}
+
+function renderStatsDetailedSections(det) {
+    _statsDetailedCache = det || null;
+    if (!det) return;
+
+    const sum = det.summary || {};
+    const gbSpanEl = document.getElementById('stats-kpi-gb');
+    if (gbSpanEl) {
+        let spanStr = `${String(sum.total_gb ?? '0,00').replace('.', ',')} Go`;
+        if (sum.first_ts && sum.last_ts) {
+            const y1 = new Date(sum.first_ts * 1000).getFullYear();
+            const y2 = new Date(sum.last_ts * 1000).getFullYear();
+            spanStr += y1 === y2 ? ` · ${y1}` : ` · ${y1}–${y2}`;
+        }
+        gbSpanEl.textContent = spanStr;
+    }
+
+    renderStatsPeriodSection();
+
+    // Jours de la semaine
+    const wds = det.weekdays || [];
+    const maxWd = Math.max(1, ...wds.map(x => Number(x.count || 0)));
+    const bestWd = wds.reduce((best, cur) => (!best || cur.count > best.count ? cur : best), null);
+    const wdPeakEl = document.getElementById('stats-weekday-peak');
+    if (wdPeakEl) wdPeakEl.textContent = bestWd && bestWd.count > 0 ? `Pic : ${bestWd.label}` : '—';
+    const wdEl = document.getElementById('stats-weekday-chart');
+    if (wdEl) {
+        wdEl.innerHTML = wds.map(w => {
+            const pct = w.count > 0 ? Math.max(4, Math.round((w.count / maxWd) * 100)) : 0;
+            return `
+                <div class="flex items-center gap-2 text-[11px]">
+                    <span class="w-8 font-bold opacity-75 shrink-0">${w.short}</span>
+                    <div class="flex-1 h-2 rounded-full ui-pill overflow-hidden">
+                        <div class="h-full rounded-full" style="width:${pct}%; background-color: var(--accent);"></div>
+                    </div>
+                    <span class="w-10 text-right font-extrabold tabular-nums">${w.count}</span>
+                </div>`;
+        }).join('');
+    }
+
+    // Saisonnalité (12 mois)
+    const seasons = det.season_months || [];
+    const bestSeason = seasons.reduce((best, cur) => (!best || cur.count > best.count ? cur : best), null);
+    const sPeakEl = document.getElementById('stats-season-peak');
+    if (sPeakEl) sPeakEl.textContent = bestSeason && bestSeason.count > 0 ? `Pic : ${bestSeason.full}` : '—';
+    _renderStatsMiniColumns(
+        document.getElementById('stats-season-chart'),
+        seasons,
+        it => it.label,
+        it => `${it.full} : ${it.count} média(s) (${_formatStatsBytes(it.bytes)})`
+    );
+
+    // Heures de la journée (24h)
+    const hrs = det.hours || [];
+    const bestHr = hrs.reduce((best, cur) => (!best || cur.count > best.count ? cur : best), null);
+    const hPeakEl = document.getElementById('stats-hour-peak');
+    if (hPeakEl) hPeakEl.textContent = bestHr && bestHr.count > 0 ? `Pic : ${bestHr.label}` : '—';
+    _renderStatsMiniColumns(
+        document.getElementById('stats-hour-chart'),
+        hrs,
+        it => (it.hour % 6 === 0 ? `${String(it.hour).padStart(2, '0')}h` : ''),
+        it => `${it.label} : ${it.count} média(s)`
+    );
+
+    // Carte Métadonnées & Classement
+    const metaEl = document.getElementById('stats-meta-card');
+    if (metaEl) {
+        const tot = Math.max(1, Number(sum.total_files || 0));
+        const pctOf = (n) => `${Math.round((Number(n || 0) / tot) * 100)} %`;
+        metaEl.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Avec date exacte</span>
+                <span class="font-extrabold tabular-nums">${sum.dated_count || 0} <span class="opacity-60 font-semibold">(${pctOf(sum.dated_count)})</span></span>
+            </div>
+            <button type="button" onclick="switchTab('sug-missing_meta')" class="w-full flex items-center justify-between gap-2 hover:opacity-80 transition cursor-pointer text-left">
+                <span class="opacity-75 font-semibold">Sans date / à réparer</span>
+                <span class="font-extrabold tabular-nums ${sum.undated_count > 0 ? 'text-amber-400' : ''}">${sum.undated_count || 0}</span>
+            </button>
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Géolocalisés (GPS)</span>
+                <span class="font-extrabold tabular-nums">${sum.geotagged_count || 0} <span class="opacity-60 font-semibold">(${pctOf(sum.geotagged_count)})</span></span>
+            </div>
+            <button type="button" onclick="switchTab('sug-missing_gps')" class="w-full flex items-center justify-between gap-2 hover:opacity-80 transition cursor-pointer text-left">
+                <span class="opacity-75 font-semibold">Sans coordonnées GPS</span>
+                <span class="font-extrabold tabular-nums">${sum.no_gps_count || 0}</span>
+            </button>
+            <div class="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Classés dans un album</span>
+                <span class="font-extrabold tabular-nums">${sum.albumed_count || 0} <span class="opacity-60 font-semibold">(${pctOf(sum.albumed_count)})</span></span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Hors album</span>
+                <span class="font-extrabold tabular-nums">${sum.unorganized_count || 0}</span>
+            </div>`;
+    }
+
+    // Carte Résolutions & Vidéos
+    const techEl = document.getElementById('stats-tech-card');
+    if (techEl) {
+        const resMap = det.resolutions || {};
+        const big = sum.largest_file;
+        const avgStr = `${String(Number(sum.avg_mb || 0).toFixed(2)).replace('.', ',')} Mo`;
+        techEl.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Durée vidéo cumulée</span>
+                <span class="font-extrabold tabular-nums">${_formatStatsVideoDuration(sum.total_video_duration_sec)}</span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold">Poids moyen / fichier</span>
+                <span class="font-extrabold tabular-nums">${avgStr}</span>
+            </div>
+            ${big ? `
+            <div class="flex items-center justify-between gap-2">
+                <span class="opacity-75 font-semibold shrink-0">Plus gros fichier</span>
+                <span class="font-extrabold truncate max-w-[60%] text-right" title="${_escTileText(big.name)}">${_escTileText(big.name)} (${String(big.mb).replace('.', ',')} Mo)</span>
+            </div>` : ''}
+            <div class="pt-2 border-t border-[var(--border-subtle)] grid grid-cols-2 gap-1.5 text-[11px]">
+                <div class="ui-pill rounded-xl px-2.5 py-1.5 flex items-center justify-between"><span class="opacity-70 font-bold">4K+</span><span class="font-extrabold tabular-nums">${resMap['4k'] || 0}</span></div>
+                <div class="ui-pill rounded-xl px-2.5 py-1.5 flex items-center justify-between"><span class="opacity-70 font-bold">Full HD</span><span class="font-extrabold tabular-nums">${resMap.full_hd || 0}</span></div>
+                <div class="ui-pill rounded-xl px-2.5 py-1.5 flex items-center justify-between"><span class="opacity-70 font-bold">HD</span><span class="font-extrabold tabular-nums">${resMap.hd || 0}</span></div>
+                <div class="ui-pill rounded-xl px-2.5 py-1.5 flex items-center justify-between"><span class="opacity-70 font-bold">&lt; HD</span><span class="font-extrabold tabular-nums">${resMap.sd || 0}</span></div>
+            </div>`;
+    }
+
+    // Carte Principaux albums
+    const albEl = document.getElementById('stats-top-albums-card');
+    if (albEl) {
+        const albs = det.top_albums || [];
+        if (!albs.length) {
+            albEl.innerHTML = `<div class="opacity-60 font-semibold py-2">Aucun album renseigné pour le moment.</div>`;
+        } else {
+            const maxAlb = Math.max(1, ...albs.map(a => Number(a.count || 0)));
+            albEl.innerHTML = albs.map(a => {
+                const pct = Math.max(5, Math.round((a.count / maxAlb) * 100));
+                const enc = encodeURIComponent(a.name);
+                return `
+                    <button type="button" onclick="switchTab('albums'); setTimeout(() => openSingleAlbumView(decodeURIComponent('${enc}')), 40)"
+                            class="w-full text-left space-y-1 hover:opacity-85 transition cursor-pointer">
+                        <div class="flex items-center justify-between gap-2 text-[11px]">
+                            <span class="font-extrabold truncate">${_escTileText(a.name)}</span>
+                            <span class="opacity-75 font-bold tabular-nums shrink-0">${a.count} · ${_formatStatsBytes(a.bytes)}</span>
+                        </div>
+                        <div class="h-1.5 rounded-full ui-pill overflow-hidden">
+                            <div class="h-full rounded-full" style="width:${pct}%; background-color: var(--accent);"></div>
+                        </div>
+                    </button>`;
+            }).join('');
+        }
+    }
+}
+
+async function loadStatsPage() {
+    _renderTypesPills({}, '...');
+    try {
+        const [, resTypes, resDet] = await Promise.all([
+            typeof loadStats === 'function' ? loadStats() : Promise.resolve(),
+            fetch('/api/types/summary'),
+            fetch('/api/stats/detailed')
+        ]);
+        let d = { categories: {}, extensions: [] };
+        if (resTypes && resTypes.ok) d = await resTypes.json();
+        _renderTypesPills(d.categories || {}, (d.extensions || []).length);
+
+        const extGrid = document.getElementById('types-ext-grid');
+        if (extGrid) {
+            extGrid.innerHTML = (d.extensions || []).length
+                ? (d.extensions || []).map(e => `
+                    <button type="button" onclick="filterGalleryByExt('${e.ext}')"
+                            class="ui-pill hover:bg-[var(--bg-hover)] rounded-2xl p-3 cursor-pointer flex justify-between items-center gap-2 font-bold text-xs transition text-left">
+                        <div class="min-w-0">
+                            <div class="font-mono font-extrabold truncate">${e.ext || '(aucune)'}</div>
+                            <div class="text-[10px] opacity-60 font-semibold">${String(e.mb ?? 0).replace('.', ',')} Mo</div>
+                        </div>
+                        <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0">${e.count}</span>
+                    </button>
+                `).join('')
+                : `<div class="col-span-full text-xs opacity-60 font-semibold py-2">Aucune extension détectée.</div>`;
+        }
+        renderStatsTypeBreakdown(d.categories || {});
+
+        if (resDet && resDet.ok) {
+            const det = await resDet.json();
+            renderStatsDetailedSections(det);
+        }
+    } catch (e) {
+        console.error('loadStatsPage error:', e);
+    }
+}
+
 async function loadTypesSummary() {
     closeSingleCategoryView();
-    _renderTypesPills({}, '...');
-    let d = { categories: {}, extensions: [] };
+    syncTypesLayoutSizeButtons();
     let catsData = { categories: [], ai_indexed: 0 };
     try {
-        const [resTypes, resCats] = await Promise.all([
-            fetch('/api/types/summary'),
-            fetch('/api/categories/list')
-        ]);
-        if (resTypes.ok) d = await resTypes.json();
+        const resCats = await fetch('/api/categories/list');
         if (resCats.ok) catsData = await resCats.json();
     } catch (e) {
         console.error('loadTypesSummary error:', e);
     }
-    _renderTypesPills(d.categories || {}, (d.extensions || []).length);
+    _smartCategoriesCache = {
+        categories: Array.isArray(catsData.categories) ? catsData.categories : [],
+        ai_indexed: Number(catsData.ai_indexed || 0)
+    };
+    renderSmartCategoriesFromCache();
+}
 
-    const extGrid = document.getElementById('types-ext-grid');
-    if (extGrid) {
-        extGrid.innerHTML = (d.extensions || []).map(e => `
-            <div onclick="filterGalleryByExt('${e.ext}')" class="ui-pill rounded-2xl p-3 cursor-pointer flex justify-between items-center font-bold text-xs hover:opacity-85 transition">
-                <span class="font-mono">${e.ext}</span>
-                <span class="opacity-70">${e.count}</span>
-            </div>
-        `).join('');
-    }
-
-    renderSmartCategoriesGrid(catsData.categories || [], catsData.ai_indexed || 0);
+function renderSmartCategoriesFromCache() {
+    renderSmartCategoriesGrid(_smartCategoriesCache.categories || [], _smartCategoriesCache.ai_indexed || 0);
 }
 
 function renderSmartCategoriesGrid(categories, aiIndexed = 0) {
     const grid = document.getElementById('smart-categories-grid');
     if (!grid) return;
-    if (!categories.length) {
-        const hint = aiIndexed > 0
-            ? 'Aucune catégorie générée pour l\'instant. Cliquez sur « Analyser » pour classer automatiquement vos photos.'
-            : 'Aucune catégorie pour le moment. Cliquez sur « Analyser » pour lancer l\'IA CLIP ou sur « + Ajouter » pour créer une catégorie manuelle.';
-        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">${hint}</div>`;
+
+    const sortBy = document.getElementById('types-sort-by')?.value || 'content';
+    const sortOrder = document.getElementById('types-sort-order')?.value || 'desc';
+    const filterBy = document.getElementById('types-filter-by')?.value || 'ALL';
+    const dir = sortOrder === 'asc' ? 1 : -1;
+
+    let list = [...(categories || [])];
+    if (filterBy === 'AI') list = list.filter(c => String(c.source || '').toUpperCase() === 'AI');
+    else if (filterBy === 'MANUAL') list = list.filter(c => String(c.source || '').toUpperCase() !== 'AI');
+    else if (filterBy === 'NON_EMPTY') list = list.filter(c => Number(c.count || 0) > 0);
+    else if (filterBy === 'EMPTY') list = list.filter(c => Number(c.count || 0) === 0);
+
+    list.sort((a, b) => {
+        if (sortBy === 'name') {
+            return dir * String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
+        }
+        if (sortBy === 'added') {
+            return dir * (Number(a.category_id || 0) - Number(b.category_id || 0));
+        }
+        const diff = Number(a.count || 0) - Number(b.count || 0);
+        if (diff !== 0) return dir * diff;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
+    });
+
+    const totalLbl = document.getElementById('types-total-label');
+    if (totalLbl) totalLbl.textContent = `${list.length} catégorie${list.length > 1 ? 's' : ''}`;
+
+    if (typesLayout === 'LIST') {
+        grid.className = 'flex flex-col gap-2 pb-10';
+    } else if (typesSize === 'SM') {
+        grid.className = 'grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-3.5 pb-10';
+    } else if (typesSize === 'LG') {
+        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-10';
+    } else {
+        grid.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-10';
+    }
+
+    if (!list.length) {
+        const hasAny = (categories || []).length > 0;
+        const hint = hasAny
+            ? 'Aucune catégorie ne correspond à ce filtre.'
+            : (aiIndexed > 0
+                ? 'Aucune catégorie générée pour l\'instant. Cliquez sur « Analyser » pour classer automatiquement vos photos.'
+                : 'Aucune catégorie pour le moment. Cliquez sur « Analyser » pour lancer l\'IA CLIP ou sur « + Ajouter » pour créer une catégorie manuelle.');
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-10 text-center text-sm font-semibold opacity-65 shadow-sm">${hint}</div>`;
         return;
     }
-    grid.innerHTML = categories.map(cat => {
-        const coverHtml = cat.cover_path
-            ? `<img src="/thumb?path=${encodeURIComponent(cat.cover_path)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition"/>`
-            : `<div class="w-full h-full flex items-center justify-center opacity-20">
-                   <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-               </div>`;
+
+    const deleteSvg = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`;
+    const emptySvg = `<svg class="w-9 h-9" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`;
+
+    grid.innerHTML = list.map(cat => {
+        const hasCover = Boolean(cat.cover_path);
+        const isAi = String(cat.source || '').toUpperCase() === 'AI';
         const escName = _escTileText(cat.name);
+        const safeJsName = String(cat.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const countTxt = `${cat.count} élément${cat.count > 1 ? 's' : ''}`;
+        const srcBadgeTxt = isAi ? 'IA' : 'Manuelle';
+
+        if (typesLayout === 'LIST') {
+            const thumbSz = typesSize === 'SM' ? 'w-11 h-11 rounded-xl' : (typesSize === 'LG' ? 'w-20 h-20 rounded-2xl' : 'w-14 h-14 rounded-2xl');
+            const coverThumb = hasCover
+                ? `<img src="/thumb?path=${encodeURIComponent(cat.cover_path)}" loading="lazy" class="w-full h-full object-cover"/>`
+                : `<div class="w-full h-full flex items-center justify-center opacity-25">${emptySvg}</div>`;
+            return `
+                <div onclick="openSingleCategoryView(${cat.category_id})"
+                     class="album-card ui-card hover:bg-[var(--bg-hover)] rounded-2xl p-2.5 flex items-center justify-between gap-3.5 cursor-pointer group shadow-sm transition">
+                    <div class="flex items-center gap-3.5 min-w-0">
+                        <div class="${thumbSz} overflow-hidden bg-black/10 shrink-0">${coverThumb}</div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="text-sm font-extrabold truncate">${escName}</span>
+                                <span class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-bold opacity-75 shrink-0">${srcBadgeTxt}</span>
+                            </div>
+                            <div class="text-[11px] opacity-60 font-semibold mt-0.5">${countTxt}</div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="event.stopPropagation(); deleteSmartCategoryById(${cat.category_id}, '${safeJsName}')" title="Supprimer"
+                            class="w-8 h-8 rounded-full ui-pill hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer shrink-0">
+                        ${deleteSvg}
+                    </button>
+                </div>`;
+        }
+
+        const coverHtml = hasCover
+            ? `<img src="/thumb?path=${encodeURIComponent(cat.cover_path)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-300"/>`
+            : `<div class="w-full h-full flex items-center justify-center opacity-20">${emptySvg}</div>`;
+        const srcBadge = `<span class="absolute bottom-2.5 left-2.5 bg-black/45 backdrop-blur-md border border-white/15 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full z-10 pointer-events-none">${srcBadgeTxt}</span>`;
+
         return `
             <div onclick="openSingleCategoryView(${cat.category_id})"
-                 class="ui-card rounded-3xl overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition flex flex-col relative">
-                <div class="aspect-square overflow-hidden bg-black/5 relative">
+                 class="album-card cursor-pointer group flex flex-col">
+                <div class="ui-card aspect-square rounded-[24px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-200">
                     ${coverHtml}
-                    <button type="button" onclick="event.stopPropagation(); deleteSmartCategoryById(${cat.category_id}, '${escName.replace(/'/g, "\\'")}')" title="Supprimer"
-                            class="absolute top-2 right-2 w-7 h-7 rounded-full bg-rose-600/90 text-white flex items-center justify-center text-xs font-bold shadow opacity-0 group-hover:opacity-100 hover:scale-110 transition z-10">✕</button>
+                    ${hasCover ? '<div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 via-black/15 to-transparent opacity-75 group-hover:opacity-95 transition-opacity"></div>' : ''}
+                    ${srcBadge}
+                    <button type="button" onclick="event.stopPropagation(); deleteSmartCategoryById(${cat.category_id}, '${safeJsName}')" title="Supprimer"
+                            class="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/45 backdrop-blur-md border border-white/15 text-white hover:bg-rose-500/85 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg cursor-pointer">
+                        ${deleteSvg}
+                    </button>
                 </div>
-                <div class="p-3 text-center">
-                    <div class="text-sm font-extrabold truncate">${escName}</div>
-                    <div class="text-[10px] opacity-60 font-semibold">${cat.count} élément${cat.count > 1 ? 's' : ''}</div>
+                <div class="pt-2.5 px-1">
+                    <div class="text-sm font-extrabold truncate leading-tight">${escName}</div>
+                    <div class="text-[11px] opacity-60 font-semibold mt-0.5 truncate">${countTxt}</div>
                 </div>
             </div>
         `;
@@ -2230,7 +3505,7 @@ async function analyzeSmartCategories() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Analyser';
+            btn.innerHTML = `<svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>Analyser</span>`;
         }
     }
 }
@@ -2253,16 +3528,25 @@ async function openSingleCategoryView(categoryId) {
     if (!grid) return;
     const items = d.items || [];
     if (!items.length) {
-        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">Aucun média dans cette catégorie pour le moment.</div>`;
+        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-10 text-center text-sm font-semibold opacity-65 shadow-sm">Aucun média dans cette catégorie pour le moment.</div>`;
         return;
     }
     currentCategoryItems = items;
     grid.innerHTML = items.map((it, idx) => {
+        const isVid = typeof isVideoFile === 'function' && isVideoFile(it.dest_path);
+        const durTxt = typeof formatDuration === 'function' ? formatDuration(it.duration_sec) : '';
+        const vidBadge = isVid
+            ? `<div class="absolute bottom-2.5 left-2.5 z-10 bg-black/35 backdrop-blur-sm text-white/95 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
+                   <svg class="w-2.5 h-2.5 opacity-90" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                   <span>${durTxt}</span>
+               </div>`
+            : '';
         return `
             <div onclick="openCategoryLightbox(${idx})"
-                 class="ui-card rounded-2xl overflow-hidden cursor-pointer group shadow-sm relative">
-                <div class="aspect-square overflow-hidden bg-black/5">
-                    ${renderMediaPreview(it.dest_path, 'w-full h-full object-cover group-hover:scale-105 transition')}
+                 class="media-tile ui-card rounded-[24px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-xl relative transition-all duration-150">
+                <div class="aspect-square overflow-hidden bg-black/10 relative">
+                    ${renderMediaPreview(it.dest_path, 'w-full h-full object-cover group-hover:scale-[1.03] transition duration-300')}
+                    ${vidBadge}
                 </div>
             </div>
         `;
@@ -2314,12 +3598,45 @@ function filterGalleryByExt(ext) {
     switchTab('gallery');
 }
 
-function openEditorFromTools(kind) {
-    if (currentGalleryItems.length > 0) {
-        const match = currentGalleryItems.find(it => kind === 'VIDEO' ? isVideoFile(it.dest_path) : !isVideoFile(it.dest_path)) || currentGalleryItems[0];
+function filterGalleryByPeriod(dateFrom, dateTo) {
+    if (!dateFrom && !dateTo) return;
+    selectedFilterTypes = [];
+    selectedFilterYears = [];
+    selectedFilterMonths = [];
+    selectedFilterExts = [];
+    selectedFilterAlbums = [];
+    selectedFilterFolders = [];
+    selectedFilterPersons = [];
+    currentExtFilter = '';
+    selectedFilterPeriods = [{ from: dateFrom || '', to: dateTo || '' }];
+    const dfEl = document.getElementById('gal-date-from');
+    const dtEl = document.getElementById('gal-date-to');
+    if (dfEl) dfEl.value = '';
+    if (dtEl) dtEl.value = '';
+    renderFilterChips();
+    updateActiveFilterBadge();
+    switchTab('gallery');
+}
+
+async function openEditorFromTools(kind) {
+    const wantVideo = kind === 'VIDEO';
+    let match = (currentGalleryItems || []).find(it => wantVideo ? isVideoFile(it.dest_path) : !isVideoFile(it.dest_path));
+    if (!match) {
+        try {
+            const mt = wantVideo ? 'VIDEOS' : 'PHOTOS';
+            const res = await fetch(`/api/gallery/items?page=1&limit=1&media_type=${mt}`);
+            if (res.ok) {
+                const d = await res.json();
+                if (Array.isArray(d.items) && d.items.length > 0) match = d.items[0];
+            }
+        } catch (_) {}
+    }
+    if (match && match.source_path && match.dest_path) {
         openStudioModal(encodeURIComponent(match.source_path), encodeURIComponent(match.dest_path));
-    } else {
-        switchTab('gallery');
+        return;
+    }
+    if (typeof showAppToast === 'function') {
+        showAppToast(wantVideo ? 'Aucune vidéo disponible dans cette bibliothèque.' : 'Aucune photo disponible dans cette bibliothèque.', 'info');
     }
 }
 
@@ -2579,9 +3896,11 @@ async function openLightbox(idx) {
     const nextBtn = document.getElementById('lb-next-btn');
     if (prevBtn) prevBtn.classList.toggle('opacity-30', idx <= 0);
     if (nextBtn) nextBtn.classList.toggle('opacity-30', idx >= currentGalleryItems.length - 1);
+    if (!lightboxIsCustomItem) currentLightboxDupGroup = null;
     renderLightboxFilmstrip(idx);
     document.getElementById('lightbox-modal').classList.remove('hidden');
     _preloadLightboxNeighbors(idx);
+    _syncLightboxDuplicatesUI(item, idx);
 
     if (!lightboxIsCustomItem && idx >= currentGalleryItems.length - 5) {
         if (currentTab === 'albums' && openedAlbumName) loadSingleAlbumItems(true);
@@ -2599,6 +3918,7 @@ async function openLightbox(idx) {
 
 function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
     lightboxIsCustomItem = true;
+    currentLightboxDupGroup = null;
     currentGalleryItems = [{
         source_path: decodeURIComponent(encSrc),
         dest_path: decodeURIComponent(encDest),
@@ -2609,12 +3929,120 @@ function openLightboxForCustomItem(encSrc, encDest, ts = 0, isFav = 0) {
     openLightbox(0);
 }
 
+function openLightboxForComparisonGroup(items, targetIdx = 0, meta = {}) {
+    const cleanItems = (items || []).filter(Boolean).map(it => ({ ...it }));
+    if (!cleanItems.length) return;
+    lightboxIsCustomItem = true;
+    currentLightboxDupGroup = { items: cleanItems, ...meta };
+    currentGalleryItems = cleanItems;
+    const safeIdx = Math.max(0, Math.min(targetIdx, cleanItems.length - 1));
+    openLightbox(safeIdx);
+}
+
+function _renderLightboxDuplicatesBar(items, activeSourcePath, isGroupScoped) {
+    const bar = document.getElementById('lb-duplicates-bar');
+    const cmpBtn = document.getElementById('lb-btn-compare');
+    const strip = document.getElementById('lb-filmstrip');
+    const valid = Array.isArray(items) && items.length >= 2;
+    if (cmpBtn) cmpBtn.classList.toggle('hidden', !valid);
+    if (!bar) return;
+    if (!valid) {
+        bar.classList.add('hidden');
+        bar.innerHTML = '';
+        return;
+    }
+    const labelTxt = currentLightboxDupGroup?.kind === 'similar'
+        ? `Similaires (${items.length})`
+        : `Doublons (${items.length})`;
+    const cardsHtml = items.map((it, i) => {
+        const isActive = it.source_path === activeSourcePath;
+        const ringCls = isActive ? 'ring-2 ring-white bg-white/20 opacity-100' : 'bg-white/5 hover:bg-white/15 opacity-75 hover:opacity-100';
+        const fname = escapeHtml((it.dest_path || it.source_path || '').split(/[\\/]/).pop() || `Copie ${i + 1}`);
+        const dim = (it.width && it.height) ? `${it.width}×${it.height}` : '';
+        const mb = it.file_size ? `${(it.file_size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo` : '';
+        const tsVal = it.timestamp || it.modified_at || 0;
+        const timePart = typeof formatTime === 'function' ? formatTime(tsVal) : '';
+        const fullDateTitle = typeof formatDateTime === 'function' ? formatDateTime(tsVal) : '';
+        const metaTxt = [dim, mb, timePart].filter(Boolean).join(' · ') || fname;
+        const clickExpr = isGroupScoped ? `openLightbox(${i})` : `switchLightboxToDetectedDuplicate(${i})`;
+        return `
+            <button type="button" onclick="event.stopPropagation(); ${clickExpr}"
+                    title="${fname}${fullDateTitle ? ' — ' + fullDateTitle : ''}${metaTxt ? ' (' + metaTxt + ')' : ''}"
+                    class="shrink-0 flex items-center gap-1.5 rounded-xl px-2 py-1 transition cursor-pointer ${ringCls}">
+                <img src="/thumb?path=${encodeURIComponent(it.dest_path)}" loading="lazy" class="w-7 h-7 rounded-lg object-cover shrink-0"/>
+                <div class="text-left leading-tight max-w-[155px]">
+                    <div class="text-[10px] font-extrabold truncate">${fname}</div>
+                    <div class="text-[9px] text-white/70 font-semibold truncate tabular-nums">${metaTxt}</div>
+                </div>
+            </button>`;
+    }).join('');
+    bar.innerHTML = `
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/70 shrink-0 pl-0.5">${labelTxt}</span>
+        ${cardsHtml}
+        <button type="button" onclick="event.stopPropagation(); openCompareModalFromLightbox()"
+                class="shrink-0 px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-extrabold flex items-center gap-1 transition cursor-pointer">
+            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            Comparer
+        </button>`;
+    bar.classList.remove('hidden');
+    if (isGroupScoped && strip) {
+        strip.classList.add('hidden');
+    }
+    const lbImg = document.getElementById('lb-img');
+    const lbVid = document.getElementById('lb-video');
+    requestAnimationFrame(() => {
+        const multiRow = !bar.classList.contains('hidden') && bar.offsetHeight > 60;
+        [lbImg, lbVid].forEach(el => {
+            if (!el) return;
+            el.classList.toggle('max-h-[calc(100vh-145px)]', !multiRow);
+            el.classList.toggle('max-h-[calc(100vh-210px)]', multiRow);
+        });
+    });
+}
+
+function switchLightboxToDetectedDuplicate(idx) {
+    const items = window._lbDetectedDupItems;
+    if (!Array.isArray(items) || items.length < 2) return;
+    openLightboxForComparisonGroup(items, idx, { kind: 'dups', title: 'Doublons du média' });
+}
+
+async function _syncLightboxDuplicatesUI(item, idx) {
+    if (currentLightboxDupGroup && Array.isArray(currentLightboxDupGroup.items) && currentLightboxDupGroup.items.length >= 2) {
+        window._lbDetectedDupItems = currentLightboxDupGroup.items;
+        _renderLightboxDuplicatesBar(currentLightboxDupGroup.items, item.source_path, true);
+        return;
+    }
+    window._lbDetectedDupItems = null;
+    _renderLightboxDuplicatesBar([], item.source_path, false);
+    if (!item || !item.source_path || item._isTrashContext) return;
+    const seq = ++_lbDupLookupSeq;
+    try {
+        const res = await fetch(`/api/media/duplicates?source_path=${encodeURIComponent(item.source_path)}`);
+        if (!res.ok || seq !== _lbDupLookupSeq) return;
+        const d = await res.json();
+        const lbModal = document.getElementById('lightbox-modal');
+        if (!lbModal || lbModal.classList.contains('hidden')) return;
+        const active = currentGalleryItems[currentLightboxIndex];
+        if (!active || active.source_path !== item.source_path) return;
+        const items = Array.isArray(d.items) ? d.items : [];
+        if (items.length >= 2) {
+            window._lbDetectedDupItems = items;
+            _renderLightboxDuplicatesBar(items, item.source_path, false);
+        }
+    } catch (_) {}
+}
+
 function closeLightbox() {
     cancelLightboxDelete();
     closeLightboxAnalyzeModal();
     closeLightboxLocationEditor();
     toggleLightboxSlideshow(true);
     resetLightboxZoom();
+    currentLightboxDupGroup = null;
+    window._lbDetectedDupItems = null;
+    _renderLightboxDuplicatesBar([], '', false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     const vidEl = document.getElementById('lb-video');
     if (vidEl) vidEl.pause();
@@ -2637,9 +4065,11 @@ function renderLightboxFilmstrip(activeIdx) {
         const it = currentGalleryItems[i];
         const isActive = i === activeIdx;
         const ringCls = isActive ? 'ring-2 ring-white scale-105 opacity-100' : 'opacity-55 hover:opacity-100';
+        const ringStyle = isActive ? 'box-shadow:0 0 0 2px var(--sel-color);' : '';
         html += `
             <button type="button" ${isActive ? 'data-lb-active="1"' : ''} onclick="event.stopPropagation(); openLightbox(${i})"
-                    class="shrink-0 w-8 h-8 rounded-md overflow-hidden transition ${ringCls}">
+                    style="${ringStyle}"
+                    class="shrink-0 w-8 h-8 rounded-md overflow-hidden transition cursor-pointer ${ringCls}">
                 <img src="/thumb?path=${encodeURIComponent(it.dest_path)}" loading="lazy" class="w-full h-full object-cover"/>
             </button>`;
     }
@@ -2656,6 +4086,64 @@ function navigateLightbox(delta) {
 }
 
 window.addEventListener('keydown', e => {
+    const studioModal = document.getElementById('studio-modal');
+    if (studioModal && !studioModal.classList.contains('hidden')) {
+        const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName);
+        if (e.key === 'Escape' && typeof closeStudioModal === 'function') {
+            closeStudioModal();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !isTyping && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey && typeof studioRedo === 'function') studioRedo();
+            else if (!e.shiftKey && typeof studioUndo === 'function') studioUndo();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !isTyping && e.key.toLowerCase() === 'y') {
+            e.preventDefault();
+            if (typeof studioRedo === 'function') studioRedo();
+            return;
+        }
+        if (e.key === ' ' && typeof studioIsVideo !== 'undefined' && studioIsVideo && !isTyping) {
+            e.preventDefault();
+            if (typeof toggleStudioVideoPlay === 'function') toggleStudioVideoPlay();
+            return;
+        }
+        if (!isTyping) {
+            const kLow = e.key.toLowerCase();
+            if (kLow === 'g' && typeof cycleStudioGridOverlay === 'function') {
+                e.preventDefault();
+                cycleStudioGridOverlay();
+            } else if (kLow === 'm' && typeof toggleStudioSplitCompare === 'function') {
+                e.preventDefault();
+                toggleStudioSplitCompare();
+            } else if (kLow === 'i' && typeof studioIsVideo !== 'undefined' && studioIsVideo && typeof setStudioTrimInAtPlayhead === 'function') {
+                e.preventDefault();
+                setStudioTrimInAtPlayhead();
+            } else if (kLow === 'o' && typeof studioIsVideo !== 'undefined' && studioIsVideo && typeof setStudioTrimOutAtPlayhead === 'function') {
+                e.preventDefault();
+                setStudioTrimOutAtPlayhead();
+            } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && typeof studioIsVideo !== 'undefined' && studioIsVideo && typeof stepStudioVideo === 'function') {
+                e.preventDefault();
+                const dt = e.shiftKey ? 0.1 : 1.0;
+                stepStudioVideo(e.key === 'ArrowLeft' ? -dt : dt);
+            } else if ((e.key === '[' || e.key === ']') && typeof studioMouseTool !== 'undefined' && studioMouseTool === 'ERASER') {
+                const sl = document.getElementById('st-eraser-size');
+                if (sl) {
+                    sl.value = String(Math.max(8, Math.min(72, Number(sl.value || 24) + (e.key === ']' ? 4 : -4))));
+                    if (typeof syncStudioEraserCursorSize === 'function') syncStudioEraserCursorSize();
+                }
+            }
+        }
+        return;
+    }
+    const cmpModal = document.getElementById('compare-modal');
+    if (cmpModal && !cmpModal.classList.contains('hidden')) {
+        if (e.key === 'Escape' && typeof closeCompareModal === 'function') {
+            closeCompareModal();
+        }
+        return;
+    }
     const delConfirm = document.getElementById('lb-delete-confirm');
     if (delConfirm && !delConfirm.classList.contains('hidden')) {
         if (e.key === 'Escape') {
@@ -2674,6 +4162,11 @@ window.addEventListener('keydown', e => {
             const albumsEditModal = document.getElementById('lb-albums-edit-modal');
             if (albumsEditModal && !albumsEditModal.classList.contains('hidden')) {
                 closeLightboxAlbumsEditor();
+                return;
+            }
+            const toolsAiModal = document.getElementById('tools-ai-modal');
+            if (toolsAiModal && !toolsAiModal.classList.contains('hidden') && typeof closeToolsAiModal === 'function') {
+                closeToolsAiModal();
                 return;
             }
         }
@@ -2724,8 +4217,9 @@ function updateLightboxFavButton(isFav) {
     const btn = document.getElementById('lb-btn-fav');
     if (!icon || !btn) return;
     if (isFav) {
-        icon.setAttribute('fill', '#fb7185');
-        icon.setAttribute('stroke', '#fb7185');
+        const col = (typeof currentFavMatchAccent !== 'undefined' && currentFavMatchAccent) ? 'var(--sel-color)' : '#fb7185';
+        icon.setAttribute('fill', col);
+        icon.setAttribute('stroke', col);
     } else {
         icon.setAttribute('fill', 'none');
         icon.setAttribute('stroke', 'currentColor');
@@ -2921,10 +4415,18 @@ function lightboxDownloadMedia() {
 
 let _deleteConfirmMode = null;
 
+function _syncLightboxDeleteModalLabels(isPermanent = false) {
+    const titleEl = document.getElementById('lb-delete-title');
+    const btnEl = document.getElementById('lb-delete-confirm-btn');
+    if (titleEl) titleEl.textContent = isPermanent ? 'Supprimer définitivement ?' : 'Mettre à la corbeille ?';
+    if (btnEl) btnEl.textContent = isPermanent ? 'Supprimer définitivement' : 'Mettre à la corbeille';
+}
+
 function openBatchTrashConfirm() {
     const count = selectedGalleryPaths.size;
     if (!count) return;
     _deleteConfirmMode = 'batch';
+    _syncLightboxDeleteModalLabels(false);
     const modal = document.getElementById('lb-delete-confirm');
     const nameEl = document.getElementById('lb-delete-filename');
     if (nameEl) {
@@ -2936,7 +4438,9 @@ function openBatchTrashConfirm() {
 function lightboxDeleteMedia() {
     const item = currentGalleryItems[currentLightboxIndex];
     if (!item) return;
-    _deleteConfirmMode = 'lightbox';
+    const isTrashPerm = Boolean(item._isTrashContext || currentTab === 'trash');
+    _deleteConfirmMode = isTrashPerm ? 'lightbox_trash_perm' : 'lightbox';
+    _syncLightboxDeleteModalLabels(isTrashPerm);
     const modal = document.getElementById('lb-delete-confirm');
     const nameEl = document.getElementById('lb-delete-filename');
     if (nameEl) {
@@ -2961,9 +4465,10 @@ async function confirmLightboxDelete() {
         return;
     }
     if (!item) return;
+    const action = mode === 'lightbox_trash_perm' ? 'DELETE_PERMANENTLY' : 'MOVE_TO_TRASH';
     await fetch('/api/trash/action', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({source_paths: [item.source_path], action: 'MOVE_TO_TRASH'})
+        body:JSON.stringify({source_paths: [item.source_path], action})
     });
     closeLightbox(); refreshActiveMediaView(); loadStats();
 }

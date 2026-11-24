@@ -306,7 +306,7 @@ function renderCustomGroupModalChecklist() {
             <input type="checkbox" ${isChk ? 'checked' : ''}
                    data-group-item-key="${safeKey}"
                    onchange="toggleCustomGroupModalItem(this.dataset.groupItemKey, this.checked)"
-                   class="w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"/>
+                   class="w-4 h-4 rounded cursor-pointer shrink-0"/>
             ${thumbHtml}
             <div class="flex-1 min-w-0">
                 <div class="text-xs font-extrabold truncate">${safeLabel}</div>
@@ -497,7 +497,291 @@ const PAGE_SETTINGS_CONFIG = {
     places: {
         title: 'Réglages — Lieux',
         groupScope: 'places',
-        hasDefaults: false
+        hasDefaults: true,
+        sortOptions: [
+            { value: 'content', label: 'Plus de contenu' },
+            { value: 'recent', label: 'Récent' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'NONE', label: 'Aucun' },
+            { value: 'COUNTRY', label: 'Pays / Région' },
+            { value: 'LETTER', label: 'Initiale' },
+            { value: 'DAY', label: 'Jour' },
+            { value: 'WEEK', label: 'Semaine' },
+            { value: 'MONTH', label: 'Mois' },
+            { value: 'YEAR', label: 'Année' }
+        ],
+        layoutOptions: [
+            { value: 'GRID', label: 'Grille' },
+            { value: 'LIST', label: 'Liste' }
+        ],
+        defaults: { sortBy: 'content', sortOrder: 'desc', groupBy: 'NONE', layout: 'GRID', size: 'MD' }
+    },
+    place_single: {
+        title: 'Réglages — Vue Lieu',
+        groupScope: null,
+        hasDefaults: true,
+        sortOptions: _MEDIA_SORT_OPTS,
+        groupOptions: _TIME_GROUP_OPTS,
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'date', sortOrder: 'desc', groupBy: 'NONE', layout: 'GRID', size: 'MD' }
+    },
+    types: {
+        title: 'Réglages — Catégories',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sortOptions: [
+            { value: 'content', label: 'Plus de contenu' },
+            { value: 'name', label: 'Nom' },
+            { value: 'added', label: "Date d'ajout" }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Toutes' },
+            { value: 'AI', label: 'IA uniquement' },
+            { value: 'MANUAL', label: 'Manuelles uniquement' },
+            { value: 'NON_EMPTY', label: 'Avec médias' },
+            { value: 'EMPTY', label: 'Vides' }
+        ],
+        layoutOptions: [
+            { value: 'GRID', label: 'Grille' },
+            { value: 'LIST', label: 'Liste' }
+        ],
+        defaults: { sortBy: 'content', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    dups: {
+        title: 'Réglages — Doublons',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sortOptions: [
+            { value: 'date', label: 'Date' },
+            { value: 'size', label: 'Taille récupérable' },
+            { value: 'count', label: 'Nombre de fichiers' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Tous' },
+            { value: 'EXACT_ONLY', label: 'Doublons exacts' },
+            { value: 'DIFF_QUALITY', label: 'Qualités différentes' },
+            { value: 'PHOTOS', label: 'Photos uniquement' },
+            { value: 'VIDEOS', label: 'Vidéos uniquement' },
+            { value: 'MULTI', label: 'Plus de 2 fichiers' },
+            { value: 'CHECKED', label: 'Avec sélection' }
+        ],
+        layoutOptions: [
+            { value: 'GRID', label: 'Grille' },
+            { value: 'MASONRY', label: 'Mosaïque' }
+        ],
+        defaults: { sortBy: 'date', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    similar: {
+        title: 'Réglages — Similaires',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sortOptions: [
+            { value: 'date', label: 'Date' },
+            { value: 'size', label: 'Taille récupérable' },
+            { value: 'count', label: 'Nombre de fichiers' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Tous' },
+            { value: 'EXACT_ONLY', label: 'Doublons exacts' },
+            { value: 'DIFF_QUALITY', label: 'Qualités différentes' },
+            { value: 'PHOTOS', label: 'Photos uniquement' },
+            { value: 'VIDEOS', label: 'Vidéos uniquement' },
+            { value: 'MULTI', label: 'Plus de 2 fichiers' },
+            { value: 'CHECKED', label: 'Avec sélection' }
+        ],
+        layoutOptions: [
+            { value: 'GRID', label: 'Grille' },
+            { value: 'MASONRY', label: 'Mosaïque' }
+        ],
+        defaults: { sortBy: 'date', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    trash: {
+        title: 'Réglages — Corbeille',
+        groupScope: null,
+        hasDefaults: true,
+        isTrash: true,
+        sortOptions: [
+            { value: 'trashed_at', label: 'Date de suppression' },
+            { value: 'date', label: 'Date du média' },
+            { value: 'days_left', label: 'Jours restants' },
+            { value: 'size', label: 'Taille' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: _TIME_GROUP_OPTS,
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'trashed_at', sortOrder: 'desc', groupBy: 'NONE', layout: 'GRID', size: 'MD' }
+    },
+    'sug-albums': {
+        title: 'Réglages — Albums & Événements',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'albums',
+        sortOptions: [
+            { value: 'score', label: 'Pertinence' },
+            { value: 'date', label: 'Date du média' },
+            { value: 'size', label: 'Taille' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Tout (nouveaux + ajouts)' },
+            { value: 'NEW_ONLY', label: 'Nouveaux albums uniquement' },
+            { value: 'EXISTING_ONLY', label: 'Ajouts aux albums existants' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'score', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    'sug-rotation': {
+        title: 'Réglages — Rotation suggérée',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'rotation',
+        sortOptions: [
+            { value: 'date', label: 'Date du média' },
+            { value: 'angle', label: 'Angle suggéré' },
+            { value: 'size', label: 'Taille' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Toutes les rotations' },
+            { value: '90', label: '+90° horaire' },
+            { value: '270', label: '+270° (90° antihoraire)' },
+            { value: '180', label: '180° retourné' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'date', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    'sug-blurry': {
+        title: 'Réglages — Qualité : Flou & Exposition',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'blurry',
+        sugSettingField: 'blur',
+        sortOptions: [
+            { value: 'blur_score', label: 'Netteté' },
+            { value: 'date', label: 'Date du média' },
+            { value: 'size', label: 'Taille' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'all', label: 'Tout (flou + exposition)' },
+            { value: 'blur', label: 'Photos floues uniquement' },
+            { value: 'exposure', label: 'Sombres / surexposées' },
+            { value: 'sharper', label: 'Meilleur cliché dispo' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'blur_score', sortOrder: 'asc', groupBy: 'all', layout: 'GRID', size: 'MD' }
+    },
+    'sug-missing_gps': {
+        title: 'Réglages — Lieux manquants (GPS)',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'missing_gps',
+        sugSettingField: 'gps',
+        sortOptions: [
+            { value: 'time_diff', label: 'Écart temporel' },
+            { value: 'date', label: 'Date du média' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Tous les médias estimés' },
+            { value: 'NEAR_30M', label: 'Écart ≤ 30 min' },
+            { value: 'NEAR_2H', label: 'Écart ≤ 2 heures' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'time_diff', sortOrder: 'asc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    'sug-people': {
+        title: 'Réglages — Personnes à trier',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'people',
+        sortOptions: [
+            { value: 'count', label: 'Nombre d\'apparitions' },
+            { value: 'similarity', label: 'Ressemblance' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Fusions + Inconnus' },
+            { value: 'MERGES', label: 'Paires à fusionner' },
+            { value: 'UNNAMED', label: 'Visages inconnus' }
+        ],
+        layoutOptions: [
+            { value: 'GRID', label: 'Grille' },
+            { value: 'LIST', label: 'Liste' }
+        ],
+        defaults: { sortBy: 'count', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    'sug-screenshots': {
+        title: 'Réglages — Captures & Documents',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'screenshots',
+        sugSettingField: 'age',
+        sortOptions: [
+            { value: 'age', label: 'Ancienneté' },
+            { value: 'size', label: 'Taille' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Captures + Documents OCR' },
+            { value: 'SCREEN', label: 'Captures d\'écran uniquement' },
+            { value: 'OCR', label: 'Documents OCR uniquement' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'age', sortOrder: 'desc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
+    },
+    'sug-large': {
+        title: 'Réglages — Stockage & Courtes vidéos',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'large',
+        sugSettingField: 'large',
+        sortOptions: [
+            { value: 'size', label: 'Taille' },
+            { value: 'duration', label: 'Durée' },
+            { value: 'date', label: 'Date du média' },
+            { value: 'name', label: 'Nom' }
+        ],
+        groupOptions: [
+            { value: 'large', label: 'Fichiers volumineux' },
+            { value: 'short_videos', label: 'Micro-vidéos (≤ 2 s)' },
+            { value: 'videos_only', label: 'Vidéos lourdes uniquement' },
+            { value: 'photos_only', label: 'Photos lourdes uniquement' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'size', sortOrder: 'desc', groupBy: 'large', layout: 'GRID', size: 'MD' }
+    },
+    'sug-missing_meta': {
+        title: 'Réglages — Sans métadonnées',
+        groupScope: null,
+        hasDefaults: true,
+        groupLabel: 'Filtre',
+        sugKind: 'missing_meta',
+        sortOptions: [
+            { value: 'name', label: 'Nom' },
+            { value: 'size', label: 'Taille' },
+            { value: 'modified', label: 'Date fichier' }
+        ],
+        groupOptions: [
+            { value: 'ALL', label: 'Tous' },
+            { value: 'NO_META', label: 'Aucune métadonnée' },
+            { value: 'MTIME', label: 'Date système de repli' }
+        ],
+        layoutOptions: _MEDIA_LAYOUT_OPTS,
+        defaults: { sortBy: 'name', sortOrder: 'asc', groupBy: 'ALL', layout: 'GRID', size: 'MD' }
     }
 };
 
@@ -546,6 +830,90 @@ function applyPageDefaultOptions(pageKey, shouldReload = false) {
         if (shouldReload && typeof renderPersonsOverviewFromCache === 'function') renderPersonsOverviewFromCache();
         return true;
     }
+    if (pageKey === 'places') {
+        const sb = document.getElementById('places-sort-by');
+        const so = document.getElementById('places-sort-order');
+        const gb = document.getElementById('places-group-by');
+        if (sb) sb.value = saved.sortBy;
+        if (so) so.value = saved.sortOrder;
+        if (gb) gb.value = saved.groupBy;
+        if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', 'places-sort-dir-btn', 'places-sort-arrow');
+        if (typeof placesLayout !== 'undefined') { placesLayout = saved.layout; localStorage.setItem('phototo_places_layout', saved.layout); }
+        if (typeof placesSize !== 'undefined') { placesSize = saved.size; localStorage.setItem('phototo_places_size', saved.size); }
+        if (typeof syncPlacesLayoutSizeButtons === 'function') syncPlacesLayoutSizeButtons();
+        if (shouldReload && typeof renderPlacesOverviewFromCache === 'function') renderPlacesOverviewFromCache();
+        return true;
+    }
+    if (pageKey === 'types') {
+        const sb = document.getElementById('types-sort-by');
+        const so = document.getElementById('types-sort-order');
+        const fb = document.getElementById('types-filter-by');
+        if (sb) sb.value = saved.sortBy;
+        if (so) so.value = saved.sortOrder;
+        if (fb) fb.value = saved.groupBy;
+        if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', 'types-sort-dir-btn', 'types-sort-arrow');
+        if (typeof typesLayout !== 'undefined') { typesLayout = saved.layout; localStorage.setItem('phototo_types_layout', saved.layout); }
+        if (typeof typesSize !== 'undefined') { typesSize = saved.size; localStorage.setItem('phototo_types_size', saved.size); }
+        if (typeof syncTypesLayoutSizeButtons === 'function') syncTypesLayoutSizeButtons();
+        if (shouldReload && typeof renderSmartCategoriesFromCache === 'function') renderSmartCategoriesFromCache();
+        return true;
+    }
+    if (pageKey === 'dups' || pageKey === 'similar') {
+        const sb = document.getElementById(`${pageKey}-sort-by`);
+        const so = document.getElementById(`${pageKey}-sort-order`);
+        const fb = document.getElementById(`${pageKey}-filter-by`);
+        const safeFilter = (saved.groupBy && saved.groupBy !== 'NONE' && saved.groupBy !== 'DAY' && saved.groupBy !== 'WEEK' && saved.groupBy !== 'MONTH' && saved.groupBy !== 'YEAR' && saved.groupBy !== 'SIZE') ? saved.groupBy : 'ALL';
+        const safeLayout = saved.layout === 'MASONRY' ? 'MASONRY' : 'GRID';
+        if (sb) sb.value = saved.sortBy;
+        if (so) so.value = saved.sortOrder;
+        if (fb) fb.value = safeFilter;
+        if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', `${pageKey}-sort-dir-btn`, `${pageKey}-sort-arrow`);
+        if (typeof _cmpViewState !== 'undefined' && _cmpViewState[pageKey]) {
+            _cmpViewState[pageKey].layout = safeLayout;
+            _cmpViewState[pageKey].size = saved.size;
+            localStorage.setItem(`phototo_${pageKey}_layout`, safeLayout);
+            localStorage.setItem(`phototo_${pageKey}_size`, saved.size);
+        }
+        if (typeof syncComparisonLayoutSizeButtons === 'function') syncComparisonLayoutSizeButtons(pageKey);
+        if (shouldReload && typeof renderComparisonGroupsFromCache === 'function') renderComparisonGroupsFromCache(pageKey);
+        return true;
+    }
+    if (pageKey === 'trash') {
+        const sb = document.getElementById('trash-sort-by');
+        const so = document.getElementById('trash-sort-order');
+        const gb = document.getElementById('trash-group-by');
+        if (sb) sb.value = saved.sortBy;
+        if (so) so.value = saved.sortOrder;
+        if (gb) gb.value = saved.groupBy;
+        if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', 'trash-sort-dir-btn', 'trash-sort-arrow');
+        if (typeof _trashViewState !== 'undefined') {
+            _trashViewState.layout = saved.layout;
+            _trashViewState.size = saved.size;
+            localStorage.setItem('phototo_trash_layout', saved.layout);
+            localStorage.setItem('phototo_trash_size', saved.size);
+        }
+        if (typeof syncTrashLayoutSizeButtons === 'function') syncTrashLayoutSizeButtons();
+        if (shouldReload && typeof renderTrashFromCache === 'function') renderTrashFromCache();
+        return true;
+    }
+    if (pageKey.startsWith('sug-')) {
+        const sb = document.getElementById('sug-sort-by');
+        const so = document.getElementById('sug-sort-order');
+        const fb = document.getElementById('sug-filter-by');
+        if (sb && [...sb.options].some(o => o.value === saved.sortBy)) sb.value = saved.sortBy;
+        if (so) so.value = saved.sortOrder;
+        if (fb && [...fb.options].some(o => o.value === saved.groupBy)) fb.value = saved.groupBy;
+        if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', 'sug-sort-dir-btn', 'sug-sort-arrow');
+        if (typeof _sugPageState !== 'undefined') {
+            _sugPageState.layout = saved.layout || 'GRID';
+            _sugPageState.size = saved.size || 'MD';
+            localStorage.setItem(`phototo_${pageKey}_layout`, _sugPageState.layout);
+            localStorage.setItem(`phototo_${pageKey}_size`, _sugPageState.size);
+        }
+        if (typeof syncSugPageLayoutSizeButtons === 'function') syncSugPageLayoutSizeButtons();
+        if (shouldReload && typeof openSuggestionPage === 'function') openSuggestionPage(pageKey.slice(4), true);
+        return true;
+    }
     const sb = document.getElementById('gal-sort-by');
     const so = document.getElementById('gal-sort-order');
     const gb = document.getElementById('gal-group-by');
@@ -565,6 +933,8 @@ function openCurrentMediaPageSettings() {
     let pageKey = typeof currentTab !== 'undefined' ? currentTab : 'gallery';
     if (pageKey === 'albums' && typeof openedAlbumName !== 'undefined' && openedAlbumName) pageKey = 'album_single';
     else if (pageKey === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) pageKey = 'person_single';
+    else if (pageKey === 'map' && typeof _openedPlaceBucketIdx !== 'undefined' && _openedPlaceBucketIdx >= 0) pageKey = 'place_single';
+    else if (pageKey === 'map') pageKey = 'places';
     else if (!PAGE_SETTINGS_CONFIG[pageKey]) pageKey = 'gallery';
     openPageSettingsModal(pageKey);
 }
@@ -603,6 +973,43 @@ function openPageSettingsModal(pageKey) {
         renderCustomGroupsManageList();
     }
 
+    const trashPolicySec = document.getElementById('ps-trash-policy-section');
+    if (trashPolicySec) {
+        trashPolicySec.classList.toggle('hidden', !cfg.isTrash);
+        if (cfg.isTrash) {
+            const retSel = document.getElementById('ps-trash-retention-days');
+            const curDays = (typeof _trashViewState !== 'undefined' && _trashViewState.retentionDays !== undefined)
+                ? String(_trashViewState.retentionDays)
+                : '30';
+            if (retSel) {
+                if (![...retSel.options].some(o => o.value === curDays)) {
+                    const opt = document.createElement('option');
+                    opt.value = curDays;
+                    opt.textContent = curDays === '0' ? 'Illimitée' : `${curDays} jours`;
+                    retSel.appendChild(opt);
+                }
+                retSel.value = curDays;
+            }
+        }
+    }
+
+    const sugSec = document.getElementById('ps-sug-settings-section');
+    if (sugSec) {
+        const f = cfg.sugSettingField || '';
+        sugSec.classList.toggle('hidden', !f);
+        document.getElementById('ps-sug-field-blur')?.classList.toggle('hidden', f !== 'blur');
+        document.getElementById('ps-sug-field-large')?.classList.toggle('hidden', f !== 'large');
+        document.getElementById('ps-sug-field-age')?.classList.toggle('hidden', f !== 'age');
+        document.getElementById('ps-sug-field-gps')?.classList.toggle('hidden', f !== 'gps');
+        if (f && typeof getSugToolSettings === 'function') {
+            const curS = getSugToolSettings();
+            if (f === 'blur' && document.getElementById('ps-sug-blur-thresh')) document.getElementById('ps-sug-blur-thresh').value = String(curS.blurThreshold || 45);
+            if (f === 'large' && document.getElementById('ps-sug-large-min-mb')) document.getElementById('ps-sug-large-min-mb').value = String(curS.largeMinMb || 10);
+            if (f === 'age' && document.getElementById('ps-sug-age-days')) document.getElementById('ps-sug-age-days').value = String(curS.ageDays ?? 90);
+            if (f === 'gps' && document.getElementById('ps-sug-gps-gap')) document.getElementById('ps-sug-gps-gap').value = String(curS.gpsGapHours || 6);
+        }
+    }
+
     const defSec = document.getElementById('ps-defaults-section');
     const saveBtn = document.getElementById('ps-save-btn');
     if (defSec) defSec.classList.toggle('hidden', !cfg.hasDefaults);
@@ -610,11 +1017,13 @@ function openPageSettingsModal(pageKey) {
 
     if (cfg.hasDefaults) {
         const cur = getPageDefaultOptions(pageKey) || cfg.defaults;
+        const grpLblEl = document.getElementById('ps-def-group-label');
+        if (grpLblEl) grpLblEl.textContent = cfg.groupLabel || 'Regroupement';
         const fillSelect = (id, opts, val) => {
             const el = document.getElementById(id);
             if (!el) return;
             el.innerHTML = opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-            el.value = val;
+            el.value = opts.some(o => o.value === val) ? val : opts[0].value;
         };
         fillSelect('ps-def-sort-by', cfg.sortOptions, cur.sortBy);
         fillSelect('ps-def-group-by', cfg.groupOptions, cur.groupBy);
@@ -631,7 +1040,7 @@ function closePageSettingsModal() {
     document.getElementById('page-settings-modal')?.classList.add('hidden');
 }
 
-function savePageDefaultOptions() {
+async function savePageDefaultOptions() {
     const { pageKey } = _pageSettingsCtx;
     const cfg = PAGE_SETTINGS_CONFIG[pageKey];
     if (!cfg || !cfg.hasDefaults) { closePageSettingsModal(); return; }
@@ -645,6 +1054,37 @@ function savePageDefaultOptions() {
     try {
         localStorage.setItem(`phototo_page_defaults_${pageKey}`, JSON.stringify(payload));
     } catch (e) {}
+    if (cfg.isTrash) {
+        const retVal = Number(document.getElementById('ps-trash-retention-days')?.value ?? 30);
+        try {
+            const res = await fetch('/api/trash/policy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ retention_days: retVal })
+            });
+            if (res.ok && typeof loadTrashTab === 'function') {
+                await loadTrashTab();
+                if (typeof loadStats === 'function') loadStats();
+            }
+            if (typeof showAppToast === 'function') {
+                showAppToast(
+                    retVal > 0
+                        ? `Durée de conservation réglée sur ${retVal} jours.`
+                        : 'Conservation illimitée activée pour la corbeille.',
+                    'success'
+                );
+            }
+        } catch (e) {}
+    }
+    if (cfg.sugSettingField && typeof saveSugToolSettings === 'function') {
+        const patch = {};
+        if (cfg.sugSettingField === 'blur') patch.blurThreshold = Number(document.getElementById('ps-sug-blur-thresh')?.value || 45);
+        if (cfg.sugSettingField === 'large') patch.largeMinMb = Number(document.getElementById('ps-sug-large-min-mb')?.value || 10);
+        if (cfg.sugSettingField === 'age') patch.ageDays = Number(document.getElementById('ps-sug-age-days')?.value ?? 90);
+        if (cfg.sugSettingField === 'gps') patch.gpsGapHours = Number(document.getElementById('ps-sug-gps-gap')?.value || 6);
+        saveSugToolSettings(patch);
+        if (typeof loadToolsSuggestionsSummary === 'function') loadToolsSuggestionsSummary();
+    }
     applyPageDefaultOptions(pageKey, true);
     closePageSettingsModal();
 }
@@ -661,6 +1101,15 @@ function resetPageDefaultOptions() {
     if (document.getElementById('ps-def-layout')) document.getElementById('ps-def-layout').value = d.layout;
     if (document.getElementById('ps-def-size')) document.getElementById('ps-def-size').value = d.size;
     localStorage.setItem(`phototo_page_defaults_${pageKey}`, JSON.stringify(d));
+    if (cfg.sugSettingField && typeof saveSugToolSettings === 'function') {
+        const patch = {};
+        if (cfg.sugSettingField === 'blur') patch.blurThreshold = Number(document.getElementById('ps-sug-blur-thresh')?.value || 45);
+        if (cfg.sugSettingField === 'large') patch.largeMinMb = Number(document.getElementById('ps-sug-large-min-mb')?.value || 10);
+        if (cfg.sugSettingField === 'age') patch.ageDays = Number(document.getElementById('ps-sug-age-days')?.value ?? 90);
+        if (cfg.sugSettingField === 'gps') patch.gpsGapHours = Number(document.getElementById('ps-sug-gps-gap')?.value || 6);
+        saveSugToolSettings(patch);
+        if (typeof loadToolsSuggestionsSummary === 'function') loadToolsSuggestionsSummary();
+    }
     applyPageDefaultOptions(pageKey, true);
     localStorage.removeItem(`phototo_page_defaults_${pageKey}`);
 }

@@ -139,3 +139,84 @@ def extract_analysis_frames(file_path: str | Path, max_dim: int | None = None) -
         return resized
 
     return frames
+
+
+def probe_media_dimensions(file_path: str | Path) -> tuple[int, int]:
+    """Retourne (largeur, hauteur) d'une image ou vidéo via PIL/OpenCV puis ExifTool en repli."""
+    p = Path(file_path)
+    if not p.exists() or not p.is_file():
+        return (0, 0)
+    ext = p.suffix.lower()
+
+    if ext in VIDEO_EXTS:
+        cap = None
+        try:
+            cap = cv2.VideoCapture(str(p))
+            if cap.isOpened():
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+                if w <= 0 or h <= 0:
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        h, w = int(frame.shape[0]), int(frame.shape[1])
+                if w > 0 and h > 0:
+                    return (w, h)
+        except Exception:
+            pass
+        finally:
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+    else:
+        try:
+            with Image.open(p) as im:
+                w, h = im.size
+                try:
+                    if im.getexif().get(274) in (5, 6, 7, 8):
+                        w, h = h, w
+                except Exception:
+                    pass
+                if w > 0 and h > 0:
+                    return (int(w), int(h))
+        except Exception:
+            pass
+
+    try:
+        import exiftool
+        with exiftool.ExifToolHelper(common_args=["-G", "-n", "-charset", "filename=utf8"]) as et:
+            meta_list = et.get_metadata(str(p))
+        if meta_list:
+            m = meta_list[0]
+            w_val = (
+                m.get("QuickTime:ImageWidth")
+                or m.get("Matroska:ImageWidth")
+                or m.get("RIFF:ImageWidth")
+                or m.get("ASF:ImageWidth")
+                or m.get("File:ImageWidth")
+                or m.get("EXIF:ExifImageWidth")
+                or m.get("EXIF:ImageWidth")
+                or m.get("PNG:ImageWidth")
+                or 0
+            )
+            h_val = (
+                m.get("QuickTime:ImageHeight")
+                or m.get("Matroska:ImageHeight")
+                or m.get("RIFF:ImageHeight")
+                or m.get("ASF:ImageHeight")
+                or m.get("File:ImageHeight")
+                or m.get("EXIF:ExifImageHeight")
+                or m.get("EXIF:ImageHeight")
+                or m.get("PNG:ImageHeight")
+                or 0
+            )
+            if (not w_val or not h_val) and m.get("Composite:ImageSize"):
+                parts = re.findall(r"\d+", str(m.get("Composite:ImageSize")))
+                if len(parts) >= 2:
+                    w_val, h_val = int(parts[0]), int(parts[1])
+            if w_val and h_val:
+                return (int(w_val), int(h_val))
+    except Exception:
+        pass
+    return (0, 0)

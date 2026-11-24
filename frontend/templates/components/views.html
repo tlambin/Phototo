@@ -22,25 +22,17 @@
         <div class="flex items-center gap-2">
             <button id="btn-batch-album-remove" type="button" onclick="runGalleryBatch('ALBUM_REMOVE')"
                     class="hidden ui-pill text-xs font-bold px-3 py-1.5 rounded-full hover:opacity-80 cursor-pointer">- Retirer de l'album</button>
-            <!-- Bouton à part : Analyser les médias -->
-            <button id="gal-batch-analyze-btn" type="button" onclick="openBatchAnalyzeModal()" title="Analyser les médias"
-                    class="ui-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 text-[11px] font-bold hover:bg-[var(--bg-hover)] transition cursor-pointer shrink-0">
-                <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                </svg>
-                <span>Analyser les médias</span>
-            </button>
             <div class="ui-pill rounded-full p-1 flex items-center gap-1">
                 <!-- Mettre en favoris -->
                 <button type="button" onclick="runGalleryBatch('FAVORITE_ADD')" title="Mettre en favoris"
-                        class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-rose-400 flex items-center justify-center transition cursor-pointer">
+                        class="w-8 h-8 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
                     </svg>
                 </button>
                 <!-- Ajouter à un album (modale Ajouter à un album) -->
                 <button type="button" onclick="openBatchAlbumsEditor()" title="Ajouter à un album"
-                        class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-purple-300 flex items-center justify-center transition cursor-pointer">
+                        class="w-8 h-8 rounded-full hover:bg-purple-500/20 hover:text-purple-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <rect x="3" y="6" width="14" height="14" rx="2.5"/>
                         <path d="M7 3h11a2.5 2.5 0 0 1 2.5 2.5V16"/>
@@ -49,7 +41,7 @@
                 </button>
                 <!-- Ajouter à un groupe (Favoris) -->
                 <button id="gal-batch-group-btn" type="button" onclick="openCustomGroupModal('favorites', null, Array.from(selectedGalleryPaths))" title="Créer un groupe de favoris avec la sélection"
-                        class="hidden w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-amber-300 flex items-center justify-center transition cursor-pointer">
+                        class="hidden w-8 h-8 rounded-full hover:bg-amber-500/20 hover:text-amber-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
@@ -57,7 +49,7 @@
                 </button>
                 <!-- Partager -->
                 <button type="button" onclick="shareGalleryBatch()" title="Partager"
-                        class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-sky-300 flex items-center justify-center transition cursor-pointer">
+                        class="w-8 h-8 rounded-full hover:bg-sky-500/20 hover:text-sky-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <circle cx="18" cy="5" r="2.75"/><circle cx="6" cy="12" r="2.75"/><circle cx="18" cy="19" r="2.75"/>
                         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
@@ -65,15 +57,22 @@
                 </button>
                 <!-- Télécharger -->
                 <button type="button" onclick="downloadGalleryBatch()" title="Télécharger"
-                        class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-emerald-300 flex items-center justify-center transition cursor-pointer">
+                        class="w-8 h-8 rounded-full hover:bg-emerald-500/20 hover:text-emerald-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
                         <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
                     </svg>
                 </button>
+                <!-- Analyser les médias -->
+                <button id="gal-batch-analyze-btn" type="button" onclick="openBatchAnalyzeModal()" title="Analyser les médias"
+                        class="w-8 h-8 rounded-full hover:bg-indigo-500/20 hover:text-indigo-400 flex items-center justify-center transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                </button>
                 <!-- Corriger les métadonnées / heures -->
                 <button type="button" onclick="openMetadataModalForSelection()" title="Corriger les métadonnées / heures"
-                        class="w-8 h-8 rounded-full hover:bg-[var(--bg-hover)] hover:text-orange-300 flex items-center justify-center transition cursor-pointer">
+                        class="w-8 h-8 rounded-full hover:bg-orange-500/20 hover:text-orange-400 flex items-center justify-center transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                         <path d="M12 20h9"/>
                         <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
@@ -90,6 +89,51 @@
                     </svg>
                 </button>
             </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BARRE FLOTTANTE DE SÉLECTION CORBEILLE (même style que la galerie) -->
+    <div id="trash-batch-bar" class="hidden fixed bottom-5 z-[29] ui-card rounded-full px-4 py-1.5 shadow-2xl">
+      <div class="flex flex-wrap justify-between items-center gap-3">
+        <div class="flex items-center gap-3">
+            <span id="trash-batch-count" class="plum-btn text-xs font-extrabold px-3 py-1 rounded-full shrink-0">0 sélectionné(s)</span>
+            <button type="button" onclick="toggleSelectAllTrash(true)" class="text-xs font-bold hover:underline cursor-pointer">Tout cocher</button>
+            <button type="button" onclick="toggleSelectAllTrash(false)" class="text-xs opacity-70 hover:opacity-100 hover:underline cursor-pointer">Tout décocher</button>
+        </div>
+        <div class="ui-pill rounded-full p-1 flex items-center gap-1">
+            <button type="button" onclick="restoreSelectedTrash()" title="Restaurer la sélection"
+                    class="px-3 h-8 rounded-full hover:bg-emerald-500/20 hover:text-emerald-400 flex items-center gap-1.5 text-xs font-extrabold transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                <span>Restaurer</span>
+            </button>
+            <button type="button" onclick="deleteSelectedTrashPermanently()" title="Supprimer définitivement la sélection"
+                    class="px-3 h-8 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center gap-1.5 text-xs font-extrabold transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                <span>Supprimer</span>
+            </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BARRE FLOTTANTE DE SÉLECTION OUTILS / SUGGESTIONS -->
+    <div id="sug-batch-bar" class="hidden fixed bottom-5 z-[29] ui-card rounded-full px-4 py-1.5 shadow-2xl">
+      <div class="flex flex-wrap justify-between items-center gap-3">
+        <div class="flex items-center gap-3">
+            <span id="sug-batch-count" class="plum-btn text-xs font-extrabold px-3 py-1 rounded-full shrink-0">0 sélectionné(s)</span>
+            <button type="button" onclick="toggleSelectAllSugItems(true)" class="text-xs font-bold hover:underline cursor-pointer">Tout cocher</button>
+            <button type="button" onclick="toggleSelectAllSugItems(false)" class="text-xs opacity-70 hover:opacity-100 hover:underline cursor-pointer">Tout décocher</button>
+        </div>
+        <div class="ui-pill rounded-full p-1 flex items-center gap-1">
+            <button id="sug-batch-primary-btn" type="button" onclick="runSugBatchPrimaryAction()"
+                    class="hidden px-3.5 h-8 rounded-full hover:bg-emerald-500/20 hover:text-emerald-400 flex items-center gap-1.5 text-xs font-extrabold transition cursor-pointer">
+                <span id="sug-batch-primary-label">Appliquer</span>
+            </button>
+            <button id="sug-batch-trash-btn" type="button" onclick="trashSelectedSugItems()" title="Mettre à la corbeille"
+                    class="hidden px-3.5 h-8 rounded-full hover:bg-rose-500/20 hover:text-rose-400 flex items-center gap-1.5 text-xs font-extrabold transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                <span>Corbeille</span>
+            </button>
         </div>
       </div>
     </div>
@@ -291,12 +335,17 @@
                 </div>
             </div>
 
-            <!-- Capsule Timeline flottante au bord droit de la fenêtre (apparaît au survol du bord ou au scroll) -->
+            <!-- Timeline verticale style Google Photos modernisé (adaptée à l'interface) -->
             <div id="gallery-timeline-wrapper"
-                 class="hidden sm:flex fixed right-2 top-[88px] bottom-2 z-[28] w-12 items-stretch justify-end pointer-events-auto">
+                 class="hidden sm:flex fixed right-0 top-[88px] bottom-2 z-[28] w-14 pr-1 items-stretch justify-end pointer-events-auto select-none overflow-visible">
+                <div id="timeline-hover-indicator" class="hidden pointer-events-none absolute right-0 flex items-center justify-end z-20" style="top: 16px; transform: translateY(-50%);">
+                    <div id="timeline-hover-pill" class="ui-card px-3 py-1 rounded-full text-[11px] font-extrabold shadow-lg whitespace-nowrap tracking-tight mr-1"></div>
+                    <div id="timeline-hover-line" class="h-[2px] w-12 rounded-full shrink-0"></div>
+                </div>
                 <aside id="gallery-timeline-box"
-                       class="w-11 h-full ui-card rounded-[14px] p-1 flex flex-col items-center overflow-y-auto no-scrollbar select-none shadow-lg">
-                    <div id="timeline-items-container" class="w-full min-h-full flex flex-col items-center justify-between gap-1 text-[10px] font-extrabold"></div>
+                       class="relative w-12 h-full rounded-2xl overflow-hidden flex flex-col items-end cursor-pointer">
+                    <div id="timeline-scroll-marker" class="hidden pointer-events-none absolute right-0.5 w-1 h-4 rounded-full z-10"></div>
+                    <div id="timeline-items-container" class="relative w-full h-full"></div>
                 </aside>
             </div>
         </div>
@@ -751,26 +800,199 @@
     <!-- ==================== VUE 4 : LIEUX ==================== -->
     <div id="tab-map" class="hidden pr-3.5">
         <div id="map-overview-panel" class="space-y-6">
-            <div class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
+            <div id="places-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+              <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
                 <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 class="text-4xl font-extrabold tracking-tight leading-none">Lieux</h1>
                     <span id="map-stats-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
+                    <span id="places-active-filter-badge" class="hidden ui-card px-3.5 py-1.5 rounded-full text-xs font-extrabold leading-none translate-y-[1px] items-center gap-2 pointer-events-auto">
+                        <span id="places-active-filter-text"></span>
+                        <button type="button" onclick="resetAllPlacesFilters()" class="hover:text-rose-500 font-bold cursor-pointer">✕</button>
+                    </span>
                 </div>
-                <div class="sticky-hide-on-stuck flex items-center gap-2">
-                    <button id="places-page-settings-btn" type="button" onclick="openPageSettingsModal('places')"
-                            title="Réglages des lieux (groupes)"
-                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
-                    </button>
-                    <button id="map-add-btn" type="button" onclick="openMetadataModalForSelection()" class="plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                <div class="sticky-header-actions ml-auto flex items-center gap-2.5">
+                    <button id="map-add-btn" type="button" onclick="openMetadataModalForSelection()" class="sticky-hide-on-stuck plum-btn px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
                         <span>Ajouter</span>
                     </button>
+                    <button id="places-options-btn" type="button" onclick="togglePlacesOptionsBar()" title="Afficher/Masquer les options des lieux"
+                            class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </button>
                 </div>
+              </div>
+
+              <!-- Options des Lieux : Trier par + Grouper par + Filtrer + Style (Grille / Liste & Petit / Moyen / Grand) -->
+              <div id="places-options-drawer" class="hidden sticky-options-drawer">
+              <div class="flex flex-wrap items-center justify-between gap-2.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button id="places-page-settings-btn" type="button" onclick="openPageSettingsModal('places')"
+                            title="Réglages des lieux (groupes et options par défaut)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Trier par :</span>
+                        <select id="places-sort-by" onchange="onPlacesControlsChanged()"
+                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="content">Plus de contenu</option>
+                            <option value="recent">Récent</option>
+                            <option value="name">Nom</option>
+                        </select>
+                        <input type="hidden" id="places-sort-order" value="desc"/>
+                        <button type="button" id="places-sort-dir-btn" onclick="togglePlacesSortOrder()"
+                                title="Ordre décroissant (cliquer pour inverser)"
+                                class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                            <svg id="places-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Grouper par :</span>
+                        <select id="places-group-by" onchange="onPlacesControlsChanged()"
+                                class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="NONE">Aucun</option>
+                            <option value="COUNTRY">Pays / Région</option>
+                            <option value="LETTER">Initiale</option>
+                            <option value="DAY">Jour</option>
+                            <option value="WEEK">Semaine</option>
+                            <option value="MONTH">Mois</option>
+                            <option value="YEAR">Année</option>
+                        </select>
+                    </div>
+
+                    <div id="places-filter-wrapper" class="relative">
+                        <button id="places-filter-btn" type="button" onclick="togglePlacesFilterMenu()"
+                                class="ui-card rounded-full px-4 py-2 min-h-[42px] flex items-center gap-2 text-xs font-extrabold shadow-sm hover:opacity-90 transition cursor-pointer select-none">
+                            <svg class="w-3.5 h-3.5 opacity-80 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                            </svg>
+                            <span>Filtrer</span>
+                            <span id="places-filter-count" class="hidden plum-btn px-1.5 py-0.5 rounded-full text-[10px] leading-none">0</span>
+                            <svg class="w-3 h-3 opacity-60 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+
+                        <div id="places-filter-popover" class="hidden absolute left-0 top-full mt-2 z-40 w-80 ui-card rounded-3xl p-4 shadow-xl space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold">Filtrer par :</span>
+                                <button type="button" onclick="resetAllPlacesFilters()" class="text-[11px] font-extrabold opacity-75 hover:opacity-100 hover:text-rose-500 transition cursor-pointer">
+                                    tout retirer
+                                </button>
+                            </div>
+                            <div id="places-active-filter-chips" class="hidden flex flex-wrap gap-1.5"></div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <select id="places-year" onchange="togglePlacesMultiFilterValue('year', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                                    <option value="">Années</option>
+                                </select>
+                                <select id="places-month" onchange="togglePlacesMultiFilterValue('month', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer w-full">
+                                    <option value="">Mois</option>
+                                    <option value="01">Janvier</option><option value="02">Février</option>
+                                    <option value="03">Mars</option><option value="04">Avril</option>
+                                    <option value="05">Mai</option><option value="06">Juin</option>
+                                    <option value="07">Juillet</option><option value="08">Août</option>
+                                    <option value="09">Septembre</option><option value="10">Octobre</option>
+                                    <option value="11">Novembre</option><option value="12">Décembre</option>
+                                </select>
+                                <select id="places-content-filter" onchange="togglePlacesMultiFilterValue('content', this)"
+                                        class="ui-pill rounded-full px-3 py-1.5 text-xs font-bold outline-none cursor-pointer col-span-2 w-full">
+                                    <option value="">Tous les lieux</option>
+                                    <option value="DOMESTIC">Pays d'origine uniquement</option>
+                                    <option value="FOREIGN">À l'étranger uniquement</option>
+                                    <option value="HAS_FAVORITES">Contient des favoris</option>
+                                    <option value="MULTI_MEDIA">Plusieurs médias (2+)</option>
+                                    <option value="SINGLE_MEDIA">1 seul média</option>
+                                </select>
+                            </div>
+                            <div class="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-extrabold opacity-75">Périodes :</span>
+                                    <button type="button" onclick="addPlacesPeriodFromInputs()" title="Ajouter cette période pour en saisir une autre"
+                                            class="ui-pill px-2 py-0.5 rounded-full text-[10px] font-extrabold hover:opacity-85 transition cursor-pointer">
+                                        + Ajouter période
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="flex flex-col gap-0.5">
+                                        <span class="text-[10px] font-bold opacity-60 px-1">Du</span>
+                                        <input id="places-date-from" type="date" onchange="onPlacesControlsChanged()"
+                                               class="ui-pill rounded-full px-2.5 py-1 text-[11px] font-bold outline-none cursor-pointer w-full"/>
+                                    </label>
+                                    <label class="flex flex-col gap-0.5">
+                                        <span class="text-[10px] font-bold opacity-60 px-1">Au</span>
+                                        <input id="places-date-to" type="date" onchange="onPlacesControlsChanged()"
+                                               class="ui-pill rounded-full px-2.5 py-1 text-[11px] font-bold outline-none cursor-pointer w-full"/>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="setPlacesLayout('GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                            <div id="places-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Grille</span>
+                        </button>
+                        <button type="button" onclick="setPlacesLayout('LIST')" class="flex items-center gap-1.5 group cursor-pointer">
+                            <div id="places-layout-btn-LIST" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Liste</span>
+                        </button>
+                    </div>
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                        <button type="button" id="places-size-btn-SM" onclick="setPlacesSize('SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                        <button type="button" id="places-size-btn-MD" onclick="setPlacesSize('MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                        <button type="button" id="places-size-btn-LG" onclick="setPlacesSize('LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                    </div>
+                </div>
+              </div>
+              </div>
             </div>
+
             <div id="places-groups-bar" class="flex flex-wrap items-center gap-2"></div>
-            <div id="world-map" class="w-full h-[400px] rounded-[28px] ui-card shadow-md z-10 overflow-hidden"></div>
-            <div id="places-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-8"></div>
+
+            <!-- Carte interactive avec barre d'ajustements -->
+            <div id="world-map-card" class="ui-card rounded-[28px] shadow-md overflow-hidden">
+                <div class="px-4 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)]">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <svg class="w-3.5 h-3.5 opacity-75 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <span id="map-toolbar-summary" class="text-[11px] font-extrabold opacity-80 truncate">Carte interactive</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button id="map-viewport-filter-btn" type="button" onclick="toggleMapViewportFilter()"
+                                title="Ne lister que les lieux visibles dans la zone de la carte"
+                                class="ui-pill hover:bg-[var(--bg-hover)] px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition cursor-pointer">
+                            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="3"/></svg>
+                            <span>Zone visible</span>
+                        </button>
+                        <button id="map-fit-btn" type="button" onclick="fitWorldMapToMarkers()"
+                                title="Recentrer la carte sur les lieux affichés"
+                                class="ui-pill hover:bg-[var(--bg-hover)] px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition cursor-pointer">
+                            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                            <span>Recentrer</span>
+                        </button>
+                        <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                            <button type="button" id="map-height-btn-SM" onclick="setMapHeightMode('SM')" class="ui-pill px-2 py-0.5 rounded-full transition cursor-pointer">Compacte</button>
+                            <button type="button" id="map-height-btn-MD" onclick="setMapHeightMode('MD')" class="nav-item-active px-2 py-0.5 rounded-full transition cursor-pointer">Normale</button>
+                            <button type="button" id="map-height-btn-LG" onclick="setMapHeightMode('LG')" class="ui-pill px-2 py-0.5 rounded-full transition cursor-pointer">Grande</button>
+                            <button type="button" id="map-height-btn-HIDE" onclick="setMapHeightMode('HIDE')" class="ui-pill px-2 py-0.5 rounded-full transition cursor-pointer">Masquer</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="world-map" class="w-full h-[380px] z-10 overflow-hidden"></div>
+            </div>
+
+            <div id="places-cards-grid" class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-4 pb-10"></div>
         </div>
 
         <div id="place-single-panel" class="hidden space-y-5 pb-10">
@@ -784,141 +1006,721 @@
                     <span>Voir sur la carte</span>
                 </button>
             </div>
-            <div class="sticky-view-header flex flex-wrap items-center gap-3">
-                <h1 id="single-place-title" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
-                <span id="single-place-subtitle" class="hidden count-pill ui-card px-4 py-1.5 rounded-full text-xs font-bold leading-none opacity-80"></span>
-                <span id="single-place-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+            <div id="place-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                    <h1 id="single-place-title" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
+                    <span id="single-place-subtitle" class="hidden count-pill ui-card px-4 py-1.5 rounded-full text-xs font-bold leading-none opacity-80"></span>
+                    <span id="single-place-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+                </div>
+                <button id="place-single-options-btn" type="button" onclick="toggleFilterBar()" title="Afficher/Masquer les options"
+                        class="sticky-options-toggle ml-auto ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
-            <div id="place-single-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5"></div>
+            <div id="place-single-grid" class="space-y-6"></div>
         </div>
     </div>
 
     <!-- ==================== VUE 5 : CATÉGORIES / TYPES ==================== -->
     <!-- ==================== VUE 5 : CATÉGORIES ==================== -->
-    <div id="tab-types" class="hidden space-y-6 pr-4">
-        <div id="types-overview-panel" class="space-y-6">
-            <div class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-baseline gap-3">
+    <div id="tab-types" class="hidden pr-3.5 pb-12">
+        <div id="types-overview-panel" class="space-y-5">
+            <div id="types-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+              <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                     <h1 class="text-4xl font-extrabold tracking-tight leading-none">Catégories</h1>
-                    <span class="text-2xl font-bold opacity-60">...</span>
+                    <span id="types-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
                 </div>
-                <div class="flex items-center gap-2.5">
-                    <button type="button" onclick="promptCreateSmartCategory()" class="ui-card px-5 py-2.5 rounded-full text-xs font-bold shadow-sm hover:opacity-85 transition">
-                        + Ajouter
+                <div class="sticky-header-actions ml-auto flex items-center gap-2.5">
+                    <button id="types-new-btn" type="button" onclick="promptCreateSmartCategory()"
+                            class="sticky-hide-on-stuck ui-card hover:bg-[var(--bg-hover)] px-5 py-2.5 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-2 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Ajouter</span>
                     </button>
-                    <button id="btn-analyze-categories" type="button" onclick="analyzeSmartCategories()" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">
-                        Analyser
+                    <button id="btn-analyze-categories" type="button" onclick="analyzeSmartCategories()"
+                            class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span>Analyser</span>
+                    </button>
+                    <button id="types-options-btn" type="button" onclick="toggleTypesOptionsBar()" title="Afficher/Masquer les options des catégories"
+                            class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                        <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </button>
                 </div>
-            </div>
+              </div>
 
-            <!-- Pilules compactes : Photos | Vidéos | Images animées | Formats -->
-            <div id="types-cards-grid" class="flex flex-wrap items-center gap-3"></div>
+              <!-- Options des Catégories : Trier + Filtrer + Style (Grille / Liste & Petit / Moyen / Grand) -->
+              <div id="types-options-drawer" class="hidden sticky-options-drawer">
+                <div class="flex flex-wrap items-center justify-between gap-2.5">
+                  <div class="flex flex-wrap items-center gap-2.5">
+                    <button id="types-page-settings-btn" type="button" onclick="openPageSettingsModal('types')"
+                            title="Réglages des catégories (options par défaut)"
+                            class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                    </button>
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Trier par :</span>
+                        <select id="types-sort-by" onchange="onTypesControlsChanged()"
+                                class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="content">Plus de contenu</option>
+                            <option value="name">Nom</option>
+                            <option value="added">Date d'ajout</option>
+                        </select>
+                        <input type="hidden" id="types-sort-order" value="desc"/>
+                        <button type="button" id="types-sort-dir-btn" onclick="toggleTypesSortOrder()"
+                                title="Ordre décroissant (cliquer pour inverser)"
+                                class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                            <svg id="types-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                        <span class="shrink-0">Filtrer :</span>
+                        <select id="types-filter-by" onchange="onTypesControlsChanged()"
+                                class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                            <option value="ALL">Toutes</option>
+                            <option value="AI">IA uniquement</option>
+                            <option value="MANUAL">Manuelles uniquement</option>
+                            <option value="NON_EMPTY">Avec médias</option>
+                            <option value="EMPTY">Vides</option>
+                        </select>
+                    </div>
+                  </div>
+                  <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="setTypesLayout('GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                            <div id="types-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Grille</span>
+                        </button>
+                        <button type="button" onclick="setTypesLayout('LIST')" class="flex items-center gap-1.5 group cursor-pointer">
+                            <div id="types-layout-btn-LIST" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                            </div>
+                            <span class="text-[11px] font-bold opacity-75">Liste</span>
+                        </button>
+                    </div>
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                        <button type="button" id="types-size-btn-SM" onclick="setTypesSize('SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                        <button type="button" id="types-size-btn-MD" onclick="setTypesSize('MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                        <button type="button" id="types-size-btn-LG" onclick="setTypesSize('LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div id="categories-status-banner" class="hidden ui-card rounded-2xl px-4 py-2.5 text-xs font-bold shadow-sm"></div>
 
-            <!-- Tableau des formats (affiché au clic sur la pilule Formats) -->
-            <div id="types-formats-panel" class="hidden ui-card rounded-3xl p-5 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-extrabold">Formats & Extensions</h3>
-                    <button type="button" onclick="toggleFormatsPanel(false)" class="text-xs font-bold opacity-60 hover:opacity-100">✕</button>
-                </div>
-                <div id="types-ext-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
-            </div>
-
             <!-- Grille des catégories intelligentes (IA + manuelles) -->
-            <div id="smart-categories-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"></div>
+            <div id="smart-categories-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-10"></div>
         </div>
 
         <!-- Vue détaillée d'une catégorie -->
-        <div id="category-single-panel" class="hidden space-y-5">
+        <div id="category-single-panel" class="hidden space-y-5 pb-10">
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <button type="button" onclick="closeSingleCategoryView()" class="ui-card px-4 py-2 rounded-full text-xs font-bold shadow-sm">
-                    ← Toutes les catégories
+                <button type="button" onclick="closeSingleCategoryView()" class="ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span>Retour aux catégories</span>
                 </button>
-                <div class="flex items-center gap-2">
-                    <button type="button" onclick="deleteCurrentSmartCategory()" class="bg-rose-600/90 hover:bg-rose-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">
-                        Supprimer la catégorie
+                <div class="ui-card rounded-full p-1 flex items-center gap-1 shadow-sm">
+                    <button type="button" onclick="deleteCurrentSmartCategory()" title="Supprimer cette catégorie"
+                            class="hover:bg-rose-500/20 hover:text-rose-400 px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                        <span>Supprimer</span>
                     </button>
                 </div>
             </div>
-            <div class="sticky-view-header flex items-center justify-between gap-3">
-                <h1 id="single-category-title" class="text-3xl font-extrabold leading-none"></h1>
-                <span id="single-category-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+            <div id="category-single-sticky-header" class="sticky-view-header flex items-center justify-between gap-3">
+                <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                    <h1 id="single-category-title" class="text-4xl font-extrabold tracking-tight leading-none"></h1>
+                    <span id="single-category-count" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85"></span>
+                </div>
             </div>
-            <div id="category-single-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4"></div>
+            <div id="category-single-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
         </div>
+    </div>
+
+    <!-- ==================== VUE 5b : STATISTIQUES DE LA BIBLIOTHÈQUE ==================== -->
+    <div id="tab-stats" class="hidden space-y-6 pb-12 pr-3.5">
+        <div id="stats-sticky-header" class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Statistiques</h1>
+                <span id="stats-summary-pill" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 média · 0,00 Go</span>
+            </div>
+            <button type="button" onclick="loadStatsPage()"
+                    class="sticky-hide-on-stuck ui-card hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-2 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>Actualiser</span>
+            </button>
+        </div>
+
+        <!-- Types de médias : Photos | Vidéos | Images animées | Formats -->
+        <section class="space-y-3">
+            <h2 class="text-xs font-extrabold uppercase tracking-wider opacity-65 px-1">Types de médias &amp; Formats</h2>
+            <div id="types-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"></div>
+            <div id="types-formats-panel" class="hidden ui-card rounded-3xl p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-extrabold">Formats &amp; Extensions</h3>
+                    <button type="button" onclick="toggleFormatsPanel(false)" class="ui-pill hover:bg-[var(--bg-hover)] w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold opacity-75 hover:opacity-100 transition cursor-pointer">✕</button>
+                </div>
+                <div id="types-ext-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+            </div>
+        </section>
+
+        <!-- Compteurs rapides -->
+        <section class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+            <button type="button" onclick="switchTab('gallery')" class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 text-left shadow-sm transition cursor-pointer space-y-1">
+                <div class="text-[11px] font-bold opacity-60 uppercase tracking-wider">Indexés</div>
+                <div id="stats-kpi-indexed" class="text-2xl font-extrabold tabular-nums">0</div>
+                <div id="stats-kpi-gb" class="text-[11px] font-semibold opacity-70">0,00 Go</div>
+            </button>
+            <button type="button" onclick="switchTab('favorites')" class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 text-left shadow-sm transition cursor-pointer space-y-1">
+                <div class="text-[11px] font-bold opacity-60 uppercase tracking-wider">Favoris</div>
+                <div id="stats-kpi-favorites" class="text-2xl font-extrabold tabular-nums">0</div>
+                <div class="text-[11px] font-semibold opacity-70">Ouvrir les favoris →</div>
+            </button>
+            <button type="button" onclick="switchTab('faces')" class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 text-left shadow-sm transition cursor-pointer space-y-1">
+                <div class="text-[11px] font-bold opacity-60 uppercase tracking-wider">Personnes</div>
+                <div id="stats-kpi-persons" class="text-2xl font-extrabold tabular-nums">0</div>
+                <div class="text-[11px] font-semibold opacity-70">Visages regroupés</div>
+            </button>
+            <button type="button" onclick="switchTab('trash')" class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 text-left shadow-sm transition cursor-pointer space-y-1">
+                <div class="text-[11px] font-bold opacity-60 uppercase tracking-wider">Corbeille</div>
+                <div id="stats-kpi-trash" class="text-2xl font-extrabold tabular-nums">0</div>
+                <div class="text-[11px] font-semibold opacity-70">Médias supprimés</div>
+            </button>
+        </section>
+
+        <!-- Chronologie par Années / Mois / Semaines / Jours -->
+        <section id="stats-temporal-section" class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h2 class="text-sm font-extrabold">Activité par période</h2>
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[11px] font-extrabold">
+                        <button id="stats-gran-years" type="button" onclick="setStatsGranularity('years')" class="nav-item-active px-3 py-1 rounded-full transition cursor-pointer">Années</button>
+                        <button id="stats-gran-months" type="button" onclick="setStatsGranularity('months')" class="px-3 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer">Mois</button>
+                        <button id="stats-gran-weeks" type="button" onclick="setStatsGranularity('weeks')" class="px-3 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer">Semaines</button>
+                        <button id="stats-gran-days" type="button" onclick="setStatsGranularity('days')" class="px-3 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer">Jours</button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                        <button id="stats-order-recent" type="button" onclick="setStatsOrderMode('recent')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Récents</button>
+                        <button id="stats-order-top" type="button" onclick="setStatsOrderMode('top')" class="px-2.5 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer">Records</button>
+                    </div>
+                    <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                        <button id="stats-metric-count" type="button" onclick="setStatsMetricMode('count')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Médias</button>
+                        <button id="stats-metric-bytes" type="button" onclick="setStatsMetricMode('bytes')" class="px-2.5 py-1 rounded-full opacity-75 hover:opacity-100 transition cursor-pointer">Taille</button>
+                    </div>
+                </div>
+            </div>
+            <div id="stats-period-chart" class="h-36 flex items-end gap-1.5 pt-4 px-1 overflow-x-auto no-scrollbar"></div>
+            <div id="stats-period-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1"></div>
+        </section>
+
+        <!-- Habitudes de prise de vue : Jour de semaine, Saison, Heures -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Jours de la semaine</h2>
+                    <span id="stats-weekday-peak" class="ui-pill px-2.5 py-0.5 rounded-full text-[10px] font-extrabold opacity-80"></span>
+                </div>
+                <div id="stats-weekday-chart" class="space-y-2"></div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Saisonnalité (Mois)</h2>
+                    <span id="stats-season-peak" class="ui-pill px-2.5 py-0.5 rounded-full text-[10px] font-extrabold opacity-80"></span>
+                </div>
+                <div id="stats-season-chart" class="h-36 flex items-end gap-1.5 pt-4"></div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Heures de prise de vue</h2>
+                    <span id="stats-hour-peak" class="ui-pill px-2.5 py-0.5 rounded-full text-[10px] font-extrabold opacity-80"></span>
+                </div>
+                <div id="stats-hour-chart" class="h-36 flex items-end gap-0.5 pt-4"></div>
+            </div>
+        </section>
+
+        <!-- Organisation, Technique & Top Albums -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <h2 class="text-sm font-extrabold">Métadonnées &amp; Classement</h2>
+                <div id="stats-meta-card" class="space-y-2.5 text-xs"></div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <h2 class="text-sm font-extrabold">Résolutions &amp; Vidéos</h2>
+                <div id="stats-tech-card" class="space-y-2.5 text-xs"></div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Principaux albums</h2>
+                    <button type="button" onclick="switchTab('albums')" class="ui-pill hover:bg-[var(--bg-hover)] px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition cursor-pointer">Tous →</button>
+                </div>
+                <div id="stats-top-albums-card" class="space-y-2 text-xs"></div>
+            </div>
+        </section>
+
+        <!-- Répartition & Couverture d'analyse -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Répartition par type &amp; stockage</h2>
+                    <span id="stats-type-total" class="ui-pill px-3 py-1 rounded-full text-[11px] font-extrabold opacity-80">0 Go</span>
+                </div>
+                <div id="stats-type-bar" class="h-2.5 w-full rounded-full overflow-hidden ui-pill flex gap-0.5"></div>
+                <div id="stats-type-breakdown" class="space-y-2.5"></div>
+            </div>
+            <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-extrabold">Couverture IA &amp; Santé</h2>
+                    <button type="button" onclick="switchTab('tools')" class="ui-pill hover:bg-[var(--bg-hover)] px-3 py-1 rounded-full text-[11px] font-extrabold transition cursor-pointer">Outils →</button>
+                </div>
+                <div id="stats-coverage-list" class="space-y-3"></div>
+            </div>
+        </section>
     </div>
 
     <!-- ==================== VUE 6 : OUTILS ==================== -->
-    <div id="tab-tools" class="hidden space-y-6">
-        <div class="flex items-baseline gap-3 mb-4">
-            <h1 class="text-4xl font-extrabold tracking-tight leading-none">Outils</h1>
-            <span class="text-2xl font-bold opacity-60">...</span>
+    <div id="tab-tools" class="hidden space-y-5 pb-12 pr-3.5">
+        <div id="tools-sticky-header" class="sticky-view-header flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                <h1 class="text-4xl font-extrabold tracking-tight leading-none">Outils</h1>
+                <span id="tools-summary-pill" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 média · 0,00 Go</span>
+            </div>
         </div>
 
-        <div class="flex flex-wrap gap-4">
-            <button onclick="openEditorFromTools('PHOTO')" class="ui-card px-6 py-3 rounded-2xl text-xs font-extrabold flex items-center gap-2.5 shadow-sm hover:scale-[1.02] transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                <span>Editeur Photos</span>
+        <!-- RANGÉE SUPÉRIEURE : ÉDITEUR PHOTO · ÉDITEUR VIDÉO · OUTILS IA -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <button type="button" onclick="openEditorFromTools('PHOTO')"
+                    class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 flex items-center gap-3.5 text-left shadow-sm transition group cursor-pointer">
+                <div class="w-11 h-11 rounded-2xl ui-pill flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="text-sm font-extrabold leading-tight">Éditeur photo</div>
+                    <div class="text-[11px] opacity-60 truncate mt-0.5">Recadrage, lumière &amp; filtres</div>
+                </div>
             </button>
-            <button onclick="openEditorFromTools('VIDEO')" class="ui-card px-6 py-3 rounded-2xl text-xs font-extrabold flex items-center gap-2.5 shadow-sm hover:scale-[1.02] transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>
-                <span>Editeur Vidéos</span>
+
+            <button type="button" onclick="openEditorFromTools('VIDEO')"
+                    class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 flex items-center gap-3.5 text-left shadow-sm transition group cursor-pointer">
+                <div class="w-11 h-11 rounded-2xl ui-pill flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="M7 3v18M17 3v18M2 12h20"/></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="text-sm font-extrabold leading-tight">Éditeur vidéo</div>
+                    <div class="text-[11px] opacity-60 truncate mt-0.5">Découpe, audio &amp; encodage</div>
+                </div>
+            </button>
+
+            <button id="tools-ai-open-btn" type="button" onclick="openToolsAiModal()"
+                    class="ui-card hover:bg-[var(--bg-hover)] rounded-3xl p-4 flex items-center gap-3.5 text-left shadow-sm transition group cursor-pointer">
+                <div class="w-11 h-11 rounded-2xl ui-pill flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l1.9 4.7L18.6 9.6l-4.7 1.9L12 16.2l-1.9-4.7L5.4 9.6l4.7-1.9Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="text-sm font-extrabold leading-tight">Outils IA</div>
+                    <div class="text-[11px] opacity-60 truncate mt-0.5">OCR, CLIP, visages &amp; catégories</div>
+                </div>
             </button>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 max-w-xl gap-6 pt-2">
-            <div class="ui-card rounded-3xl p-6 text-center space-y-4 shadow-sm">
-                <div class="text-xs font-extrabold tracking-wider uppercase">MES DOUBLONS</div>
-                <div class="ui-pill rounded-2xl py-2.5 text-lg font-extrabold" id="st-dups">0</div>
-                <div class="flex justify-center gap-3">
-                    <button onclick="switchTab('dups')" title="Voir les doublons" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </button>
-                    <button onclick="switchTab('dups'); runTask('DEDUP')" title="Lancer l'analyse des doublons" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    </button>
+        <!-- FENÊTRES PRINCIPALES : RECHERCHE DE DOUBLONS & RECHERCHE DE SIMILAIRES -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-extrabold leading-tight">Recherche de doublons</h2>
+                            <p class="text-[11px] opacity-60 truncate">Copies identiques à nettoyer pour libérer de l'espace</p>
+                        </div>
+                    </div>
+                    <span class="ui-pill px-3 py-1 rounded-full text-xs font-extrabold tabular-nums shrink-0"><span id="st-dups">0</span> groupe(s)</span>
                 </div>
-            </div>
 
-            <div class="ui-card rounded-3xl p-6 text-center space-y-4 shadow-sm">
-                <div class="text-xs font-extrabold tracking-wider uppercase">MES SIMILARITES</div>
-                <div class="ui-pill rounded-2xl py-2.5 text-lg font-extrabold" id="st-sims">0</div>
-                <div class="flex justify-center gap-3">
-                    <button onclick="switchTab('similar')" title="Voir les similarités" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-bold opacity-70">
+                        <span>Couverture de l'analyse</span>
+                        <span id="tools-cov-text-dedup" class="tabular-nums">0 / 0 (0 %)</span>
+                    </div>
+                    <div class="w-full ui-pill rounded-full h-2 overflow-hidden">
+                        <div id="tools-cov-bar-dedup" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+                    <button type="button" onclick="switchTab('dups')"
+                            class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                        Ouvrir
                     </button>
-                    <button onclick="switchTab('similar'); runTask('SIMILAR')" title="Lancer l'analyse des similarités" class="plum-btn w-10 h-7 rounded-full flex items-center justify-center shadow">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <button type="button" onclick="switchTab('dups'); runTask('DEDUP')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span>Analyser</span>
                     </button>
                 </div>
-            </div>
+            </section>
+
+            <section class="ui-card rounded-3xl p-5 shadow-sm space-y-3.5 flex flex-col justify-between">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="12" height="14" rx="2"/><path d="M18 7h2a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-extrabold leading-tight">Recherche de similaires</h2>
+                            <p class="text-[11px] opacity-60 truncate">Rafales, prises proches et variantes visuelles</p>
+                        </div>
+                    </div>
+                    <span class="ui-pill px-3 py-1 rounded-full text-xs font-extrabold tabular-nums shrink-0"><span id="st-sims">0</span> groupe(s)</span>
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] font-bold opacity-70">
+                        <span>Couverture de l'analyse</span>
+                        <span id="tools-cov-text-similar" class="tabular-nums">0 / 0 (0 %)</span>
+                    </div>
+                    <div class="w-full ui-pill rounded-full h-2 overflow-hidden">
+                        <div id="tools-cov-bar-similar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+                    <button type="button" onclick="switchTab('similar')"
+                            class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                        Ouvrir
+                    </button>
+                    <button type="button" onclick="switchTab('similar'); runTask('SIMILAR')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span>Analyser</span>
+                    </button>
+                </div>
+            </section>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 max-w-4xl">
-            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm">
-                <div class="text-xs font-extrabold uppercase">🔍 Texte OCR & Recherche IA</div>
-                <div class="flex gap-2">
-                    <button onclick="runTask('OCR')" class="plum-btn flex-1 py-2 rounded-full text-xs font-bold">Analyser OCR</button>
-                    <button onclick="runTask('CLIP')" class="plum-btn flex-1 py-2 rounded-full text-xs font-bold">Indexer IA</button>
+        <!-- FENÊTRE SUGGESTIONS -->
+        <section class="ui-card rounded-3xl p-5 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-2xl ui-pill flex items-center justify-center shrink-0 opacity-85">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2v.3h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2Z"/></svg>
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-extrabold leading-tight">Suggestions</h2>
+                        <p class="text-[11px] opacity-60 truncate">Tri intelligent (décor, personnes, lieux), rotations, photos floues, fichiers lourds et métadonnées.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" onclick="runTask('SUGGESTIONS')"
+                            class="plum-btn px-4 py-1.5 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span>Tout analyser</span>
+                    </button>
+                    <button type="button" onclick="loadToolsSuggestionsSummary(true)" title="Actualiser les suggestions"
+                            class="w-9 h-9 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center transition cursor-pointer shrink-0">
+                        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
                 </div>
             </div>
-            <div class="ui-card rounded-3xl p-5 space-y-3 shadow-sm md:col-span-2 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <div class="text-xs font-extrabold uppercase">📅 Métadonnées Takeout manquantes (<span id="st-missing-meta">0</span>)</div>
-                    <p class="text-[11px] opacity-70">Récupère automatiquement les dates depuis le nom ou le JSON.</p>
+
+            <!-- Barre de progression en direct quand une analyse de suggestion tourne -->
+            <div id="tools-sug-progress-card" class="hidden ui-pill rounded-2xl p-3.5 space-y-2">
+                <div class="flex items-center justify-between gap-2 text-xs font-extrabold">
+                    <span id="tools-sug-status-title" class="truncate">Analyse des suggestions en cours...</span>
+                    <span id="tools-sug-progress-meta" class="text-[11px] opacity-75 tabular-nums shrink-0">0 / 0 • --</span>
                 </div>
-                <button id="btn-retry-meta" onclick="retryMissingMetadataNow()" class="plum-btn px-5 py-2 rounded-full text-xs font-bold shadow">
-                    Réparer les dates
+                <div class="w-full ui-card rounded-full h-2.5 overflow-hidden relative">
+                    <div id="tools-sug-progress-bar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- 1. Albums & Événements -->
+                <div id="tools-sug-card-albums" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Albums &amp; Événements</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-albums-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Ajouts d'albums (décor, personnes, lieu) · <span id="tools-sug-albums-meta">0 nouvel album</span></p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-albums')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button type="button" onclick="openSuggestionAndAnalyze('albums')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Suggestion de rotation -->
+                <div id="tools-sug-card-rotation" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Rotation suggérée</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-rotation-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Photos penchées ou à l'envers · <span id="tools-sug-rotation-meta">Non analysé</span></p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-rotation')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button id="tools-btn-scan-rotation" type="button" onclick="openSuggestionAndAnalyze('rotation')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Qualité : Flou & Exposition -->
+                <div id="tools-sug-card-blurry" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Qualité : Flou &amp; Expo</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-blurry-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Photos floues, sombres ou cramées · <span id="tools-sug-blurry-meta">Non analysé</span></p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-blurry')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button id="tools-btn-scan-blur" type="button" onclick="openSuggestionAndAnalyze('blurry')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Localisation manquante (GPS) -->
+                <div id="tools-sug-card-gps" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Lieux manquants (GPS)</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-gps-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Photos sans GPS prises peu avant ou après un média géolocalisé.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-missing_gps')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button type="button" onclick="openSuggestionAndAnalyze('missing_gps')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5. Personnes à nommer & fusionner -->
+                <div id="tools-sug-card-people" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Personnes à trier</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-people-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Visages similaires &amp; inconnus · <span id="tools-sug-people-meta">0 fusion · 0 inconnu</span></p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-people')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button type="button" onclick="openSuggestionAndAnalyze('people')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 6. Captures d'écran & Documents -->
+                <div id="tools-sug-card-screenshots" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Captures &amp; Docs</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-screenshots-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Captures d'écran &amp; textes OCR anciens à archiver ou supprimer.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-screenshots')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button type="button" onclick="openSuggestionAndAnalyze('screenshots')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 7. Gros fichiers & Courtes vidéos -->
+                <div id="tools-sug-card-large" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Stockage &amp; Courtes</div>
+                            <span class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="tools-sug-large-count">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Gros fichiers &amp; micro-vidéos · <span id="tools-sug-large-meta">0 Mo</span></p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-large')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button type="button" onclick="openSuggestionAndAnalyze('large')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 8. Fichiers sans métadonnées -->
+                <div id="tools-sug-card-missing" class="ui-pill rounded-2xl p-4 flex flex-col justify-between gap-3">
+                    <div class="space-y-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold leading-snug">Sans métadonnées</div>
+                            <span id="tools-missing-meta-pill" class="ui-card px-2 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums shrink-0"><span id="st-missing-meta">0</span></span>
+                        </div>
+                        <p class="text-[11px] opacity-65 leading-snug">Dates absentes ou système à réparer depuis EXIF/Takeout.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                        <button type="button" onclick="switchTab('sug-missing_meta')"
+                                class="ui-card hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer">
+                            Ouvrir
+                        </button>
+                        <button id="btn-retry-meta" type="button" onclick="openSuggestionAndAnalyze('missing_meta')"
+                                class="plum-btn px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm cursor-pointer">
+                            Analyser
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== VUE 6b : PAGE DEDIEE D'UN OUTIL / SUGGESTION ==================== -->
+    <div id="tab-suggestion-page" class="hidden space-y-5 pr-3.5">
+        <div id="sug-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+          <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
+                <button id="sug-back-btn" type="button" onclick="goBackFromSugPage()" title="Retour"
+                        class="ui-card hover:bg-[var(--bg-hover)] w-9 h-9 rounded-full flex items-center justify-center shadow-sm transition cursor-pointer shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <h1 id="sug-page-title" class="text-4xl font-extrabold tracking-tight leading-none">Suggestions</h1>
+                <span id="sug-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 élément</span>
+            </div>
+            <div class="sticky-header-actions ml-auto flex flex-wrap items-center gap-2.5">
+                <button id="sug-header-action-btn" type="button" onclick="runSugPagePrimaryAction()"
+                        class="hidden sticky-hide-on-stuck ui-card hover:bg-[var(--bg-hover)] px-5 py-2.5 rounded-full text-xs font-extrabold shadow-sm transition cursor-pointer">
+                    Appliquer
+                </button>
+                <button id="sug-analyze-btn" type="button" onclick="runCurrentSugToolAnalyze()"
+                        class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span id="sug-analyze-btn-label">Analyser</span>
+                </button>
+                <button id="sug-options-btn" type="button" onclick="toggleSugOptionsBar()" title="Afficher/Masquer les options"
+                        class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
             </div>
+          </div>
+
+          <div id="sug-options-drawer" class="hidden sticky-options-drawer">
+            <div class="flex flex-wrap items-center justify-between gap-2.5">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button id="sug-page-settings-btn" type="button" onclick="openCurrentSugPageSettings()"
+                        title="Réglages de cet outil (seuils & options par défaut)"
+                        class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
+                <div id="sug-sort-pill" class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Trier par :</span>
+                    <select id="sug-sort-by" onchange="onSugPageControlsChanged()"
+                            class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer"></select>
+                    <input type="hidden" id="sug-sort-order" value="desc"/>
+                    <button type="button" id="sug-sort-dir-btn" onclick="toggleSugPageSortOrder()"
+                            title="Ordre décroissant (cliquer pour inverser)"
+                            class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                        <svg id="sug-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="sug-filter-pill" class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Filtrer par :</span>
+                    <select id="sug-filter-by" onchange="onSugPageFilterChanged()"
+                            class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer"></select>
+                </div>
+              </div>
+              <div id="sug-layout-size-pill" class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="setSugPageLayout('GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="sug-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Grille</span>
+                    </button>
+                    <button type="button" onclick="setSugPageLayout('MASONRY')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="sug-layout-btn-MASONRY" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Mosaïque</span>
+                    </button>
+                    <button type="button" onclick="setSugPageLayout('LIST')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="sug-layout-btn-LIST" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Liste</span>
+                    </button>
+                </div>
+                <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                    <button type="button" id="sug-size-btn-SM" onclick="setSugPageSize('SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                    <button type="button" id="sug-size-btn-MD" onclick="setSugPageSize('MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                    <button type="button" id="sug-size-btn-LG" onclick="setSugPageSize('LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <div id="sug-progress-card" class="hidden ui-card rounded-3xl p-4 space-y-3 shadow-sm">
+            <div id="sug-status-title" class="text-xs font-extrabold text-center">Analyse en cours...</div>
+            <div class="w-full ui-pill rounded-full h-3.5 overflow-hidden relative">
+                <div id="cov-bar-sug" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
+                <span id="cov-pct-sug" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">0 %</span>
+            </div>
+            <div class="grid grid-cols-3 gap-3 max-w-2xl mx-auto text-center text-xs font-extrabold">
+                <div class="ui-pill rounded-2xl py-2 px-3" id="cov-label-sug">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3">Temps restant estimé :<br><span id="sug-eta-label" class="font-semibold opacity-75">--</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3"><span id="sug-found-banner">0</span> suggestion(s)<br><span class="font-semibold opacity-75">détectée(s)</span></div>
+            </div>
+        </div>
+
+        <div id="sug-summary-bar" class="hidden ui-card rounded-full px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs font-extrabold shadow-sm"></div>
+        <div id="sug-container" class="space-y-6 pb-10"></div>
     </div>
 
     <!-- ==================== VUE RECHERCHE DEDIEE ==================== -->
-    <div id="tab-search" class="hidden space-y-5 pr-4">
+    <div id="tab-search" class="hidden space-y-5 pr-3.5">
         <div class="sticky-view-header flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3">
                 <h1 class="text-4xl font-extrabold tracking-tight leading-none">Recherche</h1>
@@ -936,79 +1738,442 @@
     </div>
 
     <!-- ==================== VUE 7 : DOUBLONS ==================== -->
-    <div id="tab-dups" class="hidden space-y-5">
-        <div class="sticky-view-header flex items-center justify-between gap-3">
-            <div class="flex items-baseline gap-3">
+    <div id="tab-dups" class="hidden space-y-5 pr-3.5">
+        <div id="dups-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+          <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                 <h1 class="text-4xl font-extrabold tracking-tight leading-none">Doublons</h1>
-                <span class="text-2xl font-bold opacity-60">...</span>
+                <span id="dups-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 groupe</span>
             </div>
-            <div class="flex gap-2">
-                <button id="btn-delete-checked-dups" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
-                <button onclick="runTask('DEDUP')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
+            <div class="sticky-header-actions ml-auto flex flex-wrap items-center gap-2.5">
+                <button id="btn-delete-checked-dups" type="button" onclick="deleteCheckedDuplicates()" class="hidden sticky-hide-on-stuck bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md transition cursor-pointer">Supprimer la sélection</button>
+                <button id="dups-analyze-btn" type="button" onclick="runTask('DEDUP')" class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span>Analyser</span>
+                </button>
+                <button id="dups-options-btn" type="button" onclick="toggleDupsOptionsBar()" title="Afficher/Masquer les options des doublons"
+                        class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
+          </div>
+
+          <div id="dups-options-drawer" class="hidden sticky-options-drawer">
+            <div class="flex flex-wrap items-center justify-between gap-2.5">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button id="dups-page-settings-btn" type="button" onclick="openPageSettingsModal('dups')"
+                        title="Réglages des doublons (options par défaut)"
+                        class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Trier par :</span>
+                    <select id="dups-sort-by" onchange="onComparisonControlsChanged('dups')"
+                            class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="date">Date</option>
+                        <option value="size">Taille récupérable</option>
+                        <option value="count">Nombre de fichiers</option>
+                        <option value="name">Nom</option>
+                    </select>
+                    <input type="hidden" id="dups-sort-order" value="desc"/>
+                    <button type="button" id="dups-sort-dir-btn" onclick="toggleComparisonSortOrder('dups')"
+                            title="Ordre décroissant (cliquer pour inverser)"
+                            class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                        <svg id="dups-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Filtrer par :</span>
+                    <select id="dups-filter-by" onchange="onComparisonControlsChanged('dups')"
+                            class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="ALL">Tous</option>
+                        <option value="EXACT_ONLY">Doublons exacts</option>
+                        <option value="DIFF_QUALITY">Qualités différentes</option>
+                        <option value="PHOTOS">Photos uniquement</option>
+                        <option value="VIDEOS">Vidéos uniquement</option>
+                        <option value="MULTI">Plus de 2 fichiers</option>
+                        <option value="CHECKED">Avec sélection</option>
+                    </select>
+                </div>
+              </div>
+              <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="setComparisonLayout('dups', 'GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="dups-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Grille</span>
+                    </button>
+                    <button type="button" onclick="setComparisonLayout('dups', 'MASONRY')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="dups-layout-btn-MASONRY" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Mosaïque</span>
+                    </button>
+                </div>
+                <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                    <button type="button" id="dups-size-btn-SM" onclick="setComparisonSize('dups', 'SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                    <button type="button" id="dups-size-btn-MD" onclick="setComparisonSize('dups', 'MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                    <button type="button" id="dups-size-btn-LG" onclick="setComparisonSize('dups', 'LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
-            <div id="dups-status-title" class="text-xs font-extrabold text-center">Analyse en cours...</div>
-            <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
+        <div id="dups-progress-card" class="hidden ui-card rounded-3xl p-4 space-y-3 shadow-sm">
+            <div id="dups-status-title" class="text-xs font-extrabold text-center">Prêt pour analyse</div>
+            <div class="w-full ui-pill rounded-full h-3.5 overflow-hidden relative">
                 <div id="cov-bar-dedup" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
                 <span id="cov-pct-dedup" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">0 %</span>
             </div>
-            <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
-                <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-dedup">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
-                <div class="ui-pill rounded-2xl py-2.5 px-3">Temps restant estimé :<br><span id="dups-eta-label" class="font-semibold opacity-75">--</span></div>
-                <div class="ui-pill rounded-2xl py-2.5 px-3"><span id="dups-count-banner">0</span> doublons<br><span class="font-semibold opacity-75">0 echecs</span></div>
+            <div class="grid grid-cols-3 gap-3 max-w-2xl mx-auto text-center text-xs font-extrabold">
+                <div class="ui-pill rounded-2xl py-2 px-3" id="cov-label-dedup">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3">Temps restant estimé :<br><span id="dups-eta-label" class="font-semibold opacity-75">--</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3"><span id="dups-count-banner">0</span> doublons<br><span class="font-semibold opacity-75">0 échecs</span></div>
             </div>
         </div>
 
-        <div class="text-xs font-extrabold text-center opacity-80">Sélectionnez les fichiers que vous souhaitez supprimer</div>
-        <div id="dups-container" class="space-y-6 pb-10"></div>
+        <div id="dups-summary-bar" class="hidden">
+            <button id="dups-auto-btn" type="button" onclick="togglePageAutoPanel('dups')" class="ui-pill px-3.5 py-2 rounded-full text-xs font-extrabold">Guide de sélection</button>
+        </div>
+
+        <!-- Panneau Guide de sélection (s'ouvre sous la barre de synthèse) -->
+        <div id="dups-auto-panel" class="hidden ui-card rounded-3xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-sm font-extrabold leading-tight">Guide de sélection — Doublons</h2>
+                    <p class="text-[11px] opacity-60">Définissez vos critères de priorité pour sélectionner ou nettoyer automatiquement les copies en trop.</p>
+                </div>
+                <button type="button" onclick="togglePageAutoPanel('dups', false)" title="Fermer" class="w-7 h-7 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center text-xs font-bold cursor-pointer">✕</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                <div class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-extrabold">
+                    <div class="text-[11px] opacity-65 uppercase tracking-wider">1 · Décision</div>
+                    <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="dups-auto-mode" value="KEEP_ONE" checked onchange="setPageAutoMode('dups', 'KEEP_ONE')" class="w-3.5 h-3.5"/>
+                        <span>Ne garder qu'un seul fichier</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="dups-auto-mode" value="KEEP_BOTH" onchange="setPageAutoMode('dups', 'KEEP_BOTH')" class="w-3.5 h-3.5"/>
+                        <span>Garder tous les fichiers</span>
+                    </label>
+                </div>
+                <div id="dups-auto-priority-box" class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-extrabold">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-[11px] opacity-65 uppercase tracking-wider">2 · Conserver en priorité</div>
+                        <button type="button" id="dups-add-priority-btn" onclick="addPageAutoPriority('dups')"
+                                class="text-[11px] font-extrabold text-[var(--accent)] hover:underline cursor-pointer">+ Ajouter une priorité</button>
+                    </div>
+                    <select id="dups-auto-priority" onchange="onComparisonControlsChanged('dups')"
+                            class="ui-card w-full rounded-full px-3.5 py-1.5 text-xs font-bold outline-none cursor-pointer">
+                        <option value="BEST_QUALITY">La meilleure qualité</option>
+                        <option value="NEWEST">Le plus récent</option>
+                        <option value="OLDEST">Le plus ancien</option>
+                        <option value="LARGEST">Le plus gros</option>
+                    </select>
+                    <div id="dups-extra-priorities" class="space-y-1.5"></div>
+                </div>
+                <div id="dups-auto-checks-box" class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-bold">
+                    <div class="text-[11px] opacity-65 uppercase tracking-wider font-extrabold">3 · Règles & actions</div>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input id="dups-auto-chk-exact-only" type="checkbox" onchange="onComparisonControlsChanged('dups')" class="w-3.5 h-3.5 rounded mt-0.5 shrink-0"/>
+                        <span class="leading-snug">Uniquement les doublons exacts <span class="opacity-65 font-semibold">(même date, même qualité, même taille)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="dups-auto-chk-albums" type="checkbox" checked class="w-3.5 h-3.5 rounded"/>
+                        <span>Mettre à jour les albums existants</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="dups-auto-chk-trash" type="checkbox" checked class="w-3.5 h-3.5 rounded"/>
+                        <span>Déplacer les doublons dans la corbeille</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                <span id="dups-auto-feedback" class="text-xs font-bold opacity-75"></span>
+                <div class="flex flex-wrap items-center gap-2 ml-auto">
+                    <button type="button" onclick="previewPageAutoSelect('dups')" class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer">Pré-cocher selon la priorité</button>
+                    <button type="button" onclick="submitPageAutoResolve('dups')" class="plum-btn px-6 py-2 rounded-full text-xs font-extrabold shadow-md cursor-pointer">Appliquer</button>
+                </div>
+            </div>
+        </div>
+        <div id="dups-container" class="space-y-5 pb-10"></div>
     </div>
 
     <!-- ==================== VUE 8 : SIMILAIRES ==================== -->
-    <div id="tab-similar" class="hidden space-y-5">
-        <div class="sticky-view-header flex items-center justify-between gap-3">
-            <div class="flex items-baseline gap-3">
+    <div id="tab-similar" class="hidden space-y-5 pr-3.5">
+        <div id="similar-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+          <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                 <h1 class="text-4xl font-extrabold tracking-tight leading-none">Similaires</h1>
-                <span class="text-2xl font-bold opacity-60">...</span>
+                <span id="similar-total-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 groupe</span>
             </div>
-            <div class="flex gap-2">
-                <button id="btn-delete-checked-sims" onclick="deleteCheckedDuplicates()" class="hidden bg-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow">Supprimer la sélection</button>
-                <button onclick="runTask('SIMILAR')" class="plum-btn px-7 py-2.5 rounded-full text-xs font-bold shadow">Analyser</button>
+            <div class="sticky-header-actions ml-auto flex flex-wrap items-center gap-2.5">
+                <button id="btn-delete-checked-sims" type="button" onclick="deleteCheckedDuplicates()" class="hidden sticky-hide-on-stuck bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md transition cursor-pointer">Supprimer la sélection</button>
+                <button id="similar-analyze-btn" type="button" onclick="runTask('SIMILAR')" class="sticky-hide-on-stuck plum-btn px-6 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span>Analyser</span>
+                </button>
+                <button id="similar-options-btn" type="button" onclick="toggleSimilarOptionsBar()" title="Afficher/Masquer les options des similaires"
+                        class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
+          </div>
+
+          <div id="similar-options-drawer" class="hidden sticky-options-drawer">
+            <div class="flex flex-wrap items-center justify-between gap-2.5">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button id="similar-page-settings-btn" type="button" onclick="openPageSettingsModal('similar')"
+                        title="Réglages des similaires (options par défaut)"
+                        class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Trier par :</span>
+                    <select id="similar-sort-by" onchange="onComparisonControlsChanged('similar')"
+                            class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="date">Date</option>
+                        <option value="size">Taille récupérable</option>
+                        <option value="count">Nombre de fichiers</option>
+                        <option value="name">Nom</option>
+                    </select>
+                    <input type="hidden" id="similar-sort-order" value="desc"/>
+                    <button type="button" id="similar-sort-dir-btn" onclick="toggleComparisonSortOrder('similar')"
+                            title="Ordre décroissant (cliquer pour inverser)"
+                            class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                        <svg id="similar-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Filtrer par :</span>
+                    <select id="similar-filter-by" onchange="onComparisonControlsChanged('similar')"
+                            class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="ALL">Tous</option>
+                        <option value="EXACT_ONLY">Doublons exacts</option>
+                        <option value="DIFF_QUALITY">Qualités différentes</option>
+                        <option value="PHOTOS">Photos uniquement</option>
+                        <option value="VIDEOS">Vidéos uniquement</option>
+                        <option value="MULTI">Plus de 2 fichiers</option>
+                        <option value="CHECKED">Avec sélection</option>
+                    </select>
+                </div>
+              </div>
+              <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="setComparisonLayout('similar', 'GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="similar-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Grille</span>
+                    </button>
+                    <button type="button" onclick="setComparisonLayout('similar', 'MASONRY')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="similar-layout-btn-MASONRY" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Mosaïque</span>
+                    </button>
+                </div>
+                <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                    <button type="button" id="similar-size-btn-SM" onclick="setComparisonSize('similar', 'SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                    <button type="button" id="similar-size-btn-MD" onclick="setComparisonSize('similar', 'MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                    <button type="button" id="similar-size-btn-LG" onclick="setComparisonSize('similar', 'LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="ui-card rounded-3xl p-5 space-y-4 shadow-sm">
-            <div class="text-xs font-extrabold text-center">Analyse en cours...</div>
-            <div class="w-full ui-pill rounded-full h-4 overflow-hidden relative">
+        <div id="similar-progress-card" class="hidden ui-card rounded-3xl p-4 space-y-3 shadow-sm">
+            <div id="similar-status-title" class="text-xs font-extrabold text-center">Prêt pour analyse</div>
+            <div class="w-full ui-pill rounded-full h-3.5 overflow-hidden relative">
                 <div id="cov-bar-similar" class="h-full transition-all duration-300" style="width:0%; background-color: var(--accent-bar);"></div>
                 <span id="cov-pct-similar" class="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">0 %</span>
             </div>
-            <div class="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-xs font-extrabold">
-                <div class="ui-pill rounded-2xl py-2.5 px-3" id="cov-label-similar">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
-                <div class="ui-pill rounded-2xl py-2.5 px-3">Temps restant estimé :<br><span id="sims-eta-label" class="font-semibold opacity-75">--</span></div>
-                <div class="ui-pill rounded-2xl py-2.5 px-3"><span id="sims-count-banner">0</span> similarités<br><span class="font-semibold opacity-75">0 echecs</span></div>
+            <div class="grid grid-cols-3 gap-3 max-w-2xl mx-auto text-center text-xs font-extrabold">
+                <div class="ui-pill rounded-2xl py-2 px-3" id="cov-label-similar">0 / 0<br><span class="font-semibold opacity-75">fichiers analysés</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3">Temps restant estimé :<br><span id="sims-eta-label" class="font-semibold opacity-75">--</span></div>
+                <div class="ui-pill rounded-2xl py-2 px-3"><span id="sims-count-banner">0</span> similarités<br><span class="font-semibold opacity-75">0 échecs</span></div>
             </div>
         </div>
 
-        <div class="text-xs font-extrabold text-center opacity-80">Sélectionnez les fichiers que vous souhaitez supprimer</div>
-        <div id="similar-container" class="space-y-6 pb-10"></div>
+        <div id="similar-summary-bar" class="hidden">
+            <button id="similar-auto-btn" type="button" onclick="togglePageAutoPanel('similar')" class="ui-pill px-3.5 py-2 rounded-full text-xs font-extrabold">Guide de sélection</button>
+        </div>
+
+        <!-- Panneau Guide de sélection Similaires (s'ouvre sous la barre de synthèse) -->
+        <div id="similar-auto-panel" class="hidden ui-card rounded-3xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-sm font-extrabold leading-tight">Guide de sélection — Similaires</h2>
+                    <p class="text-[11px] opacity-60">Définissez vos critères de priorité pour ne garder que la meilleure version de chaque série.</p>
+                </div>
+                <button type="button" onclick="togglePageAutoPanel('similar', false)" title="Fermer" class="w-7 h-7 rounded-full ui-pill hover:bg-[var(--bg-hover)] flex items-center justify-center text-xs font-bold cursor-pointer">✕</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                <div class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-extrabold">
+                    <div class="text-[11px] opacity-65 uppercase tracking-wider">1 · Décision</div>
+                    <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="similar-auto-mode" value="KEEP_ONE" checked onchange="setPageAutoMode('similar', 'KEEP_ONE')" class="w-3.5 h-3.5"/>
+                        <span>Ne garder qu'un seul fichier</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="similar-auto-mode" value="KEEP_BOTH" onchange="setPageAutoMode('similar', 'KEEP_BOTH')" class="w-3.5 h-3.5"/>
+                        <span>Garder tous les fichiers</span>
+                    </label>
+                </div>
+                <div id="similar-auto-priority-box" class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-extrabold">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-[11px] opacity-65 uppercase tracking-wider">2 · Conserver en priorité</div>
+                        <button type="button" id="similar-add-priority-btn" onclick="addPageAutoPriority('similar')"
+                                class="text-[11px] font-extrabold text-[var(--accent)] hover:underline cursor-pointer">+ Ajouter une priorité</button>
+                    </div>
+                    <select id="similar-auto-priority" onchange="onComparisonControlsChanged('similar')"
+                            class="ui-card w-full rounded-full px-3.5 py-1.5 text-xs font-bold outline-none cursor-pointer">
+                        <option value="BEST_QUALITY">La meilleure qualité</option>
+                        <option value="NEWEST">Le plus récent</option>
+                        <option value="OLDEST">Le plus ancien</option>
+                        <option value="LARGEST">Le plus gros</option>
+                    </select>
+                    <div id="similar-extra-priorities" class="space-y-1.5"></div>
+                </div>
+                <div id="similar-auto-checks-box" class="ui-pill rounded-2xl p-3.5 space-y-2 text-xs font-bold">
+                    <div class="text-[11px] opacity-65 uppercase tracking-wider font-extrabold">3 · Règles & actions</div>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input id="similar-auto-chk-exact-only" type="checkbox" onchange="onComparisonControlsChanged('similar')" class="w-3.5 h-3.5 rounded mt-0.5 shrink-0"/>
+                        <span class="leading-snug">Uniquement les doublons exacts <span class="opacity-65 font-semibold">(même date, même qualité, même taille)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="similar-auto-chk-albums" type="checkbox" checked class="w-3.5 h-3.5 rounded"/>
+                        <span>Mettre à jour les albums existants</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="similar-auto-chk-trash" type="checkbox" checked class="w-3.5 h-3.5 rounded"/>
+                        <span>Déplacer les doublons dans la corbeille</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                <span id="similar-auto-feedback" class="text-xs font-bold opacity-75"></span>
+                <div class="flex flex-wrap items-center gap-2 ml-auto">
+                    <button type="button" onclick="previewPageAutoSelect('similar')" class="ui-pill hover:bg-[var(--bg-hover)] px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer">Pré-cocher selon la priorité</button>
+                    <button type="button" onclick="submitPageAutoResolve('similar')" class="plum-btn px-6 py-2 rounded-full text-xs font-extrabold shadow-md cursor-pointer">Appliquer</button>
+                </div>
+            </div>
+        </div>
+        <div id="similar-container" class="space-y-5 pb-10"></div>
     </div>
 
     <!-- ==================== VUE 9 : CORBEILLE ==================== -->
-    <div id="tab-trash" class="hidden">
-        <div class="sticky-view-header flex items-center justify-between mb-6 gap-3">
-            <div class="flex items-center gap-3">
+    <div id="tab-trash" class="hidden space-y-5 pr-3.5">
+        <div id="trash-sticky-header" class="sticky-view-header sticky-options-header space-y-3">
+          <div class="sticky-header-row flex flex-wrap items-center justify-between gap-4">
+            <div class="sticky-hide-on-stuck flex flex-wrap items-center gap-3">
                 <h1 class="text-4xl font-extrabold tracking-tight leading-none">Corbeille</h1>
-                <span id="trash-summary-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">...</span>
+                <span id="trash-summary-label" class="count-pill ui-card px-4 py-1.5 rounded-full text-xs font-extrabold leading-none opacity-85">0 élément</span>
+                <button id="trash-retention-badge" type="button" onclick="openPageSettingsModal('trash')" title="Modifier la durée de conservation"
+                        class="count-pill ui-card hover:bg-[var(--bg-hover)] px-3.5 py-1.5 rounded-full text-xs font-bold leading-none opacity-80 hover:opacity-100 transition cursor-pointer">
+                    Conservation : 30 j
+                </button>
             </div>
-            <button onclick="emptyAllTrash()" class="plum-btn px-8 py-2.5 rounded-full text-xs font-bold shadow">Vider</button>
+            <div class="sticky-header-actions ml-auto flex flex-wrap items-center gap-2.5">
+                <button id="trash-restore-all-btn" type="button" onclick="restoreAllTrash()"
+                        class="hidden sticky-hide-on-stuck ui-card hover:bg-emerald-500/20 hover:text-emerald-400 px-5 py-2.5 rounded-full text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                    <span>Tout restaurer</span>
+                </button>
+                <button id="trash-empty-btn" type="button" onclick="emptyAllTrash()"
+                        class="hidden sticky-hide-on-stuck bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-md flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    <span>Vider</span>
+                </button>
+                <button id="trash-options-btn" type="button" onclick="toggleTrashOptionsBar()" title="Afficher/Masquer les options de la corbeille"
+                        class="sticky-options-toggle ui-card w-11 h-11 rounded-full flex items-center justify-center hover:opacity-85 transition select-none shrink-0 cursor-pointer">
+                    <svg class="w-4 h-4 opacity-85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+            </div>
+          </div>
+
+          <div id="trash-options-drawer" class="hidden sticky-options-drawer">
+            <div class="flex flex-wrap items-center justify-between gap-2.5">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button id="trash-page-settings-btn" type="button" onclick="openPageSettingsModal('trash')"
+                        title="Réglages de la corbeille (durée de conservation & options par défaut)"
+                        class="ui-card hover:bg-[var(--bg-hover)] w-10 h-10 rounded-full flex items-center justify-center shadow-sm opacity-85 hover:opacity-100 transition cursor-pointer shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor"/></svg>
+                </button>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Trier par :</span>
+                    <select id="trash-sort-by" onchange="onTrashControlsChanged()"
+                            class="ui-pill rounded-full px-3.5 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="trashed_at">Date de suppression</option>
+                        <option value="date">Date du média</option>
+                        <option value="days_left">Jours restants</option>
+                        <option value="size">Taille</option>
+                        <option value="name">Nom</option>
+                    </select>
+                    <input type="hidden" id="trash-sort-order" value="desc"/>
+                    <button type="button" id="trash-sort-dir-btn" onclick="toggleTrashSortOrder()"
+                            title="Ordre décroissant (cliquer pour inverser)"
+                            class="ui-pill w-7 h-7 rounded-full flex items-center justify-center hover:opacity-85 transition cursor-pointer">
+                        <svg id="trash-sort-arrow" class="w-3.5 h-3.5 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="ui-card rounded-full px-4 py-2 flex flex-wrap items-center gap-2.5 text-xs font-extrabold shadow-sm">
+                    <span class="shrink-0">Grouper par :</span>
+                    <select id="trash-group-by" onchange="onTrashControlsChanged()"
+                            class="ui-pill rounded-full px-4 py-1 text-xs font-bold outline-none cursor-pointer">
+                        <option value="NONE">Aucun</option>
+                        <option value="DAY">Jour</option>
+                        <option value="WEEK">Semaine</option>
+                        <option value="MONTH">Mois</option>
+                        <option value="YEAR">Année</option>
+                    </select>
+                </div>
+              </div>
+              <div class="ui-card rounded-full px-4 py-1.5 flex flex-wrap items-center gap-2.5 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="setTrashLayout('GRID')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="trash-layout-btn-GRID" class="w-8 h-8 rounded-xl nav-item-active flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Grille</span>
+                    </button>
+                    <button type="button" onclick="setTrashLayout('MASONRY')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="trash-layout-btn-MASONRY" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Mosaïque</span>
+                    </button>
+                    <button type="button" onclick="setTrashLayout('LIST')" class="flex items-center gap-1.5 group cursor-pointer">
+                        <div id="trash-layout-btn-LIST" class="w-8 h-8 rounded-xl ui-pill flex items-center justify-center transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                        </div>
+                        <span class="text-[11px] font-bold opacity-75">Liste</span>
+                    </button>
+                </div>
+                <div class="ui-pill rounded-full p-0.5 flex items-center gap-0.5 text-[10px] font-extrabold">
+                    <button type="button" id="trash-size-btn-SM" onclick="setTrashSize('SM')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Petit</button>
+                    <button type="button" id="trash-size-btn-MD" onclick="setTrashSize('MD')" class="nav-item-active px-2.5 py-1 rounded-full transition cursor-pointer">Moyen</button>
+                    <button type="button" id="trash-size-btn-LG" onclick="setTrashSize('LG')" class="ui-pill px-2.5 py-1 rounded-full transition cursor-pointer">Grand</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div id="trash-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5 pb-10"></div>
+
+        <div id="trash-grid" class="space-y-6 pb-10"></div>
     </div>
 
     <!-- ==================== VUE 10 : PARAMÈTRES ==================== -->
-    <div id="tab-settings" class="hidden max-w-4xl pb-12 space-y-5">
+    <div id="tab-settings" class="hidden max-w-4xl pb-12 space-y-5 pr-3.5">
         <div class="flex flex-wrap items-center justify-between gap-4 min-h-[44px] mb-1">
             <h1 class="text-4xl font-extrabold tracking-tight leading-none">Paramètres</h1>
             <div id="settings-power-bar" class="ui-card rounded-full p-1 flex items-center gap-1 shadow-sm shrink-0">
@@ -1038,40 +2203,180 @@
             </div>
 
             <div class="space-y-2">
-                <!-- Thème (contrôle segmenté) -->
-                <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-                    <span class="text-xs font-bold">Thème</span>
-                    <div class="flex items-center gap-1 p-1 rounded-full ui-card">
-                        <button id="theme-btn-light" onclick="setAppTheme('light')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"/></svg>
-                            <span>Clair</span>
+                <!-- Aperçu en direct -->
+                <div id="settings-appearance-preview" class="ui-pill rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="media-tile tile-selected relative w-14 h-14 rounded-[24px] overflow-hidden shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-200/60 via-sky-300/60 to-violet-400/60">
+                            <span class="select-badge-checked absolute top-1.5 left-1.5 w-4 h-4 rounded-full flex items-center justify-center">
+                                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                            </span>
+                            <span class="fav-badge-active w-5 h-5 rounded-full bg-rose-500/25 border border-rose-400/60 text-rose-400 flex items-center justify-center">
+                                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="text-xs font-extrabold">Aperçu en direct</div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="plum-btn px-2.5 py-0.5 rounded-full text-[10px] font-extrabold">Action</span>
+                                <span class="nav-item-active px-2.5 py-0.5 rounded-full text-[10px] font-bold">Actif</span>
+                                <span class="ui-card px-2.5 py-0.5 rounded-full text-[10px] font-bold">Carte</span>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-semibold opacity-60">Sélection, cartes et boutons mis à jour instantanément</span>
+                </div>
+
+                <!-- Thème (Clair / Sombre / Système) + Option OLED -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2.5 space-y-2">
+                    <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                        <span class="text-xs font-bold">Thème</span>
+                        <div class="flex flex-wrap items-center gap-1 p-1 rounded-full ui-card">
+                            <button id="theme-btn-light" onclick="setAppTheme('light')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"/></svg>
+                                <span>Clair</span>
+                            </button>
+                            <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                                <span>Sombre</span>
+                            </button>
+                            <button id="theme-btn-system" onclick="setAppTheme('system')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                <span>Système</span>
+                            </button>
+                        </div>
+                    </div>
+                    <label for="theme-oled-toggle" class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-subtle)] cursor-pointer select-none">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-2.5 h-2.5 rounded-full bg-black border border-current/35 shrink-0"></span>
+                            <div class="min-w-0">
+                                <span class="text-[11px] font-bold">Noir pur (OLED)</span>
+                                <span class="text-[10px] opacity-60 ml-1.5">Fond noir absolu lorsque le thème sombre est actif</span>
+                            </div>
+                        </div>
+                        <input id="theme-oled-toggle" type="checkbox" onchange="setAppOled(this.checked)" class="w-4 h-4 rounded shrink-0 cursor-pointer"/>
+                    </label>
+                </div>
+
+                <!-- Style d'interface (Glass par défaut / Solide) + Effacer les ombres -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2.5 space-y-2">
+                    <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                        <div>
+                            <div class="text-xs font-bold">Style de l'interface</div>
+                            <div class="text-[10px] opacity-60">Glass : transparence et verre dépoli par défaut · Solide : opaque, sans flou ni transparence.</div>
+                        </div>
+                        <div class="flex items-center gap-1 p-1 rounded-full ui-card shrink-0">
+                            <button id="style-btn-glass" type="button" onclick="setAppStyle('glass')" title="Verre dépoli avec transparence et flou (par défaut)" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                <span>Glass</span>
+                            </button>
+                            <button id="style-btn-solid" type="button" onclick="setAppStyle('solid')" title="Surfaces opaques sans flou ni transparence" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                <span>Solide</span>
+                            </button>
+                        </div>
+                    </div>
+                    <label for="shadows-off-toggle" class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-subtle)] cursor-pointer select-none">
+                        <div class="min-w-0">
+                            <span class="text-[11px] font-bold">Effacer les ombres</span>
+                            <span class="text-[10px] opacity-60 ml-1.5">Supprime les ombres portées pour un rendu plat et minimal</span>
+                        </div>
+                        <input id="shadows-off-toggle" type="checkbox" onchange="setAppNoShadows(this.checked)" class="w-4 h-4 rounded shrink-0 cursor-pointer"/>
+                    </label>
+                </div>
+
+                <!-- Style de la visionneuse (Studio Thème / Classique) -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                    <div>
+                        <div class="text-xs font-bold">Style de la visionneuse</div>
+                        <div class="text-[10px] opacity-60">Studio : scène encadrée et couleurs du thème · Classique : rendu léger et épuré d'origine.</div>
+                    </div>
+                    <div class="flex items-center gap-1 p-1 rounded-full ui-card shrink-0">
+                        <button id="lbstyle-btn-studio" type="button" onclick="setAppLightboxStyle('studio')" title="Style unifié avec les éditeurs et les couleurs du thème"
+                                class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <span>Studio</span>
                         </button>
-                        <button id="theme-btn-dark" onclick="setAppTheme('dark')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                            <span>Sombre</span>
-                        </button>
-                        <button id="theme-btn-system" onclick="setAppTheme('system')" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                            <span>Système</span>
+                        <button id="lbstyle-btn-classic" type="button" onclick="setAppLightboxStyle('classic')" title="Ancien style minimaliste transparent"
+                                class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                            <span>Classique</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Style d'interface (Blur / Solid) -->
-                <div class="ui-pill rounded-2xl px-3.5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-                    <div>
-                        <div class="text-xs font-bold">Style de l'interface</div>
-                        <div class="text-[10px] opacity-60">Solid désactive l'effet frost blur pour économiser batterie et CPU/GPU.</div>
-                    </div>
-                    <div class="flex items-center gap-1 p-1 rounded-full ui-card shrink-0">
-                        <button id="blur-btn-on" type="button" onclick="setAppBlur(true)" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                            <span>Blur</span>
+                <!-- Couleur & Thèmes -->
+                <div class="ui-pill rounded-2xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+                    <span class="text-xs font-bold">Couleur & Thèmes</span>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button id="accent-btn-default" type="button" onclick="setAppAccent('default')" title="Par défaut"
+                                class="ui-card rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                            <span class="w-3 h-3 rounded-full border border-current/30 bg-gradient-to-br from-zinc-900 to-zinc-200 shrink-0"></span>
+                            <span>Défaut</span>
                         </button>
-                        <button id="blur-btn-off" type="button" onclick="setAppBlur(false)" class="rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                            <span>Solid</span>
+                        <button id="accent-btn-slate" type="button" onclick="setAppAccent('slate')" title="Ambiance Ardoise"
+                                class="ui-card rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                            <span class="w-3 h-3 rounded-full shrink-0" style="background-color:#475569;"></span>
+                            <span>Ardoise</span>
                         </button>
+                        <button id="accent-btn-midnight" type="button" onclick="setAppAccent('midnight')" title="Ambiance Minuit"
+                                class="ui-card rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                            <span class="w-3 h-3 rounded-full shrink-0" style="background-color:#37479E;"></span>
+                            <span>Minuit</span>
+                        </button>
+                        <button id="accent-btn-blue" type="button" onclick="setAppAccent('blue')" title="Thème Azur"
+                                class="ui-card rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                            <span class="w-3 h-3 rounded-full shrink-0" style="background-color:#2B5EA8;"></span>
+                            <span>Azur</span>
+                        </button>
+                        <label id="accent-btn-custom" onclick="setAppAccent('custom')" title="Choisir une couleur libre"
+                               class="ui-card rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer">
+                            <input id="accent-custom-picker" type="color" value="#6366f1"
+                                   oninput="setAppCustomAccentColor(this.value, false)"
+                                   onchange="setAppCustomAccentColor(this.value, true)"
+                                   class="w-3.5 h-3.5 rounded-full border-0 p-0 bg-transparent cursor-pointer shrink-0"/>
+                            <span>Perso</span>
+                        </label>
                     </div>
                 </div>
+
+                <!-- Sous-option détaillée (Cœur Favoris, Coins, Espacement, Animations) -->
+                <details id="settings-appearance-advanced" class="ui-pill rounded-2xl px-3.5 py-2.5 group">
+                    <summary class="list-none flex items-center justify-between gap-3 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                        <div>
+                            <div class="text-xs font-bold">Options d'apparence détaillées</div>
+                            <div class="text-[10px] opacity-60">Couleur du cœur favori, arrondi des coins, espacement de la grille et animations.</div>
+                        </div>
+                        <svg class="w-4 h-4 opacity-65 shrink-0 transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2.5 mt-2 border-t border-[var(--border-subtle)]">
+                        <div class="ui-card rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold shrink-0">Cœur Favoris</span>
+                            <div class="flex items-center gap-1 p-0.5 rounded-full ui-pill">
+                                <button id="fav-accent-btn-off" type="button" onclick="setAppFavMatchAccent(false)" class="rounded-full px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer">Rose</button>
+                                <button id="fav-accent-btn-on" type="button" onclick="setAppFavMatchAccent(true)" class="rounded-full px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer">Assorti</button>
+                            </div>
+                        </div>
+                        <div class="ui-card rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold shrink-0">Coins</span>
+                            <div class="flex items-center gap-0.5 p-0.5 rounded-full ui-pill">
+                                <button id="radius-btn-rounded" type="button" onclick="setAppTileRadius('rounded')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Arrondi</button>
+                                <button id="radius-btn-soft" type="button" onclick="setAppTileRadius('soft')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Doux</button>
+                                <button id="radius-btn-square" type="button" onclick="setAppTileRadius('square')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Carré</button>
+                            </div>
+                        </div>
+                        <div class="ui-card rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold shrink-0">Espacement</span>
+                            <div class="flex items-center gap-0.5 p-0.5 rounded-full ui-pill">
+                                <button id="gap-btn-tight" type="button" onclick="setAppGridGap('tight')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Compact</button>
+                                <button id="gap-btn-normal" type="button" onclick="setAppGridGap('normal')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Normal</button>
+                                <button id="gap-btn-airy" type="button" onclick="setAppGridGap('airy')" class="rounded-full px-2 py-0.5 text-[11px] font-bold transition cursor-pointer">Aéré</button>
+                            </div>
+                        </div>
+                        <div class="ui-card rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold shrink-0">Animations</span>
+                            <div class="flex items-center gap-1 p-0.5 rounded-full ui-pill">
+                                <button id="motion-btn-on" type="button" onclick="setAppReduceMotion(false)" class="rounded-full px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer">Fluide</button>
+                                <button id="motion-btn-off" type="button" onclick="setAppReduceMotion(true)" class="rounded-full px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer">Réduit</button>
+                            </div>
+                        </div>
+                    </div>
+                </details>
 
                 <!-- Langue, Pays d'origine & Fuseau horaire en 3 colonnes propres -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1345,7 +2650,7 @@
     </div>
 
     <!-- ==================== VUE 11 : ACTIVITÉS (HISTORIQUE DES TÂCHES & ACTIONS) ==================== -->
-    <div id="tab-activities" class="hidden max-w-4xl pb-12 space-y-5">
+    <div id="tab-activities" class="hidden max-w-4xl pb-12 space-y-5 pr-3.5">
         <div class="flex flex-wrap items-center justify-between gap-4 min-h-[44px] mb-1">
             <h1 class="text-4xl font-extrabold tracking-tight leading-none">Activités</h1>
             <button id="btn-scan-activities" type="button" onclick="runTask('INGEST')" title="Analyser les dossiers sources pour détecter de nouveaux médias"
