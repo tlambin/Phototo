@@ -45,6 +45,23 @@ class TestApiRoutes(unittest.TestCase):
         database._INITIALIZED_DBS.clear()
         self.tmp.cleanup()
 
+    def test_open_media_external_player_route(self):
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch
+        client = TestClient(main.app)
+        with tempfile.TemporaryDirectory() as td:
+            vid_path = Path(td) / "clip.mp4"
+            vid_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+            with patch("backend.routers.system_router.resolve_actual_path", return_value=vid_path):
+                with patch("os.startfile", create=True) as mocked_start:
+                    res = client.post("/api/media/open-external", json={"path": str(vid_path)})
+                    self.assertEqual(res.status_code, 200)
+                    self.assertEqual(res.json()["status"], "ok")
+                    mocked_start.assert_called_once_with(str(vid_path))
+            with patch("backend.routers.system_router.resolve_actual_path", return_value=None):
+                res_missing = client.post("/api/media/open-external", json={"path": "missing.mp4"})
+                self.assertEqual(res_missing.status_code, 404)
+
     def test_index_template_renders_all_modals_and_scripts(self):
         html = main.templates.get_template("index.html").render()
         for mid in (
@@ -1269,10 +1286,20 @@ class TestApiRoutes(unittest.TestCase):
             'id="favorites-scroll-sentinel"',
         ):
             self.assertIn(fav_tok, html)
+        for vid_tok in (
+            'id="lb-video-wrapper"',
+            'id="lb-video-controls"',
+            'id="lb-vid-external-btn"',
+            'openLightboxVideoExternal()',
+        ):
+            self.assertIn(vid_tok, html)
         gallery_js_fp = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
         self.assertIn("function _getActiveGalleryViewIds(", gallery_js_fp)
         self.assertIn("function _getActiveMediaPrefKey(", gallery_js_fp)
         self.assertIn("function syncActiveMediaPrefsFromStorage(", gallery_js_fp)
+        self.assertIn("function saveMediaTabState(", gallery_js_fp)
+        self.assertIn("function restoreMediaTabState(", gallery_js_fp)
+        self.assertIn("function openLightboxVideoExternal(", gallery_js_fp)
         self.assertIn("border-radius: 28px 0 0 28px;", theme_css_tl)
         self.assertIn("rounded-l-[28px] rounded-r-none", html)
         self.assertIn("appendMediaBatchToContainer('place-single-grid', sortedItems, 0, true)", ai_views_js)

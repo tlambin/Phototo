@@ -836,6 +836,49 @@ html[data-shadows="off"] #lib-avatar-btn {
   border-color: rgba(var(--sel-rgb), 0.85);
   box-shadow: 0 2px 8px rgba(var(--sel-rgb), 0.32);
 }
+
+/* ==================== LECTEUR VIDÉO MODERNE (LIGHTBOX) ==================== */
+.lb-vid-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.95) var(--vid-progress, 0%),
+    rgba(255, 255, 255, 0.2) var(--vid-progress, 0%),
+    rgba(255, 255, 255, 0.2) 100%
+  );
+  outline: none;
+  transition: height 0.14s ease, filter 0.14s ease;
+}
+.lb-vid-range:hover {
+  height: 6px;
+}
+.lb-vid-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  transition: transform 0.14s ease;
+}
+.lb-vid-range:hover::-webkit-slider-thumb {
+  transform: scale(1.22);
+}
+.lb-vid-range::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
 .tl-gp-dot {
   position: absolute;
   right: 21px;

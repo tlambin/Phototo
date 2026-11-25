@@ -413,6 +413,27 @@ def serve_media(path: str = ""):
     return FileResponse(actual)
 
 
+class OpenExternalMediaReq(BaseModel):
+    path: str
+
+
+@router.post("/api/media/open-external")
+def api_open_media_external(req: OpenExternalMediaReq):
+    actual = resolve_actual_path(unquote(req.path or ""))
+    if not actual or not actual.is_file():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+    try:
+        if sys.platform.startswith("win") or hasattr(os, "startfile"):
+            os.startfile(str(actual))
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(actual)])
+        else:
+            subprocess.Popen(["xdg-open", str(actual)])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Impossible d'ouvrir le lecteur système : {exc}")
+    return {"status": "ok", "path": str(actual)}
+
+
 @router.get("/thumb")
 def serve_thumbnail(path: str = ""):
     if not path or not path.strip():

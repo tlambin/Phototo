@@ -688,6 +688,9 @@ const ALL_TABS = ['gallery', 'recent', 'albums', 'favorites', 'faces', 'map', 't
 let _wasRecentTab = false;
 
 function switchTab(tab) {
+    if ((currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') && typeof saveMediaTabState === 'function') {
+        saveMediaTabState(currentTab);
+    }
     currentTab = tab;
     const isSugPage = String(tab || '').startsWith('sug-');
     const isToolsChild = isSugPage || tab === 'dups' || tab === 'similar';
@@ -829,6 +832,7 @@ function refreshActiveMediaView() {
     } else if (String(currentTab || '').startsWith('sug-') && typeof openSuggestionPage === 'function') {
         openSuggestionPage(String(currentTab).slice(4), true);
     } else {
+        if (typeof saveMediaTabState === 'function') saveMediaTabState();
         resetAndLoadGallery();
     }
 }

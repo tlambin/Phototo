@@ -82,6 +82,91 @@ function syncGalleryLayoutSizeButtons() {
     });
 }
 
+const _mediaTabStates = {};
+
+function _defaultMediaTabState(scope) {
+    return {
+        layout: localStorage.getItem(`phototo_${scope}_layout`) || 'GRID',
+        size: localStorage.getItem(`phototo_${scope}_size`) || 'MD',
+        groupBy: localStorage.getItem(`phototo_${scope}_group_by`) || 'NONE',
+        sortBy: localStorage.getItem(`phototo_${scope}_sort_by`) || (scope === 'recent' ? 'added' : 'date'),
+        sortOrder: localStorage.getItem(`phototo_${scope}_sort_order`) || 'desc',
+        years: [],
+        months: [],
+        types: [],
+        exts: [],
+        periods: [],
+        dateFrom: '',
+        dateTo: '',
+        extFilter: '',
+    };
+}
+
+function saveMediaTabState(scopeOverride = null) {
+    const scope = scopeOverride || ((typeof currentTab !== 'undefined' && (currentTab === 'favorites' || currentTab === 'recent')) ? currentTab : 'gallery');
+    if (scope !== 'gallery' && scope !== 'favorites' && scope !== 'recent') return;
+    const sortByEl = document.getElementById('gal-sort-by');
+    const sortOrdEl = document.getElementById('gal-sort-order');
+    const groupByEl = document.getElementById('gal-group-by');
+    const dfEl = document.getElementById('gal-date-from');
+    const dtEl = document.getElementById('gal-date-to');
+    const st = {
+        layout: galleryLayout,
+        size: gallerySize,
+        groupBy: groupByEl ? groupByEl.value : galleryGroupBy,
+        sortBy: sortByEl ? sortByEl.value : (scope === 'recent' ? 'added' : 'date'),
+        sortOrder: sortOrdEl ? sortOrdEl.value : 'desc',
+        years: [...(selectedFilterYears || [])],
+        months: [...(selectedFilterMonths || [])],
+        types: [...(selectedFilterTypes || [])],
+        exts: [...(selectedFilterExts || [])],
+        periods: (selectedFilterPeriods || []).map(p => ({ ...p })),
+        dateFrom: dfEl ? dfEl.value : '',
+        dateTo: dtEl ? dtEl.value : '',
+        extFilter: currentExtFilter || '',
+    };
+    _mediaTabStates[scope] = st;
+    localStorage.setItem(`phototo_${scope}_layout`, st.layout);
+    localStorage.setItem(`phototo_${scope}_size`, st.size);
+    localStorage.setItem(`phototo_${scope}_group_by`, st.groupBy);
+    localStorage.setItem(`phototo_${scope}_sort_by`, st.sortBy);
+    localStorage.setItem(`phototo_${scope}_sort_order`, st.sortOrder);
+}
+
+function restoreMediaTabState(scope) {
+    if (scope !== 'gallery' && scope !== 'favorites' && scope !== 'recent') return;
+    const st = _mediaTabStates[scope] || _defaultMediaTabState(scope);
+    _mediaTabStates[scope] = st;
+    galleryLayout = st.layout;
+    gallerySize = st.size;
+    galleryGroupBy = st.groupBy;
+    selectedFilterYears = [...st.years];
+    selectedFilterMonths = [...st.months];
+    selectedFilterTypes = [...st.types];
+    selectedFilterExts = [...st.exts];
+    selectedFilterPeriods = st.periods.map(p => ({ ...p }));
+    currentExtFilter = st.extFilter || '';
+
+    const sortByEl = document.getElementById('gal-sort-by');
+    const sortOrdEl = document.getElementById('gal-sort-order');
+    const groupByEl = document.getElementById('gal-group-by');
+    const dfEl = document.getElementById('gal-date-from');
+    const dtEl = document.getElementById('gal-date-to');
+    if (sortByEl) sortByEl.value = st.sortBy;
+    if (sortOrdEl) sortOrdEl.value = st.sortOrder;
+    if (groupByEl) groupByEl.value = st.groupBy;
+    if (dfEl) dfEl.value = st.dateFrom || '';
+    if (dtEl) dtEl.value = st.dateTo || '';
+
+    if (typeof _syncSortDirButtonUI === 'function') {
+        _syncSortDirButtonUI(st.sortOrder === 'asc', 'gal-sort-dir-btn', 'gal-sort-arrow');
+    }
+    syncGalleryLayoutSizeButtons();
+    if (typeof renderFilterChips === 'function') renderFilterChips();
+    if (typeof updateActiveFilterBadge === 'function') updateActiveFilterBadge();
+    if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+}
+
 function _getActiveMediaPrefKey(kind) {
     const scope = (typeof currentTab !== 'undefined' && (currentTab === 'favorites' || currentTab === 'recent'))
         ? currentTab
@@ -91,14 +176,13 @@ function _getActiveMediaPrefKey(kind) {
 
 function syncActiveMediaPrefsFromStorage(tabOverride = null) {
     const scope = tabOverride || ((typeof currentTab !== 'undefined' && (currentTab === 'favorites' || currentTab === 'recent')) ? currentTab : 'gallery');
-    galleryLayout = localStorage.getItem(`phototo_${scope}_layout`) || 'GRID';
-    gallerySize = localStorage.getItem(`phototo_${scope}_size`) || 'MD';
-    syncGalleryLayoutSizeButtons();
+    restoreMediaTabState(scope);
 }
 
 function setGalleryLayout(layout) {
     galleryLayout = layout;
     localStorage.setItem(_getActiveMediaPrefKey('layout'), layout);
+    saveMediaTabState();
     syncGalleryLayoutSizeButtons();
     refreshActiveMediaView();
 }
@@ -106,6 +190,7 @@ function setGalleryLayout(layout) {
 function setGallerySize(size) {
     gallerySize = size;
     localStorage.setItem(_getActiveMediaPrefKey('size'), size);
+    saveMediaTabState();
     syncGalleryLayoutSizeButtons();
     refreshActiveMediaView();
 }
@@ -114,6 +199,7 @@ document.addEventListener('DOMContentLoaded', syncGalleryLayoutSizeButtons);
 
 function onChangeGroupBy(groupMode) {
     galleryGroupBy = groupMode;
+    saveMediaTabState();
     updateFloatingGroupPill();
     refreshActiveMediaView();
 }
@@ -3912,13 +3998,18 @@ async function openLightbox(idx) {
 
     const imgEl = document.getElementById('lb-img');
     const vidEl = document.getElementById('lb-video');
+    const vidWrap = document.getElementById('lb-video-wrapper');
     if (isVid) {
         imgEl.classList.add('hidden');
+        if (vidWrap) vidWrap.classList.remove('hidden');
         vidEl.classList.remove('hidden');
         vidEl.src = url;
+        vidEl.playbackRate = 1;
+        _syncLightboxVideoUI();
     } else {
         vidEl.pause();
         vidEl.classList.add('hidden');
+        if (vidWrap) vidWrap.classList.add('hidden');
         imgEl.classList.remove('hidden');
         imgEl.src = url;
     }
@@ -4048,11 +4139,14 @@ function _renderLightboxDuplicatesBar(items, activeSourcePath, isGroupScoped) {
     const lbVid = document.getElementById('lb-video');
     requestAnimationFrame(() => {
         const multiRow = !bar.classList.contains('hidden') && bar.offsetHeight > 60;
-        [lbImg, lbVid].forEach(el => {
-            if (!el) return;
-            el.classList.toggle('max-h-[calc(100vh-145px)]', !multiRow);
-            el.classList.toggle('max-h-[calc(100vh-210px)]', multiRow);
-        });
+        if (lbImg) {
+            lbImg.classList.toggle('max-h-[calc(100vh-145px)]', !multiRow);
+            lbImg.classList.toggle('max-h-[calc(100vh-210px)]', multiRow);
+        }
+        if (lbVid) {
+            lbVid.classList.toggle('max-h-[calc(100vh-225px)]', !multiRow);
+            lbVid.classList.toggle('max-h-[calc(100vh-275px)]', multiRow);
+        }
     });
 }
 
@@ -4100,8 +4194,165 @@ function closeLightbox() {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     const vidEl = document.getElementById('lb-video');
     if (vidEl) vidEl.pause();
+    const vidWrap = document.getElementById('lb-video-wrapper');
+    if (vidWrap) vidWrap.classList.add('hidden');
     document.getElementById('lightbox-modal').classList.add('hidden');
 }
+
+function _formatVideoTime(sec) {
+    if (!Number.isFinite(sec) || sec < 0) return '0:00';
+    const total = Math.floor(sec);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function _syncLightboxVideoUI() {
+    const vid = document.getElementById('lb-video');
+    if (!vid) return;
+    const isPaused = vid.paused || vid.ended;
+    const centerPlay = document.getElementById('lb-video-center-play');
+    if (centerPlay) centerPlay.classList.toggle('hidden', !isPaused);
+
+    const playIcon = document.getElementById('lb-vid-play-icon');
+    if (playIcon) {
+        playIcon.innerHTML = isPaused
+            ? '<polygon points="6 4 20 12 6 20 6 4"/>'
+            : '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    }
+
+    const dur = Number.isFinite(vid.duration) ? vid.duration : 0;
+    const cur = Number.isFinite(vid.currentTime) ? vid.currentTime : 0;
+    const curEl = document.getElementById('lb-vid-time-cur');
+    const durEl = document.getElementById('lb-vid-time-dur');
+    if (curEl) curEl.textContent = _formatVideoTime(cur);
+    if (durEl) durEl.textContent = _formatVideoTime(dur);
+
+    const seekEl = document.getElementById('lb-vid-seek');
+    if (seekEl) {
+        seekEl.max = dur > 0 ? dur : 100;
+        seekEl.value = dur > 0 ? cur : 0;
+        const pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0;
+        seekEl.style.setProperty('--vid-progress', `${pct.toFixed(2)}%`);
+    }
+
+    const volEl = document.getElementById('lb-vid-volume');
+    if (volEl) {
+        const vol = vid.muted ? 0 : vid.volume;
+        volEl.value = vol;
+        volEl.style.setProperty('--vid-progress', `${Math.round(vol * 100)}%`);
+    }
+
+    const volIcon = document.getElementById('lb-vid-vol-icon');
+    if (volIcon) {
+        volIcon.innerHTML = (vid.muted || vid.volume === 0)
+            ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+            : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+    }
+
+    const speedBtn = document.getElementById('lb-vid-speed-btn');
+    if (speedBtn) speedBtn.textContent = `${vid.playbackRate || 1}x`;
+}
+
+function toggleLightboxVideoPlay() {
+    const vid = document.getElementById('lb-video');
+    if (!vid) return;
+    if (vid.paused || vid.ended) {
+        vid.play().catch(() => {});
+    } else {
+        vid.pause();
+    }
+}
+
+function seekLightboxVideo(val) {
+    const vid = document.getElementById('lb-video');
+    if (!vid || !Number.isFinite(vid.duration) || vid.duration <= 0) return;
+    vid.currentTime = Math.max(0, Math.min(vid.duration, Number(val) || 0));
+    _syncLightboxVideoUI();
+}
+
+function toggleLightboxVideoMute() {
+    const vid = document.getElementById('lb-video');
+    if (!vid) return;
+    vid.muted = !vid.muted;
+    _syncLightboxVideoUI();
+}
+
+function setLightboxVideoVolume(val) {
+    const vid = document.getElementById('lb-video');
+    if (!vid) return;
+    const v = Math.max(0, Math.min(1, Number(val)));
+    vid.volume = v;
+    vid.muted = v === 0;
+    _syncLightboxVideoUI();
+}
+
+function cycleLightboxVideoSpeed() {
+    const vid = document.getElementById('lb-video');
+    if (!vid) return;
+    const speeds = [1, 1.25, 1.5, 2, 0.5];
+    const idx = speeds.indexOf(vid.playbackRate);
+    vid.playbackRate = speeds[(idx + 1) % speeds.length];
+    _syncLightboxVideoUI();
+}
+
+function toggleLightboxVideoFullscreen() {
+    const wrap = document.getElementById('lb-video-wrapper') || document.getElementById('lb-video');
+    if (!wrap) return;
+    if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+    } else {
+        wrap.requestFullscreen?.().catch(() => {});
+    }
+}
+
+async function openLightboxVideoExternal() {
+    const item = currentGalleryItems[currentLightboxIndex];
+    if (!item) return;
+    const vid = document.getElementById('lb-video');
+    if (vid && !vid.paused) vid.pause();
+    const mediaPath = item.dest_path || item.source_path;
+    if (!mediaPath) return;
+    try {
+        const res = await fetch('/api/media/open-external', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: mediaPath })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (typeof showToast === 'function') showToast(err.detail || "Impossible d'ouvrir la vidéo", 'error');
+        }
+    } catch (_) {
+        if (typeof showToast === 'function') showToast("Impossible d'ouvrir le lecteur système", 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const vid = document.getElementById('lb-video');
+    if (vid) {
+        ['play', 'pause', 'timeupdate', 'loadedmetadata', 'ended', 'volumechange', 'ratechange'].forEach(evt => {
+            vid.addEventListener(evt, _syncLightboxVideoUI);
+        });
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    const lb = document.getElementById('lightbox-modal');
+    const vidWrap = document.getElementById('lb-video-wrapper');
+    if (!lb || lb.classList.contains('hidden') || !vidWrap || vidWrap.classList.contains('hidden')) return;
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.code === 'Space' || e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        toggleLightboxVideoPlay();
+    } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleLightboxVideoMute();
+    }
+});
 
 function renderLightboxFilmstrip(activeIdx) {
     const strip = document.getElementById('lb-filmstrip');

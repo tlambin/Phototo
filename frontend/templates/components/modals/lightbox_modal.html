@@ -137,8 +137,70 @@
         <div class="relative inline-flex items-center justify-center max-h-full max-w-full">
             <img id="lb-img" src="" alt="" ondblclick="toggleLightboxDoubleClickZoom(event)"
                  class="max-h-[calc(100vh-165px)] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl transition-transform duration-100 origin-center"/>
-            <video id="lb-video" controls
-                   class="hidden max-h-[calc(100vh-165px)] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl bg-black"></video>
+            <div id="lb-video-wrapper" class="hidden flex flex-col items-center justify-center gap-2.5 max-w-full max-h-full"
+                 onclick="event.stopPropagation()">
+                <div class="relative inline-flex items-center justify-center max-w-full rounded-xl overflow-hidden shadow-2xl bg-black">
+                    <video id="lb-video" playsinline
+                           onclick="toggleLightboxVideoPlay()"
+                           ondblclick="toggleLightboxVideoFullscreen()"
+                           class="max-h-[calc(100vh-225px)] max-w-full w-auto h-auto object-contain bg-black cursor-pointer"></video>
+                    <button id="lb-video-center-play" type="button" onclick="toggleLightboxVideoPlay()" title="Lire la vidéo"
+                            class="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/55 backdrop-blur-md border border-white/25 text-white flex items-center justify-center hover:scale-105 hover:bg-black/75 transition z-20 cursor-pointer">
+                        <svg class="w-6 h-6 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                    </button>
+                </div>
+                <div id="lb-video-controls"
+                     class="w-[min(92vw,580px)] max-w-full px-3.5 py-2 rounded-full bg-zinc-950/80 backdrop-blur-xl border border-white/15 text-white flex items-center gap-3 shadow-2xl z-30">
+                    <button id="lb-vid-play-btn" type="button" onclick="toggleLightboxVideoPlay()" title="Lecture / Pause (Espace)"
+                            class="w-8 h-8 rounded-full bg-white text-zinc-950 hover:scale-105 active:scale-95 flex items-center justify-center shrink-0 shadow-md transition cursor-pointer">
+                        <svg id="lb-vid-play-icon" class="w-3.5 h-3.5 translate-x-[0.5px]" fill="currentColor" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                    </button>
+                    <div class="text-[11px] font-bold tabular-nums shrink-0 flex items-center gap-1 select-none">
+                        <span id="lb-vid-time-cur" class="text-white">0:00</span>
+                        <span class="text-white/40">/</span>
+                        <span id="lb-vid-time-dur" class="text-white/60">0:00</span>
+                    </div>
+                    <input id="lb-vid-seek" type="range" min="0" max="100" step="0.1" value="0"
+                           oninput="seekLightboxVideo(this.value)"
+                           class="lb-vid-range flex-1 min-w-[60px] cursor-pointer"/>
+                    <div class="hidden sm:flex items-center gap-1.5 shrink-0">
+                        <button id="lb-vid-mute-btn" type="button" onclick="toggleLightboxVideoMute()" title="Muet (M)"
+                                class="w-7 h-7 rounded-full hover:bg-white/15 flex items-center justify-center text-white/85 hover:text-white transition cursor-pointer">
+                            <svg id="lb-vid-vol-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                            </svg>
+                        </button>
+                        <input id="lb-vid-volume" type="range" min="0" max="1" step="0.05" value="1"
+                               oninput="setLightboxVideoVolume(this.value)"
+                               class="lb-vid-range w-14 cursor-pointer" style="--vid-progress:100%;"/>
+                    </div>
+                    <div class="h-4 w-px bg-white/15 shrink-0"></div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button id="lb-vid-speed-btn" type="button" onclick="cycleLightboxVideoSpeed()" title="Vitesse de lecture"
+                                class="h-7 px-2.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-extrabold tabular-nums transition cursor-pointer">
+                            1x
+                        </button>
+                        <button id="lb-vid-external-btn" type="button" onclick="openLightboxVideoExternal()" title="Ouvrir dans le lecteur système (Windows / VLC)"
+                                class="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/>
+                                <line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </button>
+                        <button id="lb-vid-fullscreen-btn" type="button" onclick="toggleLightboxVideoFullscreen()" title="Plein écran"
+                                class="w-7 h-7 rounded-full hover:bg-white/15 flex items-center justify-center transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <polyline points="15 3 21 3 21 9"/>
+                                <polyline points="9 21 3 21 3 15"/>
+                                <line x1="21" y1="3" x2="14" y2="10"/>
+                                <line x1="3" y1="21" x2="10" y2="14"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Badge Image animée / Live Photo -->
             <span id="lb-animated-badge" class="hidden absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/15 text-white text-[10px] font-extrabold tracking-wide z-20">

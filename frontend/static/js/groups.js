@@ -948,6 +948,9 @@ function applyPageDefaultOptions(pageKey, shouldReload = false) {
     if (typeof gallerySize !== 'undefined') { gallerySize = saved.size; localStorage.setItem(`phototo_${prefScope}_size`, saved.size); }
     if (typeof syncGalleryLayoutSizeButtons === 'function') syncGalleryLayoutSizeButtons();
     if (typeof syncLayoutAndSizeButtons === 'function') syncLayoutAndSizeButtons();
+    if (typeof saveMediaTabState === 'function' && (pageKey === 'gallery' || pageKey === 'favorites' || pageKey === 'recent')) {
+        saveMediaTabState(pageKey);
+    }
     if (shouldReload && typeof refreshActiveMediaView === 'function') refreshActiveMediaView();
     return true;
 }
