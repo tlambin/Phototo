@@ -82,16 +82,30 @@ function syncGalleryLayoutSizeButtons() {
     });
 }
 
+function _getActiveMediaPrefKey(kind) {
+    const scope = (typeof currentTab !== 'undefined' && (currentTab === 'favorites' || currentTab === 'recent'))
+        ? currentTab
+        : 'gallery';
+    return `phototo_${scope}_${kind}`;
+}
+
+function syncActiveMediaPrefsFromStorage(tabOverride = null) {
+    const scope = tabOverride || ((typeof currentTab !== 'undefined' && (currentTab === 'favorites' || currentTab === 'recent')) ? currentTab : 'gallery');
+    galleryLayout = localStorage.getItem(`phototo_${scope}_layout`) || 'GRID';
+    gallerySize = localStorage.getItem(`phototo_${scope}_size`) || 'MD';
+    syncGalleryLayoutSizeButtons();
+}
+
 function setGalleryLayout(layout) {
     galleryLayout = layout;
-    localStorage.setItem('phototo_gallery_layout', layout);
+    localStorage.setItem(_getActiveMediaPrefKey('layout'), layout);
     syncGalleryLayoutSizeButtons();
     refreshActiveMediaView();
 }
 
 function setGallerySize(size) {
     gallerySize = size;
-    localStorage.setItem('phototo_gallery_size', size);
+    localStorage.setItem(_getActiveMediaPrefKey('size'), size);
     syncGalleryLayoutSizeButtons();
     refreshActiveMediaView();
 }
@@ -477,9 +491,37 @@ function renderFilterChips() {
     ).join('');
 }
 
+function _getActiveGalleryViewIds() {
+    if (typeof currentTab !== 'undefined' && currentTab === 'favorites') {
+        return {
+            tabId: 'tab-favorites',
+            areaId: 'favorites-content-area',
+            totalId: 'fav-total-label',
+            prevBarId: 'favorites-prev-bar',
+            spinnerId: 'favorites-loading-spinner',
+            sentinelId: 'favorites-scroll-sentinel',
+            badgeId: 'favorites-active-filter-badge',
+            badgeTextId: 'favorites-active-filter-text',
+            headerId: 'favorites-sticky-header',
+        };
+    }
+    return {
+        tabId: 'tab-gallery',
+        areaId: 'gallery-content-area',
+        totalId: 'gal-total-label',
+        prevBarId: 'gallery-prev-bar',
+        spinnerId: 'gallery-loading-spinner',
+        sentinelId: 'gallery-scroll-sentinel',
+        badgeId: 'gallery-active-filter-badge',
+        badgeTextId: 'gallery-active-filter-text',
+        headerId: 'gallery-sticky-header',
+    };
+}
+
 function updateActiveFilterBadge() {
-    const badge = document.getElementById('gallery-active-filter-badge');
-    const txt = document.getElementById('gallery-active-filter-text');
+    const viewIds = _getActiveGalleryViewIds();
+    const badge = document.getElementById(viewIds.badgeId);
+    const txt = document.getElementById(viewIds.badgeTextId);
     if (!badge || !txt) return;
 
     const parts = [];
@@ -609,7 +651,8 @@ async function loadGalleryItems(append = false, customSkip = -1) {
     if (append && galleryTotalItems > 0 && (currentSkipOffset + currentGalleryItems.length) >= galleryTotalItems) return;
 
     galleryIsLoading = true;
-    const spinner = document.getElementById('gallery-loading-spinner');
+    const viewIds = _getActiveGalleryViewIds();
+    const spinner = document.getElementById(viewIds.spinnerId);
     if (spinner) spinner.classList.remove('hidden');
 
     const targetPage = append ? galleryPage + 1 : 1;
@@ -646,16 +689,16 @@ async function loadGalleryItems(append = false, customSkip = -1) {
         galleryTotalItems = d.total || 0;
         lightboxIsCustomItem = false;
         if (append) galleryPage = targetPage;
-        const totalLbl = document.getElementById('gal-total-label');
+        const totalLbl = document.getElementById(viewIds.totalId);
         if (totalLbl) totalLbl.textContent = `${galleryTotalItems} éléments`;
 
         if (!append) {
             currentGalleryItems = newItems;
-            appendMediaBatchToContainer('gallery-content-area', newItems, 0, true);
+            appendMediaBatchToContainer(viewIds.areaId, newItems, 0, true);
         } else {
             const startIdx = currentGalleryItems.length;
             currentGalleryItems.push(...newItems);
-            appendMediaBatchToContainer('gallery-content-area', newItems, startIdx, false);
+            appendMediaBatchToContainer(viewIds.areaId, newItems, startIdx, false);
             if (!document.getElementById('lightbox-modal')?.classList.contains('hidden')) {
                 renderLightboxFilmstrip(currentLightboxIndex);
                 const nextBtn = document.getElementById('lb-next-btn');
@@ -693,7 +736,8 @@ function jumpToGalleryTop() {
 async function loadPreviousGalleryItems() {
     if (galleryIsLoading || currentSkipOffset <= 0) return;
     galleryIsLoading = true;
-    const spinner = document.getElementById('gallery-loading-spinner');
+    const viewIds = _getActiveGalleryViewIds();
+    const spinner = document.getElementById(viewIds.spinnerId);
     if (spinner) spinner.classList.remove('hidden');
 
     const prevLimit = Math.min(60, currentSkipOffset);
@@ -724,7 +768,7 @@ async function loadPreviousGalleryItems() {
         if (prevItems.length > 0) {
             currentSkipOffset = newSkip;
             currentGalleryItems = [...prevItems, ...currentGalleryItems];
-            appendMediaBatchToContainer('gallery-content-area', currentGalleryItems, 0, true);
+            appendMediaBatchToContainer(viewIds.areaId, currentGalleryItems, 0, true);
             if (sc) {
                 const deltaH = sc.scrollHeight - prevH;
                 sc.scrollTop = prevTop + Math.max(0, deltaH);
@@ -760,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function _getActiveMediaTileEl(idx) {
-    let containerId = 'gallery-content-area';
+    let containerId = _getActiveGalleryViewIds().areaId;
     if (currentTab === 'albums' && openedAlbumName) containerId = 'album-single-content-area';
     else if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) containerId = 'tl-faces-grid';
     const container = document.getElementById(containerId);
@@ -852,8 +896,8 @@ function getGroupSelectIconHTML(state) {
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" viewBox="0 0 24 24"><line x1="6" y1="12" x2="18" y2="12"/></svg>
                 </div>`;
     }
-    return `<div class="w-5 h-5 rounded-full border border-current/35 bg-[var(--bg-pill)] opacity-65 hover:opacity-100 hover:border-current flex items-center justify-center transition-all duration-150">
-                <svg class="w-2.5 h-2.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    return `<div class="w-5 h-5 rounded-full border border-current/15 bg-transparent opacity-35 hover:opacity-90 hover:bg-[var(--bg-pill)] hover:border-current/35 flex items-center justify-center transition-all duration-150">
+                <svg class="w-2.5 h-2.5 opacity-80" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>`;
 }
 
@@ -955,7 +999,7 @@ function updateGalleryBatchBar() {
     if (remBtn) remBtn.classList.toggle('hidden', !openedAlbumName);
     const grpBtn = document.getElementById('gal-batch-group-btn');
     if (grpBtn) grpBtn.classList.toggle('hidden', currentTab !== 'favorites');
-    ['gallery-content-area', 'album-single-content-area', 'tl-faces-grid', 'place-single-grid'].forEach(id => {
+    ['gallery-content-area', 'favorites-content-area', 'album-single-content-area', 'tl-faces-grid', 'place-single-grid'].forEach(id => {
         const area = document.getElementById(id);
         if (area) area.classList.toggle('selection-active', hasSelection);
     });
@@ -1033,6 +1077,7 @@ async function shareGalleryBatch() {
 // ==================== CASE TIMELINE DROITE (FILTRE AU CLIC ANNÉE / MOIS) ====================
 
 async function loadGalleryTimeline() {
+    if (typeof currentTab !== 'undefined' && currentTab === 'favorites') return;
     const scrubber = document.getElementById('gallery-timeline-box');
     const container = document.getElementById('timeline-items-container');
     if (!scrubber || !container) return;
@@ -1070,10 +1115,12 @@ let _lastScrubJumpOffset = -1;
 let _timelineEventsBound = false;
 
 function updateActiveTimelineFromScroll() {
-    const tabGal = document.getElementById('tab-gallery');
+    if (typeof currentTab !== 'undefined' && currentTab === 'favorites') return;
+    const viewIds = _getActiveGalleryViewIds();
+    const tabEl = document.getElementById(viewIds.tabId);
     const scroller = document.getElementById('main-scroll-container');
-    const area = document.getElementById('gallery-content-area');
-    if (!tabGal || tabGal.classList.contains('hidden') || !scroller || !area) return;
+    const area = document.getElementById(viewIds.areaId);
+    if (!tabEl || tabEl.classList.contains('hidden') || !scroller || !area) return;
 
     const scrollerRect = scroller.getBoundingClientRect();
     const probeTop = scrollerRect.top + 110;
@@ -1151,7 +1198,8 @@ function _getActiveGroupedContainerAndMode() {
         return { container: document.getElementById('similar-container'), mode: simMode, headerId: 'similar-sticky-header', drawerId: 'similar-options-drawer' };
     }
     if (currentTab === 'gallery' || currentTab === 'favorites') {
-        return { container: document.getElementById('gallery-content-area'), mode: galleryGroupBy, headerId: 'gallery-sticky-header', drawerId: 'filter-drawer' };
+        const viewIds = _getActiveGalleryViewIds();
+        return { container: document.getElementById(viewIds.areaId), mode: galleryGroupBy, headerId: viewIds.headerId, drawerId: 'filter-drawer' };
     }
     return { container: null, mode: 'NONE', headerId: '', drawerId: '' };
 }
@@ -1206,11 +1254,13 @@ function updateFloatingGroupPill() {
     }
 
     const cRect = container.getBoundingClientRect();
+    const searchEl = document.getElementById('global-search-input');
+    const alignedLeft = searchEl ? searchEl.getBoundingClientRect().left : cRect.left;
     _activeFloatingGroupSection = matchedSection;
     const lblBtn = document.getElementById('floating-group-label-btn');
     if (lblBtn) lblBtn.textContent = matchedLabel;
     pill.style.top = `${topAnchor}px`;
-    pill.style.left = `${Math.round(cRect.left)}px`;
+    pill.style.left = `${Math.round(alignedLeft)}px`;
     pill.classList.remove('hidden');
     pill.classList.add('flex');
     syncGroupSectionSelectionButtons();
@@ -2256,7 +2306,9 @@ function initInfiniteScrollObserver() {
     infiniteScrollObserver = new IntersectionObserver(entries => {
         entries.forEach(entry => {
             if (!entry.isIntersecting) return;
-            if (entry.target.id === 'gallery-scroll-sentinel' && (currentTab === 'gallery' || currentTab === 'favorites')) {
+            if (entry.target.id === 'gallery-scroll-sentinel' && (currentTab === 'gallery' || currentTab === 'recent')) {
+                loadGalleryItems(true);
+            } else if (entry.target.id === 'favorites-scroll-sentinel' && currentTab === 'favorites') {
                 loadGalleryItems(true);
             } else if (entry.target.id === 'album-scroll-sentinel' && currentTab === 'albums' && openedAlbumName) {
                 loadSingleAlbumItems(true);
@@ -2268,8 +2320,10 @@ function initInfiniteScrollObserver() {
     });
 
     const galSentinel = document.getElementById('gallery-scroll-sentinel');
+    const favSentinel = document.getElementById('favorites-scroll-sentinel');
     const albSentinel = document.getElementById('album-scroll-sentinel');
     if (galSentinel) infiniteScrollObserver.observe(galSentinel);
+    if (favSentinel) infiniteScrollObserver.observe(favSentinel);
     if (albSentinel) infiniteScrollObserver.observe(albSentinel);
 }
 

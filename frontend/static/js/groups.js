@@ -7,6 +7,20 @@ const GROUP_BAR_IDS = {
     favorites: 'favorites-groups-bar'
 };
 
+const GROUP_OPTIONS_DRAWER_IDS = {
+    albums: 'albums-options-drawer',
+    persons: 'faces-options-drawer',
+    places: 'places-options-drawer',
+    favorites: 'filter-drawer'
+};
+
+function _isCustomGroupOptionsOpen(scope) {
+    const drawerId = GROUP_OPTIONS_DRAWER_IDS[scope];
+    if (!drawerId) return false;
+    const drawer = document.getElementById(drawerId);
+    return Boolean(drawer && !drawer.classList.contains('hidden'));
+}
+
 const GROUP_SCOPE_LABELS = {
     albums: 'albums',
     persons: 'personnes',
@@ -77,6 +91,12 @@ function renderCustomGroupsBar(scope) {
     const prefs = getCustomGroupPrefs(scope);
 
     if (!groups.length) {
+        if (!_isCustomGroupOptionsOpen(scope)) {
+            bar.innerHTML = '';
+            bar.classList.add('hidden');
+            return;
+        }
+        bar.classList.toggle('hidden', scope === 'favorites' && typeof currentTab !== 'undefined' && currentTab !== 'favorites');
         bar.innerHTML = `
             <button type="button" onclick="openCustomGroupModal('${scope}')"
                     title="Créer un groupe de ${GROUP_SCOPE_LABELS[scope] || scope} (logiciel uniquement)"
@@ -86,6 +106,7 @@ function renderCustomGroupsBar(scope) {
             </button>`;
         return;
     }
+    bar.classList.toggle('hidden', scope === 'favorites' && typeof currentTab !== 'undefined' && currentTab !== 'favorites');
 
     const allCls = activeId === null
         ? 'nav-item-active shadow-sm'
@@ -922,8 +943,10 @@ function applyPageDefaultOptions(pageKey, shouldReload = false) {
     if (gb) gb.value = saved.groupBy;
     if (typeof galleryGroupBy !== 'undefined') galleryGroupBy = saved.groupBy;
     if (typeof _syncSortDirButtonUI === 'function') _syncSortDirButtonUI(saved.sortOrder === 'asc', 'gal-sort-dir-btn', 'gal-sort-arrow');
-    if (typeof galleryLayout !== 'undefined') { galleryLayout = saved.layout; localStorage.setItem('phototo_gallery_layout', saved.layout); }
-    if (typeof gallerySize !== 'undefined') { gallerySize = saved.size; localStorage.setItem('phototo_gallery_size', saved.size); }
+    const prefScope = (pageKey === 'favorites' || pageKey === 'recent') ? pageKey : 'gallery';
+    if (typeof galleryLayout !== 'undefined') { galleryLayout = saved.layout; localStorage.setItem(`phototo_${prefScope}_layout`, saved.layout); }
+    if (typeof gallerySize !== 'undefined') { gallerySize = saved.size; localStorage.setItem(`phototo_${prefScope}_size`, saved.size); }
+    if (typeof syncGalleryLayoutSizeButtons === 'function') syncGalleryLayoutSizeButtons();
     if (typeof syncLayoutAndSizeButtons === 'function') syncLayoutAndSizeButtons();
     if (shouldReload && typeof refreshActiveMediaView === 'function') refreshActiveMediaView();
     return true;

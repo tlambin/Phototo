@@ -83,6 +83,21 @@ class TestApiRoutes(unittest.TestCase):
         sidebar_end = html.index('</aside>', sidebar_start)
         self.assertIn('id="topbar-logo-box"', html[sidebar_start:sidebar_end])
 
+        # Lieux : carte interactive repliée par défaut en vignette taille lieu + dépliage au clic
+        self.assertIn('id="world-map-card" class="hidden ui-card', html)
+        self.assertIn('id="map-collapse-btn"', html)
+        self.assertIn('onclick="toggleWorldMapExpanded(false)"', html)
+        ai_views_js = (ROOT_DIR / "frontend" / "static" / "js" / "ai_views.js").read_text(encoding="utf-8")
+        for tok in (
+            "let _worldMapExpanded = false;",
+            "function toggleWorldMapExpanded(",
+            "function renderWorldMapCompactCardHTML(",
+            'id="world-map-compact-card"',
+            'onclick="toggleWorldMapExpanded(true)"',
+            "mapCompactCardHtml",
+        ):
+            self.assertIn(tok, ai_views_js)
+
         # Page Outils simplifiée + pages dédiées pour chaque suggestion (style Doublons / Similaires)
         for tok in (
             'id="tools-sticky-header"', 'id="tools-summary-pill"',
@@ -1205,9 +1220,12 @@ class TestApiRoutes(unittest.TestCase):
             'id="places-active-filter-badge"',
             'id="world-map-card"',
             'id="map-viewport-filter-btn"',
-            'id="map-fit-btn"',
+            'Filtrer selon la carte',
             'id="map-height-btn-SM"',
-            'id="map-height-btn-HIDE"',
+            'Petite',
+            'Moyenne',
+            'Grande',
+            'id="map-collapse-btn"',
             'id="place-single-sticky-header"',
             'id="place-single-options-btn"',
             'id="map-add-btn"',
@@ -1238,6 +1256,25 @@ class TestApiRoutes(unittest.TestCase):
         self.assertIn("openSinglePlaceView", ai_views_js)
         self.assertIn("function togglePersonFaceEditMode(", ai_views_js)
         self.assertIn("appendMediaBatchToContainer('tl-faces-grid', items, 0, true)", ai_views_js)
+        self.assertIn("GROUP_OPTIONS_DRAWER_IDS", groups_js_fp)
+        self.assertIn("function _isCustomGroupOptionsOpen(", groups_js_fp)
+
+        # Favoris séparés de Galerie (#tab-favorites dédié)
+        for fav_tok in (
+            'id="tab-favorites"',
+            'id="favorites-sticky-header"',
+            'id="fav-total-label"',
+            'id="fav-options-btn"',
+            'id="favorites-content-area"',
+            'id="favorites-scroll-sentinel"',
+        ):
+            self.assertIn(fav_tok, html)
+        gallery_js_fp = (ROOT_DIR / "frontend" / "static" / "js" / "gallery.js").read_text(encoding="utf-8")
+        self.assertIn("function _getActiveGalleryViewIds(", gallery_js_fp)
+        self.assertIn("function _getActiveMediaPrefKey(", gallery_js_fp)
+        self.assertIn("function syncActiveMediaPrefsFromStorage(", gallery_js_fp)
+        self.assertIn("border-radius: 28px 0 0 28px;", theme_css_tl)
+        self.assertIn("rounded-l-[28px] rounded-r-none", html)
         self.assertIn("appendMediaBatchToContainer('place-single-grid', sortedItems, 0, true)", ai_views_js)
         self.assertIn("place_single:", groups_js_fp)
         self.assertIn(".sticky-options-header.is-stuck #places-filter-popover", theme_css_tl)

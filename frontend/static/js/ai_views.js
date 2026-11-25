@@ -656,7 +656,9 @@ let _openedPlaceBucketIdx = -1;
 let _openedPlaceBucketKey = '';
 let placesLayout = localStorage.getItem('phototo_places_layout') || 'GRID';
 let placesSize = localStorage.getItem('phototo_places_size') || 'MD';
-let mapHeightMode = localStorage.getItem('phototo_map_height') || 'MD';
+let mapHeightMode = ['SM', 'MD', 'LG'].includes(localStorage.getItem('phototo_map_height'))
+    ? localStorage.getItem('phototo_map_height')
+    : 'MD';
 let mapFilterByViewport = false;
 let selectedPlacesYears = [];
 let selectedPlacesMonths = [];
@@ -681,15 +683,44 @@ function syncPlacesLayoutSizeButtons() {
     });
 }
 
+let _worldMapExpanded = false;
+
+function toggleWorldMapExpanded(forceState = null) {
+    const next = forceState === null ? !_worldMapExpanded : !!forceState;
+    _worldMapExpanded = next;
+    const card = document.getElementById('world-map-card');
+    if (_worldMapExpanded && mapHeightMode === 'HIDE') {
+        mapHeightMode = 'MD';
+        localStorage.setItem('phototo_map_height', mapHeightMode);
+        syncMapHeightButtons();
+    }
+    if (card) {
+        card.classList.toggle('hidden', !_worldMapExpanded);
+    }
+    if (typeof renderPlacesOverviewFromCache === 'function') {
+        renderPlacesOverviewFromCache(false);
+    }
+    if (_worldMapExpanded) {
+        if (leafletMap && mapHeightMode !== 'HIDE') {
+            setTimeout(() => leafletMap.invalidateSize(), 140);
+        } else if (typeof loadWorldMap === 'function') {
+            loadWorldMap(false);
+        }
+    }
+}
+
 function syncMapHeightButtons() {
     const heights = { SM: '220px', MD: '380px', LG: '540px' };
+    const cardEl = document.getElementById('world-map-card');
+    if (cardEl) {
+        cardEl.classList.toggle('hidden', !_worldMapExpanded);
+    }
     const mapEl = document.getElementById('world-map');
     if (mapEl) {
-        const hidden = mapHeightMode === 'HIDE';
-        mapEl.classList.toggle('hidden', hidden);
-        if (!hidden) mapEl.style.height = heights[mapHeightMode] || '380px';
+        mapEl.classList.remove('hidden');
+        mapEl.style.height = heights[mapHeightMode] || '380px';
     }
-    ['SM', 'MD', 'LG', 'HIDE'].forEach(k => {
+    ['SM', 'MD', 'LG'].forEach(k => {
         const b = document.getElementById(`map-height-btn-${k}`);
         if (b) {
             b.classList.toggle('nav-item-active', k === mapHeightMode);
@@ -704,10 +735,14 @@ function syncMapHeightButtons() {
 }
 
 function setMapHeightMode(mode) {
-    mapHeightMode = ['SM', 'MD', 'LG', 'HIDE'].includes(mode) ? mode : 'MD';
+    mapHeightMode = ['SM', 'MD', 'LG'].includes(mode) ? mode : 'MD';
     localStorage.setItem('phototo_map_height', mapHeightMode);
+    _worldMapExpanded = true;
     syncMapHeightButtons();
-    if (leafletMap && mapHeightMode !== 'HIDE') {
+    if (typeof renderPlacesOverviewFromCache === 'function') {
+        renderPlacesOverviewFromCache(false);
+    }
+    if (leafletMap) {
         setTimeout(() => leafletMap.invalidateSize(), 140);
     }
 }
@@ -1075,6 +1110,54 @@ function _syncMapMarkersToPlaces(filteredPlaces) {
     }
 }
 
+function renderWorldMapCompactCardHTML(placesCount, mediaCount) {
+    const subText = `${placesCount} lieu${placesCount > 1 ? 'x' : ''} · ${mediaCount} média${mediaCount > 1 ? 's' : ''}`;
+    if (placesLayout === 'LIST') {
+        const thumbCls = placesSize === 'SM' ? 'w-10 h-10 rounded-xl' : (placesSize === 'LG' ? 'w-24 h-24 rounded-2xl' : 'w-16 h-16 rounded-2xl');
+        const padCls = placesSize === 'SM' ? 'p-2 gap-2.5 rounded-2xl' : (placesSize === 'LG' ? 'p-3.5 gap-4 rounded-3xl' : 'p-2.5 gap-3.5 rounded-2xl');
+        const titleCls = placesSize === 'SM' ? 'text-xs' : (placesSize === 'LG' ? 'text-base' : 'text-sm');
+        return `
+        <div id="world-map-compact-card" onclick="toggleWorldMapExpanded(true)"
+             class="ui-card flex items-center ${padCls} cursor-pointer transition-all hover:bg-[var(--bg-hover)] group">
+            <div class="relative ${thumbCls} shrink-0 overflow-hidden bg-gradient-to-br from-sky-500/20 via-emerald-500/15 to-indigo-500/20 border border-[var(--border-subtle)] flex items-center justify-center">
+                <svg class="w-1/2 h-1/2 text-sky-400 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+                <p class="font-extrabold ${titleCls} truncate">Carte interactive</p>
+                <p class="text-[11px] opacity-60 font-medium truncate">${subText}</p>
+            </div>
+        </div>`;
+    }
+
+    const radiusCls = placesSize === 'LG' ? 'rounded-[24px]' : (placesSize === 'SM' ? 'rounded-[16px]' : 'rounded-[20px]');
+    const nameTxtCls = placesSize === 'LG' ? 'text-sm' : (placesSize === 'SM' ? 'text-[11px]' : 'text-xs');
+    const placesCountLabel = `${placesCount} lieu${placesCount > 1 ? 'x' : ''}`;
+    return `
+    <div id="world-map-compact-card" onclick="toggleWorldMapExpanded(true)"
+         class="place-card cursor-pointer group flex flex-col">
+        <div class="ui-card aspect-square ${radiusCls} overflow-hidden relative shadow-sm group-hover:shadow-lg transition-all duration-200 bg-gradient-to-br from-sky-500/20 via-emerald-500/15 to-indigo-500/20 flex items-center justify-center">
+            <svg class="absolute inset-0 w-full h-full p-5 opacity-15 pointer-events-none" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                <line x1="8" y1="2" x2="8" y2="18"/>
+                <line x1="16" y1="6" x2="16" y2="22"/>
+            </svg>
+            <div class="relative z-10 w-12 h-12 rounded-2xl bg-[var(--bg-card)]/90 border border-[var(--border-subtle)] shadow-md flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <svg class="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                </svg>
+            </div>
+        </div>
+        <div class="pt-1.5 px-1">
+            <div class="${nameTxtCls} font-extrabold truncate leading-tight">Carte interactive</div>
+            <div class="text-[10px] opacity-60 font-semibold mt-0.5 truncate">${placesCountLabel}</div>
+        </div>
+    </div>`;
+}
+
 function renderPlacesOverviewFromCache(syncMarkers = true) {
     const grid = document.getElementById('places-cards-grid');
     if (!grid) return;
@@ -1109,6 +1192,9 @@ function renderPlacesOverviewFromCache(syncMarkers = true) {
 
     const sorted = [...viewportFiltered].sort((a, b) => _comparePlaceItems(a, b, sortBy, sortOrder));
     const gridCls = getPlacesGridClass();
+    const mapCompactCardHtml = !_worldMapExpanded
+        ? renderWorldMapCompactCardHTML(viewportFiltered.length, totalMediaCount)
+        : '';
 
     if (!sorted.length) {
         const hasGrp = typeof activeCustomGroupId !== 'undefined' && activeCustomGroupId.places !== null;
@@ -1116,8 +1202,8 @@ function renderPlacesOverviewFromCache(syncMarkers = true) {
         if (mapFilterByViewport && filteredBase.length > 0) emptyMsg = 'Aucun lieu dans la zone actuellement visible sur la carte.';
         else if (activeFilterCount > 0) emptyMsg = 'Aucun lieu ne correspond aux filtres sélectionnés.';
         else if (hasGrp) emptyMsg = 'Aucun lieu dans ce groupe.';
-        grid.className = gridCls;
-        grid.innerHTML = `<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">${emptyMsg}</div>`;
+        grid.className = `${gridCls} pb-10`;
+        grid.innerHTML = `${mapCompactCardHtml}<div class="col-span-full ui-card rounded-3xl p-8 text-center text-sm font-semibold opacity-60">${emptyMsg}</div>`;
         if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
         return;
     }
@@ -1135,7 +1221,10 @@ function renderPlacesOverviewFromCache(syncMarkers = true) {
             groupMap.get(key).items.push(pl);
         });
         grid.className = 'space-y-6 pb-10';
-        grid.innerHTML = groups.map(g => `
+        const compactWrapperHtml = mapCompactCardHtml
+            ? `<div class="${gridCls}">${mapCompactCardHtml}</div>`
+            : '';
+        grid.innerHTML = compactWrapperHtml + groups.map(g => `
             <section class="space-y-3 group-section">
                 <div class="flex items-center justify-between">
                     <h3 class="group-section-title text-sm font-extrabold tracking-tight">${escapeHtml(g.label)}</h3>
@@ -1151,7 +1240,7 @@ function renderPlacesOverviewFromCache(syncMarkers = true) {
     }
 
     grid.className = `${gridCls} pb-10`;
-    grid.innerHTML = sorted.map(renderPlaceCardHTML).join('');
+    grid.innerHTML = mapCompactCardHtml + sorted.map(renderPlaceCardHTML).join('');
     if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
 }
 
@@ -1174,9 +1263,7 @@ function focusOpenedPlaceOnMap() {
     const pl = _placesBucketsList[_openedPlaceBucketIdx];
     if (!pl) return;
     closeSinglePlaceView();
-    if (mapHeightMode === 'HIDE') {
-        setMapHeightMode('MD');
-    }
+    toggleWorldMapExpanded(true);
     const scroller = document.getElementById('main-scroll-container');
     if (scroller) scroller.scrollTop = 0;
     if (leafletMap) {

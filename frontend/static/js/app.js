@@ -412,7 +412,10 @@ function _getActiveOptionsContext() {
     if (String(currentTab || '').startsWith('sug-')) {
         return { headerId: 'sug-sticky-header', drawerId: 'sug-options-drawer', btnId: 'sug-options-btn' };
     }
-    if (currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent') {
+    if (currentTab === 'favorites') {
+        return { headerId: 'favorites-sticky-header', drawerId: 'filter-drawer', btnId: 'fav-options-btn' };
+    }
+    if (currentTab === 'gallery' || currentTab === 'recent') {
         return { headerId: 'gallery-sticky-header', drawerId: 'filter-drawer', btnId: 'gal-options-btn' };
     }
     return null;
@@ -459,6 +462,12 @@ function _setOptionsDrawerState(drawerId, btnId, visible) {
     _syncTopbarOptionsButton();
     syncTimelineWrapperBounds();
     if (typeof updateFloatingGroupPill === 'function') updateFloatingGroupPill();
+    if (typeof renderCustomGroupsBar === 'function') {
+        if (drawerId === 'albums-options-drawer') renderCustomGroupsBar('albums');
+        else if (drawerId === 'faces-options-drawer') renderCustomGroupsBar('persons');
+        else if (drawerId === 'places-options-drawer') renderCustomGroupsBar('places');
+        else if (drawerId === 'filter-drawer' && currentTab === 'favorites') renderCustomGroupsBar('favorites');
+    }
 }
 
 function _setHeaderStuckState(h, stuck, hidden) {
@@ -484,7 +493,9 @@ function _mountFilterDrawerForActiveView(willShow) {
     const drawer = document.getElementById('filter-drawer');
     if (!drawer) return;
     let targetHeader = document.getElementById('gallery-sticky-header');
-    if (willShow) {
+    if (currentTab === 'favorites') {
+        targetHeader = document.getElementById('favorites-sticky-header') || targetHeader;
+    } else if (willShow) {
         if (currentTab === 'albums' && typeof openedAlbumName !== 'undefined' && openedAlbumName) {
             targetHeader = document.getElementById('album-single-sticky-header') || targetHeader;
         } else if (currentTab === 'faces' && typeof currentTimelinePersonId !== 'undefined' && currentTimelinePersonId !== null) {
@@ -692,12 +703,10 @@ function switchTab(tab) {
 
     const tlWrap = document.getElementById('gallery-timeline-wrapper');
     const tlBox = document.getElementById('gallery-timeline-box') || document.getElementById('timeline-scrubber');
-    const hideTl = (tab !== 'gallery' && tab !== 'favorites' && tab !== 'recent');
+    const hideTl = (tab !== 'gallery' && tab !== 'recent');
     document.body.classList.toggle('has-gallery-timeline', !hideTl);
     if (tlWrap) tlWrap.classList.toggle('!hidden', hideTl);
     if (tlBox) tlBox.classList.toggle('hidden', hideTl);
-    const favGroupsBar = document.getElementById('favorites-groups-bar');
-    if (favGroupsBar) favGroupsBar.classList.toggle('hidden', tab !== 'favorites');
 
     const titleEl = document.getElementById('gallery-main-title') || document.getElementById('gallery-main-heading');
     const sortByEl = document.getElementById('gal-sort-by');
@@ -705,16 +714,18 @@ function switchTab(tab) {
 
     if (tab === 'favorites') {
         _wasRecentTab = false;
-        document.getElementById('tab-gallery').classList.remove('hidden');
-        if (titleEl) titleEl.textContent = 'Favoris';
+        document.getElementById('tab-favorites')?.classList.remove('hidden');
+        _mountFilterDrawerForActiveView(false);
         document.getElementById('gal-fav').checked = true;
         currentExtFilter = '';
+        if (typeof syncActiveMediaPrefsFromStorage === 'function') syncActiveMediaPrefsFromStorage('favorites');
         if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('favorites', false);
         if (typeof loadCustomGroups === 'function') loadCustomGroups('favorites');
         resetAndLoadGallery();
     } else if (tab === 'recent') {
         _wasRecentTab = true;
         document.getElementById('tab-gallery').classList.remove('hidden');
+        _mountFilterDrawerForActiveView(false);
         if (titleEl) titleEl.textContent = 'Ajoutés récemment';
         document.getElementById('gal-fav').checked = false;
         if (sortByEl) sortByEl.value = 'added';
@@ -722,16 +733,19 @@ function switchTab(tab) {
         const arrow = document.getElementById('gal-sort-arrow');
         if (arrow) arrow.style.transform = 'rotate(0deg)';
         currentExtFilter = '';
+        if (typeof syncActiveMediaPrefsFromStorage === 'function') syncActiveMediaPrefsFromStorage('recent');
         if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('recent', false);
         resetAndLoadGallery();
     } else if (tab === 'gallery') {
         if (titleEl) titleEl.textContent = 'Galerie';
+        _mountFilterDrawerForActiveView(false);
         document.getElementById('gal-fav').checked = false;
         if (_wasRecentTab && sortByEl && sortByEl.value === 'added') {
             sortByEl.value = 'date';
         }
         _wasRecentTab = false;
         currentExtFilter = '';
+        if (typeof syncActiveMediaPrefsFromStorage === 'function') syncActiveMediaPrefsFromStorage('gallery');
         if (typeof applyPageDefaultOptions === 'function') applyPageDefaultOptions('gallery', false);
         resetAndLoadGallery();
     } else if (tab === 'albums') {
@@ -3933,7 +3947,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadStats();
     await loadGalleryFilters();
     await loadGalleryItems();
-    document.body.classList.toggle('has-gallery-timeline', currentTab === 'gallery' || currentTab === 'favorites' || currentTab === 'recent');
+    document.body.classList.toggle('has-gallery-timeline', currentTab === 'gallery' || currentTab === 'recent');
     await loadGalleryTimeline();
 });
 
